@@ -47,7 +47,7 @@
 <a href="#pg-topics-sealed-classes-html">Sealed classes — complete guide</a>
 <a href="#pg-topics-pattern-matching-switch-html">Pattern matching &amp; switch — complete guide</a>
 <a href="#pg-topics-text-blocks-strings-html">Text blocks &amp; String APIs — complete guide</a>
-<a href="#pg-topics-modules-jpms-html">Modules (JPMS)</a>
+<a href="#pg-topics-modules-jpms-html">Modules (JPMS) — complete guide</a>
 <a href="#pg-topics-virtual-threads-html">Virtual threads — complete guide</a>
 <a href="#pg-topics-structured-concurrency-html">Structured concurrency — complete guide</a>
 <a href="#pg-topics-scoped-values-html">Scoped values — complete guide</a>
@@ -2444,38 +2444,72 @@ byte[] b   = hf.parseHex("0a14");</code></pre>
   </table>
 </section>
 <section id="pg-topics-modules-jpms-html" class="print-page">
-  <p class="sec-tag">Deep dive · platform</p>
+  <p class="sec-tag">Deep dive · platform · complete guide</p>
   <h1>The Java Platform Module System (JPMS) <span class="badge added">Java 9</span></h1>
   <p class="lead">
     A module is a named, self-describing group of packages that declares <strong>what it needs</strong>
     (<code>requires</code>) and <strong>what it exposes</strong> (<code>exports</code>). It adds strong
-    encapsulation and reliable configuration above the old flat classpath.
+    encapsulation and reliable configuration on top of the old flat classpath.
   </p>
 
-  <h2>Why it exists</h2>
+  <div class="hero-stats">
+    <div class="stat"><span class="num">~90</span><span class="lbl">modules the JDK is split into</span></div>
+    <div class="stat"><span class="num">strong</span><span class="lbl">encapsulation (hidden = truly hidden)</span></div>
+    <div class="stat"><span class="num">startup</span><span class="lbl">missing deps fail early, not deep in a run</span></div>
+    <div class="stat"><span class="num">jlink</span><span class="lbl">ship only the modules you use</span></div>
+    <div class="stat"><span class="num">Java 9</span><span class="lbl">introduced (Project Jigsaw)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    The classpath is a flat bag of JARs: every public class is reachable by everyone ("nothing is
+    really private"), missing or duplicate JARs blow up deep into a run ("JAR hell"), and you always
+    ship the whole JRE. Modules make dependencies explicit and checked at startup, let libraries hide
+    internals, and let tools assemble a minimal runtime.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#what">1. What &amp; why</a>
+    <a href="#moduleinfo">2. module-info.java</a>
+    <a href="#directives">3. Directives</a>
+    <a href="#graph">4. A module graph</a>
+    <a href="#exports-opens">5. exports vs opens</a>
+    <a href="#paths">6. Classpath vs module path</a>
+    <a href="#services">7. Services (ServiceLoader)</a>
+    <a href="#migration">8. Migration &amp; escape hatches</a>
+    <a href="#tooling">9. Tooling: jlink, jdeps</a>
+    <a href="#pitfalls">10. Pitfalls</a>
+    <a href="#realworld">11. Real-world use cases</a>
+    <a href="#cheat">12. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="what">1 · What &amp; why</h2>
   <ul>
-    <li><strong>Strong encapsulation</strong> — packages not <code>exported</code> are truly hidden, even from reflection.</li>
-    <li><strong>Reliable configuration</strong> — missing/duplicate/cyclic dependencies are caught at startup, not deep into a run ("JAR hell").</li>
-    <li><strong>A scalable platform</strong> — the JDK itself is ~90 modules, so tools like <code>jlink</code> can ship only what you use.</li>
+    <li><strong>Strong encapsulation</strong> — packages you don't <code>export</code> are hidden, even from reflection.</li>
+    <li><strong>Reliable configuration</strong> — missing/duplicate/cyclic dependencies are caught at startup.</li>
+    <li><strong>A scalable platform</strong> — the JDK is ~90 modules, so <code>jlink</code> can ship only what you use.</li>
   </ul>
 
-  <h2>A module in one file: <code>module-info.java</code></h2>
+  <!-- ============================================================ -->
+  <h2 id="moduleinfo">2 · A module in one file: <code>module-info.java</code></h2>
   <pre><code class="java">// src/com.myapp/module-info.java
 module com.myapp {
   requires java.net.http;            // I depend on this module
-  requires transitive com.mylib;     // and anyone who requires me also gets com.mylib
+  requires transitive com.mylib;     // and my consumers get com.mylib too
 
   exports com.myapp.api;             // this package is public API
-  exports com.myapp.internal to com.myapp.tests;   // qualified: only to that module
+  exports com.myapp.internal to com.myapp.tests;   // qualified export
 
-  uses   com.myapp.spi.Plugin;                     // I consume this service
+  uses    com.myapp.spi.Plugin;                     // I consume this service
   provides com.myapp.spi.Plugin
-      with com.myapp.plugins.DefaultPlugin;        // I supply an implementation
+      with com.myapp.plugins.DefaultPlugin;          // I provide an implementation
 
-  opens  com.myapp.model;            // allow deep reflection (e.g. for frameworks)
+  opens   com.myapp.model;           // allow deep reflection (frameworks)
 }</code></pre>
 
-  <h2>Directives at a glance</h2>
+  <!-- ============================================================ -->
+  <h2 id="directives">3 · Directives at a glance</h2>
   <table class="data">
     <tr><th>Directive</th><th>Meaning</th></tr>
     <tr><td><code>requires M</code></td><td>Depend on module M's exported packages.</td></tr>
@@ -2483,68 +2517,169 @@ module com.myapp {
     <tr><td><code>requires static M</code></td><td>Compile-time only (optional at runtime).</td></tr>
     <tr><td><code>exports P</code></td><td>Make package P readable by all modules.</td></tr>
     <tr><td><code>exports P to M1, M2</code></td><td>Qualified export — only to named modules.</td></tr>
-    <tr><td><code>opens P</code> / <code>opens P to M</code></td><td>Allow <em>deep reflection</em> into P at runtime (frameworks).</td></tr>
+    <tr><td><code>opens P</code> / <code>opens P to M</code></td><td>Allow deep reflection into P at runtime.</td></tr>
     <tr><td><code>uses S</code> / <code>provides S with Impl</code></td><td>Consume / provide a <code>ServiceLoader</code> service.</td></tr>
   </table>
 
-  <h2>exports vs. opens — the key distinction</h2>
+  <!-- ============================================================ -->
+  <h2 id="graph">4 · A module graph</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 220" role="img" aria-label="com.myapp requires com.mylib and java.net.http; it exports its api package and opens its model package">
+      <defs>
+        <marker id="mdA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="300" y="80" width="160" height="52" rx="10" class="dg-accent"/>
+      <text x="380" y="103" text-anchor="middle" class="dg-text">com.myapp</text>
+      <text x="380" y="120" text-anchor="middle" class="dg-soft">module</text>
+
+      <rect x="40" y="30" width="180" height="46" rx="8" class="dg-box"/>
+      <text x="130" y="58" text-anchor="middle" class="dg-text">com.mylib</text>
+      <rect x="40" y="140" width="180" height="46" rx="8" class="dg-box"/>
+      <text x="130" y="168" text-anchor="middle" class="dg-text">java.net.http</text>
+
+      <rect x="540" y="30" width="200" height="46" rx="8" class="dg-good-box"/>
+      <text x="640" y="52" text-anchor="middle" class="dg-text-sm">exports com.myapp.api</text>
+      <text x="640" y="68" text-anchor="middle" class="dg-soft">→ visible to all</text>
+      <rect x="540" y="140" width="200" height="46" rx="8" class="dg-warn-box"/>
+      <text x="640" y="162" text-anchor="middle" class="dg-text-sm">opens com.myapp.model</text>
+      <text x="640" y="178" text-anchor="middle" class="dg-soft">→ deep reflection</text>
+
+      <line x1="298" y1="98"  x2="222" y2="55"  class="dg-line" marker-end="url(#mdA)"/>
+      <text x="250" y="80" text-anchor="middle" class="dg-soft">requires</text>
+      <line x1="298" y1="116" x2="222" y2="160" class="dg-line" marker-end="url(#mdA)"/>
+      <text x="250" y="140" text-anchor="middle" class="dg-soft">requires</text>
+      <line x1="462" y1="98"  x2="538" y2="55"  class="dg-line" marker-end="url(#mdA)"/>
+      <line x1="462" y1="116" x2="538" y2="160" class="dg-line" marker-end="url(#mdA)"/>
+    </svg>
+    <figcaption>A module names its dependencies (<code>requires</code>) and controls its surface:
+    <code>exports</code> for compile/call access, <code>opens</code> for runtime reflection.</figcaption>
+  </figure>
+
+  <!-- ============================================================ -->
+  <h2 id="exports-opens">5 · exports vs opens — the key distinction</h2>
   <div class="ba">
     <div class="before"><div class="ba-label">exports</div>
       <pre><code class="java">exports com.myapp.api;
-// Compile &amp; call public types normally.
+// Compile against &amp; call public types normally.
 // Deep reflection (setAccessible on privates) is STILL blocked.</code></pre>
     </div>
     <div class="after"><div class="ba-label">opens</div>
       <pre><code class="java">opens com.myapp.model;
 // Reflection frameworks (Jackson, Hibernate, Spring)
-// can access private members at runtime.
+// can access members at runtime.
 // No compile-time access to non-public types.</code></pre>
     </div>
   </div>
 
-  <h2>Classpath vs. module path</h2>
+  <!-- ============================================================ -->
+  <h2 id="paths">6 · Classpath vs module path</h2>
   <table class="data">
     <tr><th></th><th>Classpath (legacy)</th><th>Module path</th></tr>
-    <tr><td>Flag</td><td><code>-cp</code> / <code>-classpath</code></td><td><code>-p</code> / <code>--module-path</code></td></tr>
-    <tr><td>Encapsulation</td><td>None — everything public is reachable</td><td>Only <code>exported</code> packages</td></tr>
-    <tr><td>A plain JAR becomes</td><td>Part of the "unnamed module"</td><td>An <em>automatic module</em> (name from the JAR) if it has no module-info</td></tr>
+    <tr><td>Flag</td><td><code>-cp</code></td><td><code>-p</code> / <code>--module-path</code></td></tr>
+    <tr><td>Encapsulation</td><td>None — all public reachable</td><td>Only <code>exported</code> packages</td></tr>
+    <tr><td>A plain JAR becomes</td><td>Part of the "unnamed module"</td><td>An <em>automatic module</em> (name from JAR)</td></tr>
   </table>
   <pre><code class="java">javac -d out --module-source-path src $(find src -name '*.java')
-java -p out -m com.myapp/com.myapp.Main       # run module/mainclass
-java --list-modules                            # what's available</code></pre>
+java -p out -m com.myapp/com.myapp.Main      # run module/mainclass
+java --list-modules                           # what's available</code></pre>
 
-  <h2>Practical guidance &amp; gotchas</h2>
+  <!-- ============================================================ -->
+  <h2 id="services">7 · Services (ServiceLoader)</h2>
+  <p>Modules formalise the plugin pattern: a module <code>provides</code> an implementation, another
+  <code>uses</code> the interface, and <code>ServiceLoader</code> wires them.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — META-INF/services text files</div>
+      <pre><code class="java">// META-INF/services/com.myapp.spi.Plugin
+com.acme.FancyPlugin
+// loaded via ServiceLoader.load(Plugin.class) — no compile-time check</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Module declarations</div>
+      <pre><code class="java">// provider module
+module com.acme { provides com.myapp.spi.Plugin with com.acme.FancyPlugin; }
+// consumer module
+module com.myapp { uses com.myapp.spi.Plugin; }
+// checked by the compiler &amp; module system
+ServiceLoader.load(Plugin.class).forEach(Plugin::run);</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="migration">8 · Migration &amp; escape hatches</h2>
   <ul>
-    <li><strong>You don't have to modularise your app</strong> to run on Java 9+. The classpath still
-      works; the "unnamed module" reads everything. Many apps stay on the classpath for years.</li>
+    <li><strong>You don't have to modularise</strong> to run on Java 9+. The classpath still works;
+      the "unnamed module" reads everything. Many apps stay on the classpath for years.</li>
     <li><strong>Automatic modules</strong> bridge non-modular JARs: put a plain JAR on the module path
-      and it gets a module name derived from the filename (or its <code>Automatic-Module-Name</code> manifest entry).</li>
-    <li><strong>Reflection frameworks</strong> need <code>opens</code> (or <code>--add-opens</code> on
-      the command line) — the #1 source of <code>InaccessibleObjectException</code> after migration.</li>
-    <li><strong>Split packages</strong> (the same package in two modules) are forbidden — a common
-      migration snag with older libraries.</li>
-    <li><strong>Escape hatches</strong> for legacy code: <code>--add-modules</code>,
-      <code>--add-exports</code>, <code>--add-opens</code>, <code>--add-reads</code>.</li>
+      and it gets a name from the filename (or its <code>Automatic-Module-Name</code> manifest entry).</li>
+    <li><strong>Command-line escape hatches</strong> for legacy code:
+      <pre><code class="java">--add-modules  --add-exports  --add-opens  --add-reads</code></pre>
+    </li>
   </ul>
 
-  <h2>Related tooling</h2>
-  <ul>
-    <li><code>jdeps --jdk-internals app.jar</code> — find uses of encapsulated internals before upgrading.</li>
-    <li><code>jlink</code> — build a minimal runtime image from your modules.</li>
-    <li><strong>Module import declarations</strong> (Java 25) — <code>import module java.base;</code>
-      imports everything a module exports; see <a href="#pg-versions-java-25-html">Java 25</a>.</li>
-  </ul>
+  <!-- ============================================================ -->
+  <h2 id="tooling">9 · Tooling: jlink &amp; jdeps</h2>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — ship the whole JRE</div>
+      <pre><code class="java"># container image bundles a full ~200MB+ JRE
+FROM eclipse-temurin:25
+COPY app.jar /app.jar
+CMD ["java","-jar","/app.jar"]</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">jlink — a minimal custom runtime</div>
+      <pre><code class="java">jlink --add-modules com.myapp,java.net.http \
+      --output myruntime --strip-debug --compress=2
+# myruntime/bin/java is a self-contained, much smaller runtime
+jdeps --jdk-internals app.jar   # find internal-API usage first</code></pre>
+    </div>
+  </div>
 
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">10 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td><code>InaccessibleObjectException</code> after upgrade</td><td>A reflection framework needs <code>opens</code> (or <code>--add-opens</code>). #1 migration snag.</td></tr>
+    <tr><td>Split packages</td><td>Same package in two modules is forbidden — common with older libs.</td></tr>
+    <tr><td>Reflecting into JDK internals</td><td>Strongly encapsulated since 16/17 — use supported APIs or <code>--add-exports</code>.</td></tr>
+    <tr><td>Assuming you must modularise</td><td>Optional — the classpath still works on any modern JDK.</td></tr>
+    <tr><td>Cyclic <code>requires</code></td><td>Module dependencies must be acyclic; the module system rejects cycles.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">11 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Why modules help</th></tr>
+    <tr><td>Small container images</td><td><code>jlink</code> runtime with only needed modules — faster pulls, smaller attack surface.</td></tr>
+    <tr><td>Enforcing architecture boundaries</td><td><code>exports</code> makes "internal" packages actually inaccessible.</td></tr>
+    <tr><td>Publishing a library</td><td>A stable public API surface; internals can change freely.</td></tr>
+    <tr><td>Plugin systems</td><td><code>uses</code>/<code>provides</code> with <code>ServiceLoader</code>.</td></tr>
+    <tr><td>Security-sensitive apps</td><td>Strong encapsulation limits what reflection can reach.</td></tr>
+  </table>
+  <div class="tip"><strong>Related (Java 25):</strong> <em>module import declarations</em> let you
+  <code>import module java.base;</code> to pull in everything a module exports — handy in scripts and
+  prototypes. See <a href="#pg-versions-java-25-html">Java 25</a>.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">12 · Cheat sheet</h2>
   <div class="cheat">
-    <h3>Cheat card</h3>
+    <h3>Modules in one glance</h3>
     <ul>
       <li><code>module M { requires …; exports …; }</code> in <code>module-info.java</code>.</li>
       <li><code>exports</code> = compile/call; <code>opens</code> = runtime deep reflection.</li>
       <li><code>requires transitive</code> re-exports a dependency; <code>requires static</code> = compile-only.</li>
       <li>Module path <code>-p</code> vs classpath <code>-cp</code>; plain JARs → automatic modules.</li>
-      <li>Framework broke after upgrade? You probably need <code>opens</code> / <code>--add-opens</code>.</li>
+      <li>Framework broke after upgrade? You likely need <code>opens</code> / <code>--add-opens</code>.</li>
+      <li><code>jlink</code> for minimal runtimes; <code>jdeps --jdk-internals</code> before upgrading.</li>
     </ul>
   </div>
+
+  <h2>Evolution</h2>
+  <table class="data">
+    <tr><th>Version</th><th>Change</th></tr>
+    <tr><td>Java 9</td><td>Module system introduced (Project Jigsaw, JEP 261 et al.).</td></tr>
+    <tr><td>Java 16/17</td><td>JDK internals strongly encapsulated by default (JEP 396/403).</td></tr>
+    <tr><td>Java 25</td><td>Module import declarations — <code>import module M;</code> (JEP 511).</td></tr>
+  </table>
 </section>
 <section id="pg-topics-virtual-threads-html" class="print-page">
   <p class="sec-tag">Deep dive · concurrency · complete guide</p>
