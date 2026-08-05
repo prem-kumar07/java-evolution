@@ -1253,6 +1253,15 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
     <strong>compact source files &amp; instance main</strong>, <strong>flexible constructor bodies</strong>
     and <strong>module import declarations</strong> — plus real startup wins from Project Leyden.
   </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">void main()</span><span class="lbl">compact source + IO</span></div>
+    <div class="stat"><span class="num">scoped values</span><span class="lbl">final (ThreadLocal successor)</span></div>
+    <div class="stat"><span class="num">gatherers</span><span class="lbl">custom stream ops (24)</span></div>
+    <div class="stat"><span class="num">FFM</span><span class="lbl">native calls, no JNI (22)</span></div>
+    <div class="stat"><span class="num">LTS</span><span class="lbl">covers 22–24</span></div>
+  </div>
+
   <div class="note"><strong>Folded in:</strong> features from
   <span class="badge added">22</span> <span class="badge added">23</span>
   <span class="badge added">24</span> are included and tagged.</div>
@@ -1261,12 +1270,12 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
     <strong>⚠ Migration watch-outs (21 → 25).</strong>
     <ul>
       <li><strong>Security Manager permanently disabled</strong> <span class="badge added">24</span> —
-        <code>System.setSecurityManager</code> now throws. Any code still using it must be reworked.</li>
+        <code>System.setSecurityManager</code> now throws. Rework any code still using it.</li>
       <li><strong><code>sun.misc.Unsafe</code> memory-access methods warn</strong> and are being removed —
         migrate to the <a href="#pg-topics-ffm-api-html">FFM API</a> / <code>VarHandle</code>.</li>
-      <li><strong>32-bit x86 port removed</strong> — no more 32-bit Linux/Windows JDK builds.</li>
-      <li><strong>Compact object headers</strong> change object sizes — tools that assume the old header layout may need updating (opt-in on 24, default-capable on 25).</li>
-      <li>Upside: <strong>virtual threads no longer pin on <code>synchronized</code></strong> — safe to drop the 21-era <code>ReentrantLock</code> workarounds.</li>
+      <li><strong>32-bit x86 port removed</strong>; <strong>compact object headers</strong> change object sizes (tools may need updating).</li>
+      <li>Upside: <strong>virtual threads no longer pin on <code>synchronized</code></strong>
+        <span class="badge added">24</span> — drop the 21-era <code>ReentrantLock</code> workarounds.</li>
     </ul>
   </div>
 
@@ -1274,9 +1283,9 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
   <h2>1 · Language features</h2>
 
   <h3>Compact source files &amp; instance <code>main</code> <span class="badge added">Final in 25</span></h3>
-  <p>You can now write a runnable program with no <code>class</code>, no <code>public static</code>,
-  no explicit imports of <code>java.base</code>, and a simple <code>IO</code> helper. The full
-  ceremony is still there when you need it — this just removes it for small programs and learners.</p>
+  <p><em>Why it matters:</em> a runnable program with no <code>class</code>, no <code>public
+  static</code>, no explicit <code>java.base</code> imports, and a simple <code>IO</code> helper — much
+  gentler for learners and scripts. The full ceremony is still available when you need it.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">public class Hello {
@@ -1294,13 +1303,13 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
   </div>
 
   <h3>Flexible constructor bodies <span class="badge added">Final in 25</span></h3>
-  <p>Run validation/normalisation statements <em>before</em> calling <code>super(...)</code> or
-  <code>this(...)</code> — previously impossible.</p>
+  <p><em>Why it matters:</em> validate or normalise arguments <em>before</em> calling
+  <code>super(...)</code>/<code>this(...)</code> — previously impossible, forcing awkward workarounds.</p>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before — validate after super, or in a helper</div>
+    <div class="before"><div class="ba-label">Before — validation must come after super()</div>
       <pre><code class="java">Range(int lo, int hi) {
-  super();                 // must be first
-  if (lo &gt; hi)             // validation too late
+  super();                 // must be first statement
+  if (lo &gt; hi)             // too late — super already ran
     throw new IllegalArgumentException();
   this.lo = lo; this.hi = hi;
 }</code></pre>
@@ -1316,7 +1325,7 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
   </div>
 
   <h3>Module import declarations <span class="badge added">Final in 25</span></h3>
-  <p>Import <em>every</em> package a module exports in one line — handy in scripts and prototypes.</p>
+  <p><em>Why it matters:</em> import <em>every</em> package a module exports in one line — great for scripts and prototypes.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">import java.util.List;
@@ -1330,42 +1339,54 @@ import java.util.function.Function;</code></pre>
   </div>
 
   <h3>Unnamed variables &amp; patterns <span class="badge added">Final in 22</span></h3>
-  <pre><code class="java">catch (IOException _) { retry(); }              // don't care about the value
-map.forEach((_, v) -> total += v);
-if (p instanceof Point(int x, _)) use(x);       // ignore y</code></pre>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — name things you never use</div>
+      <pre><code class="java">try { ... }
+catch (IOException ignored) { retry(); }
+for (Order o : orders) count++;   // 'o' unused</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 22)</div>
+      <pre><code class="java">try { ... }
+catch (IOException _) { retry(); }
+for (var _ : orders) count++;
+if (p instanceof Point(int x, _)) use(x);   // ignore y</code></pre>
+    </div>
+  </div>
 
   <h3>Scoped values <span class="badge added">Final in 25</span></h3>
-  <p>An immutable, safer replacement for <code>ThreadLocal</code>, designed for virtual threads.</p>
-  <pre><code class="java">final static ScopedValue&lt;User&gt; CURRENT = ScopedValue.newInstance();
-
-ScopedValue.where(CURRENT, user).run(() -> handleRequest());
-// deeper in the call stack:
-User u = CURRENT.get();   // bound for this scope only, cannot be mutated</code></pre>
+  <p><em>Why it matters:</em> an immutable, auto-cleaning replacement for <code>ThreadLocal</code>,
+  designed for virtual threads.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — ThreadLocal, must remove()</div>
+      <pre><code class="java">CURRENT.set(user);
+try { handle(); }
+finally { CURRENT.remove(); }   // leak if forgotten</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 25)</div>
+      <pre><code class="java">ScopedValue.where(CURRENT, user).run(() -> handle());
+// auto-unbound; deeper code reads CURRENT.get()</code></pre>
+    </div>
+  </div>
   <p>Full story → <a href="#pg-topics-scoped-values-html">Scoped values deep-dive</a>.</p>
 
   <h3>Still previewing in 25</h3>
   <ul>
-    <li><strong>Primitive types in patterns, <code>instanceof</code> &amp; <code>switch</code></strong>
-      <span class="badge preview">Preview</span> — <code>case int i</code>, etc.</li>
+    <li><strong>Primitive types in patterns</strong> <span class="badge preview">Preview</span> — <code>case int i</code>, etc.</li>
     <li><strong>Structured concurrency</strong> <span class="badge preview">Preview (5th)</span> →
       <a href="#pg-topics-structured-concurrency-html">deep-dive</a>.</li>
-    <li><strong>Stable Values</strong> <span class="badge preview">Preview</span> — deferred,
-      write-once immutability (a safe lazy-init primitive):
-      <pre><code class="java">// preview API shape
-StableValue&lt;Logger&gt; logger = StableValue.of();
-Logger l = logger.orElseSet(() -> createLogger());   // computed at most once</code></pre>
-    </li>
+    <li><strong>Stable Values</strong> <span class="badge preview">Preview</span> — write-once, lazy, thread-safe constants:
+      <pre><code class="java">StableValue&lt;Logger&gt; logger = StableValue.of();
+Logger l = logger.orElseSet(() -> createLogger());   // computed at most once</code></pre></li>
   </ul>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
   <h3>Stream Gatherers <span class="badge added">Final in 24</span></h3>
-  <p>Custom <em>intermediate</em> operations — the missing counterpart to custom <code>Collector</code>s.</p>
+  <p><em>Why it matters:</em> custom <em>intermediate</em> operations — the missing counterpart to a custom <code>Collector</code>.</p>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before — no clean windowing</div>
-      <pre><code class="java">// sliding windows of 3: manual index loops
-List&lt;List&lt;Integer&gt;&gt; windows = new ArrayList&lt;&gt;();
+    <div class="before"><div class="ba-label">Before — manual windowing</div>
+      <pre><code class="java">List&lt;List&lt;Integer&gt;&gt; windows = new ArrayList&lt;&gt;();
 for (int i = 0; i + 3 &lt;= xs.size(); i++)
   windows.add(xs.subList(i, i + 3));</code></pre>
     </div>
@@ -1373,15 +1394,14 @@ for (int i = 0; i + 3 &lt;= xs.size(); i++)
       <pre><code class="java">var windows = xs.stream()
     .gather(Gatherers.windowSliding(3))
     .toList();
-// also: fold, scan, mapConcurrent, windowFixed
-</code></pre>
+// also: fold, scan, mapConcurrent, windowFixed</code></pre>
     </div>
   </div>
   <p>Writing your own gatherer → <a href="#pg-topics-streams-gatherers-html">Streams &amp; Gatherers deep-dive</a>.</p>
 
   <h3>Foreign Function &amp; Memory API <span class="badge added">Final in 22</span></h3>
-  <p>Call native libraries and manage off-heap memory with pure Java — the modern, safe replacement
-  for JNI. → <a href="#pg-topics-ffm-api-html">FFM deep-dive</a>.</p>
+  <p>Call native libraries and manage off-heap memory in pure Java — the safe replacement for JNI. →
+  <a href="#pg-topics-ffm-api-html">FFM deep-dive</a>.</p>
 
   <h3>Cryptography</h3>
   <pre><code class="java">// Key Derivation Function API (Final in 25)
@@ -1393,32 +1413,47 @@ Signature       dsa = Signature.getInstance("ML-DSA");          // JEP 497</code
 
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>
+
+  <h3>Markdown in Javadoc <span class="badge added">Added in 23</span></h3>
+  <p><em>Why it matters:</em> write doc comments in Markdown (<code>///</code> lines) instead of HTML tags.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — HTML tags</div>
+      <pre><code class="java">/**
+ * Returns the &lt;b&gt;sum&lt;/b&gt;.
+ * &lt;ul&gt;&lt;li&gt;fast&lt;/li&gt;&lt;li&gt;null-safe&lt;/li&gt;&lt;/ul&gt;
+ * @param xs the values
+ */</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 23)</div>
+      <pre><code class="java">/// Returns the **sum**.
+/// - fast
+/// - null-safe
+/// @param xs the values</code></pre>
+    </div>
+  </div>
+
   <ul>
     <li><strong>Launch multi-file source programs</strong> <span class="badge added">Added in 22</span> —
       <code>java Main.java</code> compiles referenced sibling files on demand (no build tool). See
       <a href="#pg-quickstart-html">Quick start</a>.</li>
-    <li><strong>Markdown in Javadoc</strong> <span class="badge added">Added in 23</span> — write doc
-      comments as Markdown (<code>/// ...</code>) instead of HTML tags.</li>
-    <li><strong>Project Leyden — faster startup:</strong> Ahead-of-Time Class Loading &amp; Linking
-      <span class="badge added">Added in 24</span>, plus <strong>AOT command-line ergonomics</strong> and
-      <strong>AOT method profiling</strong> <span class="badge added">Added in 25</span> shift work from
-      run time to a training/build step.</li>
-    <li><strong>JFR upgrades</strong> <span class="badge added">25</span> — CPU-time profiling
-      (experimental), cooperative sampling, method timing &amp; tracing.</li>
+    <li><strong>Project Leyden — faster startup:</strong> AOT Class Loading &amp; Linking
+      <span class="badge added">24</span>, plus AOT command-line ergonomics &amp; method profiling
+      <span class="badge added">25</span> shift work from run time to a training/build step.</li>
+    <li><strong>JFR upgrades</strong> <span class="badge added">25</span> — CPU-time profiling,
+      cooperative sampling, method timing &amp; tracing.</li>
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
   <h2>4 · JVM / performance / other</h2>
   <ul>
     <li><strong>Compact Object Headers</strong> <span class="badge added">Final in 25</span> (experimental in 24) —
-      shrinks every object's header from 12/16 to 8 bytes, meaningfully cutting heap use.</li>
+      shrinks every object header from 12/16 to 8 bytes, meaningfully cutting heap use.</li>
     <li><strong>Virtual threads no longer pinned on <code>synchronized</code></strong>
-      <span class="badge added">Added in 24</span> — a major reliability fix; blocking inside a
-      <code>synchronized</code> block no longer ties up a carrier thread.</li>
-    <li><strong>Generational Shenandoah</strong> <span class="badge added">25</span> and
-      <strong>ZGC generational by default</strong> <span class="badge added">23</span> /
-      non-generational mode removed <span class="badge added">24</span>.</li>
-    <li><strong>32-bit x86 port removed</strong>; <code>sun.misc.Unsafe</code> memory-access methods now warn.</li>
+      <span class="badge added">Added in 24</span> — a major reliability fix.</li>
+    <li><strong>Generational Shenandoah</strong> <span class="badge added">25</span>; <strong>ZGC
+      generational by default</strong> <span class="badge added">23</span> / non-generational removed
+      <span class="badge added">24</span>.</li>
+    <li><strong>32-bit x86 port removed</strong>; <code>sun.misc.Unsafe</code> memory-access methods warn.</li>
   </ul>
 
   <!-- ============ SUMMARY ============ -->
@@ -1429,9 +1464,8 @@ Signature       dsa = Signature.getInstance("ML-DSA");          // JEP 497</code
       <li><strong>Simpler programs:</strong> <code>void main()</code> + <code>IO.println</code>, <code>import module java.base</code></li>
       <li><strong>Final:</strong> scoped values, stream gatherers (24), FFM (22), flexible constructors, unnamed <code>_</code> (22)</li>
       <li><strong>Crypto:</strong> KDF API, ML-KEM / ML-DSA (post-quantum)</li>
-      <li><strong>Startup:</strong> Project Leyden AOT caching</li>
-      <li><strong>Memory:</strong> compact object headers</li>
-      <li><strong>Reliability:</strong> virtual threads no longer pin on <code>synchronized</code></li>
+      <li><strong>Javadoc:</strong> Markdown comments (23); <strong>startup:</strong> Project Leyden AOT</li>
+      <li><strong>Memory:</strong> compact object headers; <strong>reliability:</strong> VTs no longer pin</li>
       <li><strong>Preview:</strong> primitive patterns, structured concurrency, stable values</li>
     </ul>
   </div>
