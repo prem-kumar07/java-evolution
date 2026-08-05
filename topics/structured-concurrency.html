@@ -3,112 +3,246 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Structured concurrency</title>
+  <title>Structured concurrency — complete guide</title>
   <link rel="stylesheet" href="../assets/style.css">
 </head>
 <body data-root="../" data-page="topics/structured-concurrency.html" data-title="Structured concurrency">
 <main>
-  <p class="sec-tag">Deep dive · concurrency</p>
+  <p class="sec-tag">Deep dive · concurrency · complete guide</p>
   <h1>Structured concurrency <span class="badge preview">Preview</span></h1>
   <p class="lead">
     Structured concurrency treats a group of related subtasks as a <strong>single unit of work</strong>.
-    They start together, and the scope guarantees they all finish (or are cancelled) before the block
-    exits — no leaked threads, clear error propagation, honest stack traces.
+    They start together inside a scope, and the scope guarantees they all finish — or are all
+    cancelled — before the block exits. No leaked threads, clear error propagation, honest task trees.
   </p>
-  <div class="warn"><strong>Still a preview feature</strong> (5th preview in Java 25, 6th in 26).
-  Compile/run with <code>--enable-preview</code>. The API shown here is the reworked Java 25 shape;
-  earlier releases used <code>ShutdownOnFailure</code>/<code>ShutdownOnSuccess</code> (see Evolution).</div>
 
-  <h2>The problem: unstructured concurrency leaks</h2>
+  <div class="hero-stats">
+    <div class="stat"><span class="num">no leaks</span><span class="lbl">all subtasks joined/cancelled</span></div>
+    <div class="stat"><span class="num">fail-fast</span><span class="lbl">one error cancels siblings</span></div>
+    <div class="stat"><span class="num">1 VT</span><span class="lbl">per subtask (cheap)</span></div>
+    <div class="stat"><span class="num">clear</span><span class="lbl">parent-child task tree</span></div>
+    <div class="stat"><span class="num">Preview</span><span class="lbl">6th preview in Java 26</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Firing off subtasks with a raw <code>ExecutorService</code> + <code>Future</code>s is
+    <em>unstructured</em>: if one task fails, siblings keep running (wasted work / leaks), cancellation
+    is manual and easy to botch, and there's no relationship between parent and child in stack traces
+    or thread dumps. Structured concurrency gives those subtasks a lifetime bound to a lexical scope —
+    like try-with-resources, but for concurrency.
+  </div>
+  <div class="warn"><strong>Still a preview feature</strong> (5th preview in Java 25, 6th in 26).
+  Compile/run with <code>--enable-preview</code>. The API here is the reworked Java 25 shape; earlier
+  releases used <code>ShutdownOnFailure</code>/<code>ShutdownOnSuccess</code> (see Evolution).</div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#problem">1. The problem with raw futures</a>
+    <a href="#model">2. The scope model</a>
+    <a href="#basic">3. Basic usage</a>
+    <a href="#joiners">4. Joiners (completion policy)</a>
+    <a href="#deadline">5. Deadlines &amp; cancellation</a>
+    <a href="#vt">6. With virtual threads &amp; scoped values</a>
+    <a href="#pitfalls">7. Pitfalls</a>
+    <a href="#realworld">8. Real-world use cases</a>
+    <a href="#cheat">9. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="problem">1 · The problem with raw futures</h2>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before — ExecutorService, manual coordination</div>
+    <div class="before"><div class="ba-label">Legacy — unstructured, leak-prone</div>
       <pre><code class="java">Future&lt;User&gt;  u = pool.submit(() -> findUser(id));
 Future&lt;Order&gt; o = pool.submit(() -> fetchOrder(id));
 try {
   return new Response(u.get(), o.get());
   // if findUser throws, fetchOrder keeps running (leak);
-  // cancellation &amp; error handling are all manual and easy to botch
+  // if the caller is interrupted, both may be orphaned.
 } catch (Exception e) {
   u.cancel(true); o.cancel(true);   // did you remember both?
   throw e;
 }</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After — one scope, one unit</div>
+    <div class="after"><div class="ba-label">Structured — one scope, one unit</div>
       <pre><code class="java">try (var scope = StructuredTaskScope.open()) {   // Java 25 API
-  Subtask&lt;User&gt;  u = scope.fork(() -> findUser(id));
-  Subtask&lt;Order&gt; o = scope.fork(() -> fetchOrder(id));
+  var user  = scope.fork(() -> findUser(id));
+  var order = scope.fork(() -> fetchOrder(id));
 
-  scope.join();            // wait for all; propagate the first failure,
-                           // cancelling the siblings automatically
-  return new Response(u.get(), o.get());
-}   // on exit, every subtask is guaranteed done
-</code></pre>
+  scope.join();          // wait for all; first failure cancels the rest
+  return new Response(user.get(), order.get());
+}   // on exit, every subtask is guaranteed done</code></pre>
     </div>
   </div>
 
-  <h2>Why it's better</h2>
+  <!-- ============================================================ -->
+  <h2 id="model">2 · The scope model</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 230" role="img" aria-label="A parent scope forks three subtasks on virtual threads; join waits for all, and one failure cancels the siblings, before the block exits">
+      <defs>
+        <marker id="scA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="40" y="20" width="680" height="190" rx="12" class="dg-accent" fill-opacity="0.25"/>
+      <text x="60" y="44" class="dg-title">StructuredTaskScope (parent, one thread)</text>
+      <!-- subtasks -->
+      <rect x="70"  y="70" width="180" height="46" rx="8" class="dg-box"/>
+      <text x="160" y="92"  text-anchor="middle" class="dg-text">fork → subtask A</text>
+      <text x="160" y="108" text-anchor="middle" class="dg-soft">virtual thread</text>
+      <rect x="290" y="70" width="180" height="46" rx="8" class="dg-warn-box"/>
+      <text x="380" y="92"  text-anchor="middle" class="dg-text">subtask B ✗ fails</text>
+      <text x="380" y="108" text-anchor="middle" class="dg-soft">virtual thread</text>
+      <rect x="510" y="70" width="180" height="46" rx="8" class="dg-box"/>
+      <text x="600" y="92"  text-anchor="middle" class="dg-text">subtask C</text>
+      <text x="600" y="108" text-anchor="middle" class="dg-soft">→ cancelled</text>
+      <!-- join bar -->
+      <rect x="70" y="150" width="620" height="36" rx="8" class="dg-good-box"/>
+      <text x="380" y="173" text-anchor="middle" class="dg-text">scope.join()  → all subtasks complete or cancelled before we continue</text>
+      <line x1="160" y1="116" x2="160" y2="148" class="dg-line" marker-end="url(#scA)"/>
+      <line x1="380" y1="116" x2="380" y2="148" class="dg-line" marker-end="url(#scA)"/>
+      <line x1="600" y1="116" x2="600" y2="148" class="dg-line" marker-end="url(#scA)"/>
+    </svg>
+    <figcaption>Subtasks are children of the scope. If B fails, C is cancelled; the block cannot exit
+    until every child is done. Cancellation and joining are automatic.</figcaption>
+  </figure>
   <ul>
-    <li><strong>No leaks:</strong> the try-with-resources block can't exit until all forked subtasks complete or are cancelled.</li>
-    <li><strong>Short-circuiting:</strong> if one subtask fails, the others are cancelled — you don't wait on work you'll throw away.</li>
-    <li><strong>Clear hierarchy:</strong> subtasks are children of the scope; observability tools show the real task tree.</li>
+    <li><strong>No leaks:</strong> try-with-resources can't exit until all forked subtasks finish/cancel.</li>
+    <li><strong>Short-circuit:</strong> one failure cancels the siblings — no waiting on work you'll discard.</li>
+    <li><strong>Clear hierarchy:</strong> observability tools show the real parent→child task tree.</li>
     <li><strong>Cheap:</strong> each subtask runs on its own <a href="virtual-threads.html">virtual thread</a>.</li>
   </ul>
 
-  <h2>Joiners — choosing the completion policy (Java 25)</h2>
-  <p>A <em>Joiner</em> decides when <code>join()</code> returns and how results/errors combine.</p>
-  <pre><code class="java">// Fail fast: all must succeed, or the first exception is thrown
-try (var scope = StructuredTaskScope.open(Joiner.&lt;String&gt;allSuccessfulOrThrow())) {
-  scope.fork(() -> a());
-  scope.fork(() -> b());
-  var results = scope.join();   // Stream of subtasks, all succeeded
-}
+  <!-- ============================================================ -->
+  <h2 id="basic">3 · Basic usage</h2>
+  <pre><code class="java">Response handle(String id) throws Exception {
+  try (var scope = StructuredTaskScope.open()) {
+    var user   = scope.fork(() -> findUser(id));    // returns a Subtask&lt;User&gt;
+    var orders = scope.fork(() -> fetchOrders(id));
 
-// Race: return the first success, cancel the rest
-try (var scope = StructuredTaskScope.open(Joiner.&lt;String&gt;anySuccessfulResultOrThrow())) {
-  scope.fork(() -> mirror1());
-  scope.fork(() -> mirror2());
-  String fastest = scope.join();
+    scope.join();                    // MUST join before reading results
+    return new Response(user.get(), orders.get());
+  }
 }</code></pre>
 
-  <h2>Deadlines &amp; cancellation</h2>
+  <!-- ============================================================ -->
+  <h2 id="joiners">4 · Joiners — choosing the completion policy</h2>
+  <p>A <em>Joiner</em> decides when <code>join()</code> returns and how results/errors combine.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">All must succeed (fail-fast)</div>
+      <pre><code class="java">try (var scope = StructuredTaskScope.open(
+        Joiner.&lt;String&gt;allSuccessfulOrThrow())) {
+  scope.fork(() -> a());
+  scope.fork(() -> b());
+  var all = scope.join();   // Stream of subtasks, all OK
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Race — first success wins</div>
+      <pre><code class="java">try (var scope = StructuredTaskScope.open(
+        Joiner.&lt;String&gt;anySuccessfulResultOrThrow())) {
+  scope.fork(() -> mirror1());
+  scope.fork(() -> mirror2());
+  String fastest = scope.join();   // others cancelled
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="deadline">5 · Deadlines &amp; cancellation</h2>
   <pre><code class="java">try (var scope = StructuredTaskScope.open(
         Joiner.allSuccessfulOrThrow(),
-        cf -> cf.withTimeout(Duration.ofSeconds(2)))) {   // whole group deadline
+        cf -> cf.withTimeout(Duration.ofSeconds(2)))) {   // whole-group deadline
   scope.fork(() -> slowCall());
   scope.join();   // throws if the deadline passes; subtasks cancelled
 }</code></pre>
 
-  <h2>Gotchas</h2>
-  <ul>
-    <li><strong>Read subtask results only after <code>join()</code>.</strong> Calling
-      <code>Subtask.get()</code> before joining throws <code>IllegalStateException</code>.</li>
-    <li><strong>The scope is confined to one thread</strong> — fork from the thread that opened it.</li>
-    <li><strong>Preview API is moving.</strong> Don't build production infrastructure on the exact
-      method names yet; the concept is stable, the surface is still settling.</li>
-    <li>Pairs naturally with <a href="scoped-values.html">scoped values</a> to pass request context
-      into every subtask immutably.</li>
-  </ul>
+  <!-- ============================================================ -->
+  <h2 id="vt">6 · With virtual threads &amp; scoped values</h2>
+  <p>Structured concurrency is the "manager" for cheap <a href="virtual-threads.html">virtual
+  threads</a>, and <a href="scoped-values.html">scoped values</a> bound in the enclosing scope are
+  visible to every forked subtask — the clean way to pass request context into concurrent work.</p>
+  <pre><code class="java">ScopedValue.where(CURRENT_USER, user).run(() -> {
+  try (var scope = StructuredTaskScope.open()) {
+    scope.fork(() -> loadProfile());   // sees CURRENT_USER.get() == user
+    scope.fork(() -> loadOrders());    // also sees it
+    scope.join();
+  }
+});</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">7 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>Reading <code>subtask.get()</code> before <code>join()</code></td><td>Throws <code>IllegalStateException</code> — always join first.</td></tr>
+    <tr><td>Forking from another thread</td><td>The scope is confined to the thread that opened it.</td></tr>
+    <tr><td>Depending on exact method names</td><td>Preview API is still moving — the concept is stable, the surface is not.</td></tr>
+    <tr><td>Treating it like a thread pool</td><td>It's per-request/task, not a long-lived shared pool.</td></tr>
+    <tr><td>Forgetting <code>--enable-preview</code></td><td>Won't compile/run without it.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">8 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Joiner / shape</th></tr>
+    <tr><td>Aggregate an endpoint from several services (need all)</td><td><code>allSuccessfulOrThrow</code></td></tr>
+    <tr><td>Query redundant replicas / mirrors, take the fastest</td><td><code>anySuccessfulResultOrThrow</code></td></tr>
+    <tr><td>Fan-out with an overall SLA/deadline</td><td>any joiner + <code>withTimeout</code></td></tr>
+    <tr><td>Scatter-gather over a list of IDs</td><td>fork per item, collect results</td></tr>
+    <tr><td>Cancel-the-rest when one answer suffices</td><td>race joiner</td></tr>
+  </table>
+  <h3>Worked example — aggregate a product page with a 2s SLA</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — futures, manual timeout &amp; cancel</div>
+      <pre><code class="java">var pool = Executors.newFixedThreadPool(3);
+try {
+  var pf = pool.submit(() -> productSvc.get(id));
+  var rf = pool.submit(() -> reviewSvc.list(id));
+  var sf = pool.submit(() -> stockSvc.check(id));
+  // enforce a 2s budget across three gets... by hand
+  var page = new ProductPage(
+      pf.get(2, SECONDS), rf.get(2, SECONDS), sf.get(2, SECONDS));
+  return page;
+} catch (Exception e) {
+  // cancel whatever is still running — easy to miss one
+  throw e;
+} finally { pool.shutdownNow(); }</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Structured concurrency</div>
+      <pre><code class="java">try (var scope = StructuredTaskScope.open(
+        Joiner.allSuccessfulOrThrow(),
+        cf -> cf.withTimeout(Duration.ofSeconds(2)))) {
+
+  var product = scope.fork(() -> productSvc.get(id));
+  var reviews = scope.fork(() -> reviewSvc.list(id));
+  var stock   = scope.fork(() -> stockSvc.check(id));
+
+  scope.join();   // 2s budget for the whole group; failures cancel siblings
+  return new ProductPage(product.get(), reviews.get(), stock.get());
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">9 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>Structured concurrency in one glance</h3>
+    <ul>
+      <li><code>try (var scope = StructuredTaskScope.open(joiner)) { scope.fork(...); scope.join(); }</code></li>
+      <li>Joiners: <code>allSuccessfulOrThrow</code>, <code>anySuccessfulResultOrThrow</code>, custom.</li>
+      <li>Read <code>subtask.get()</code> only <strong>after</strong> <code>join()</code>.</li>
+      <li>All subtasks complete or are cancelled before the block exits — no leaks.</li>
+      <li>One virtual thread per subtask; add <code>withTimeout</code> for a group deadline.</li>
+      <li>Combine with scoped values to pass context; needs <code>--enable-preview</code>.</li>
+    </ul>
+  </div>
 
   <h2>Evolution</h2>
   <table class="data">
     <tr><th>Version</th><th>Change</th></tr>
     <tr><td>Java 19–20</td><td>Incubator (<code>jdk.incubator.concurrent</code>).</td></tr>
-    <tr><td>Java 21–24</td><td>Preview; API based on <code>StructuredTaskScope.ShutdownOnFailure</code> / <code>ShutdownOnSuccess</code> + <code>throwIfFailed()</code>.</td></tr>
-    <tr><td>Java 25</td><td>5th preview (JEP 505) — reworked <code>open(Joiner…)</code> API shown above.</td></tr>
+    <tr><td>Java 21–24</td><td>Preview; <code>ShutdownOnFailure</code>/<code>ShutdownOnSuccess</code> + <code>throwIfFailed()</code>.</td></tr>
+    <tr><td>Java 25</td><td>5th preview (JEP 505) — reworked <code>open(Joiner…)</code> API.</td></tr>
     <tr><td>Java 26</td><td>6th preview (JEP 525) — refinements, approaching final.</td></tr>
   </table>
-
-  <div class="cheat">
-    <h3>Cheat card</h3>
-    <ul>
-      <li><code>try (var scope = StructuredTaskScope.open(joiner)) { scope.fork(...); scope.join(); }</code></li>
-      <li>Joiners: <code>allSuccessfulOrThrow</code>, <code>anySuccessfulResultOrThrow</code>, custom.</li>
-      <li>All subtasks complete or are cancelled before the block exits — no leaks.</li>
-      <li>Read <code>subtask.get()</code> only after <code>join()</code>.</li>
-      <li>One virtual thread per subtask; add <code>withTimeout</code> for a group deadline.</li>
-      <li>Preview → needs <code>--enable-preview</code>.</li>
-    </ul>
-  </div>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>
