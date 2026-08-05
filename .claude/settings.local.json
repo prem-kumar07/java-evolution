@@ -14,7 +14,9 @@
       "Bash(node --check assets/nav.js)",
       "Bash(node --check assets/search-index.js)",
       "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand sealed classes to full guide \\(diagram, ADTs, Result example\\) *)",
-      "Bash(open topics/sealed-classes.html)"
+      "Bash(open topics/sealed-classes.html)",
+      "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand pattern matching & switch to full guide \\(timeline diagram, JSON example\\) *)",
+      "Bash(open topics/pattern-matching-switch.html)"
     ]
   }
 }

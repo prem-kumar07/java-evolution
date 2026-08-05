@@ -3,49 +3,96 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pattern matching &amp; switch</title>
+  <title>Pattern matching &amp; switch — complete guide</title>
   <link rel="stylesheet" href="../assets/style.css">
 </head>
 <body data-root="../" data-page="topics/pattern-matching-switch.html" data-title="Pattern matching &amp; switch">
 <main>
-  <p class="sec-tag">Deep dive · language</p>
+  <p class="sec-tag">Deep dive · language · complete guide</p>
   <h1>Pattern matching &amp; switch</h1>
   <p class="lead">
-    Java grew a family of related features that let you <strong>test a type, bind a variable, and
-    destructure data</strong> in one step — turning long <code>if/instanceof/cast</code> chains and
-    fall-through <code>switch</code> statements into concise, exhaustive expressions.
+    A family of related features that let you <strong>test a type, bind a variable and destructure
+    data in one step</strong> — turning long <code>if / instanceof / cast</code> chains and
+    fall-through <code>switch</code> statements into concise, exhaustive, readable expressions.
   </p>
 
-  <h2>The pieces, and when each arrived</h2>
+  <div class="hero-stats">
+    <div class="stat"><span class="num">3-in-1</span><span class="lbl">test + cast + bind</span></div>
+    <div class="stat"><span class="num">0</span><span class="lbl"><code>default</code> over sealed/enum</span></div>
+    <div class="stat"><span class="num">nested</span><span class="lbl">record destructuring</span></div>
+    <div class="stat"><span class="num">14→25</span><span class="lbl">built up over releases</span></div>
+    <div class="stat"><span class="num">Java 21</span><span class="lbl">switch patterns final</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Working with a value whose concrete type varies used to mean a ladder of
+    <code>if (x instanceof T)</code> + cast + extract, or a <code>switch</code> riddled with
+    <code>break</code> and fall-through bugs. Pattern matching makes "what is this, and pull it apart"
+    a first-class, compiler-checked operation — the basis of <em>data-oriented programming</em> in Java.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#family">1. The family &amp; timeline</a>
+    <a href="#switchexpr">2. Switch expressions</a>
+    <a href="#instanceof">3. instanceof patterns</a>
+    <a href="#switchpat">4. Switch patterns + guards</a>
+    <a href="#record">5. Record patterns</a>
+    <a href="#unnamed">6. Unnamed patterns _</a>
+    <a href="#primitive">7. Primitive patterns</a>
+    <a href="#rules">8. Dominance &amp; exhaustiveness</a>
+    <a href="#pitfalls">9. Pitfalls</a>
+    <a href="#realworld">10. Real-world use cases</a>
+    <a href="#cheat">11. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="family">1 · The family &amp; timeline</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 150" role="img" aria-label="Timeline of pattern-matching features from Java 14 to 25">
+      <line x1="30" y1="60" x2="740" y2="60" class="dg-line"/>
+      <g class="dg-soft" text-anchor="middle">
+        <circle cx="70"  cy="60" r="6" class="dg-accent-solid"/><text x="70"  y="44">14</text><text x="70"  y="88">switch expr</text>
+        <circle cx="210" cy="60" r="6" class="dg-accent-solid"/><text x="210" y="44">16</text><text x="210" y="88">instanceof</text>
+        <circle cx="350" cy="60" r="6" class="dg-accent-solid"/><text x="350" y="44">21</text><text x="350" y="88">switch patterns</text>
+        <circle cx="470" cy="60" r="6" class="dg-accent-solid"/><text x="470" y="102">+ record patterns</text>
+        <circle cx="600" cy="60" r="6" class="dg-accent-solid"/><text x="600" y="44">22–25</text><text x="600" y="88">unnamed _</text>
+        <circle cx="710" cy="60" r="6" class="dg-warn"/><text x="710" y="44">preview</text><text x="710" y="88">primitives</text>
+      </g>
+    </svg>
+    <figcaption>Pattern matching arrived in pieces. Each builds on the last; together they form one
+    coherent way to work with data.</figcaption>
+  </figure>
   <table class="data">
     <tr><th>Feature</th><th>Final</th><th>What it does</th></tr>
     <tr><td>Switch expressions</td><td><span class="badge added">14</span></td><td><code>switch</code> returns a value; arrow labels; <code>yield</code>.</td></tr>
     <tr><td>Pattern matching for <code>instanceof</code></td><td><span class="badge added">16</span></td><td>Test + cast + bind in one.</td></tr>
     <tr><td>Pattern matching for <code>switch</code></td><td><span class="badge added">21</span></td><td>Type patterns &amp; guards in <code>case</code>.</td></tr>
     <tr><td>Record patterns</td><td><span class="badge added">21</span></td><td>Destructure records, nested.</td></tr>
-    <tr><td>Unnamed patterns <code>_</code></td><td><span class="badge added">25</span></td><td>Ignore parts you don't need.</td></tr>
+    <tr><td>Unnamed patterns <code>_</code></td><td><span class="badge added">22</span></td><td>Ignore parts you don't need.</td></tr>
     <tr><td>Primitive type patterns</td><td><span class="badge preview">Preview</span></td><td><code>case int i</code>, exactness checks.</td></tr>
   </table>
 
-  <h2>1 · Switch expressions <span class="badge added">Java 14</span></h2>
+  <!-- ============================================================ -->
+  <h2 id="switchexpr">2 · Switch expressions <span class="badge added">Java 14</span></h2>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before — statement, break, fall-through bugs</div>
+    <div class="before"><div class="ba-label">Legacy — statement, break, fall-through</div>
       <pre><code class="java">int num;
 switch (day) {
   case MON: case TUE: case WED:
   case THU: case FRI:
-    num = 5; break;
+    num = 5; break;          // forget break → bug
   case SAT: case SUN:
     num = 2; break;
   default:
     throw new IllegalStateException();
 }</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After</div>
+    <div class="after"><div class="ba-label">Switch expression</div>
       <pre><code class="java">int num = switch (day) {
   case MON, TUE, WED, THU, FRI -> 5;
   case SAT, SUN                -> 2;
-};   // arrow = no fall-through; exhaustive on enums
+};   // arrow: no fall-through; exhaustive over the enum
 
 // block form uses yield:
 int n = switch (day) {
@@ -55,64 +102,73 @@ int n = switch (day) {
     </div>
   </div>
 
-  <h2>2 · Pattern matching for <code>instanceof</code> <span class="badge added">Java 16</span></h2>
+  <!-- ============================================================ -->
+  <h2 id="instanceof">3 · Pattern matching for <code>instanceof</code> <span class="badge added">Java 16</span></h2>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before</div>
+    <div class="before"><div class="ba-label">Legacy</div>
       <pre><code class="java">if (o instanceof String) {
-  String s = (String) o;    // repeat + cast
-  if (s.length() &gt; 3) ...
+  String s = (String) o;      // repeat the type + cast
+  if (s.length() &gt; 3) use(s);
 }</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After</div>
+    <div class="after"><div class="ba-label">Pattern</div>
       <pre><code class="java">if (o instanceof String s &amp;&amp; s.length() &gt; 3) {
-  ...   // s is in scope where the test is true
+  use(s);                     // s bound where the test is true
 }</code></pre>
     </div>
   </div>
-  <p>The bound variable's scope follows control flow ("flow scoping"): it's available exactly where
-  the pattern is known to have matched — including after an early <code>return</code>:</p>
+  <p><strong>Flow scoping:</strong> the binding is in scope exactly where the pattern is known to have
+  matched — including after an early return:</p>
   <pre><code class="java">if (!(o instanceof String s)) return;
-// s is in scope here, because we only get past the guard when it matched
+// we only reach here if it matched, so s is in scope:
 System.out.println(s.length());</code></pre>
 
-  <h2>3 · Pattern matching for <code>switch</code> <span class="badge added">Java 21</span></h2>
-  <pre><code class="java">String describe(Object o) {
-  return switch (o) {
-    case null            -> "null";                 // null can be a case
-    case Integer i when i &lt; 0 -> "negative int";    // guarded pattern
-    case Integer i       -> "int " + i;
-    case String s        -> "string of " + s.length();
-    case int[] arr       -> "array len " + arr.length;
-    default              -> "something else";
-  };
-}</code></pre>
+  <!-- ============================================================ -->
+  <h2 id="switchpat">4 · Pattern matching for <code>switch</code> + guards <span class="badge added">Java 21</span></h2>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — instanceof ladder</div>
+      <pre><code class="java">String describe;
+if (o instanceof Integer i &amp;&amp; i &lt; 0) describe = "negative";
+else if (o instanceof Integer i)     describe = "int " + i;
+else if (o instanceof String s)      describe = "str " + s;
+else if (o == null)                  describe = "null";
+else                                 describe = "other";</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Switch with patterns + guards</div>
+      <pre><code class="java">String describe = switch (o) {
+  case null                   -> "null";      // null is a case
+  case Integer i when i &lt; 0    -> "negative";  // guard with 'when'
+  case Integer i              -> "int " + i;
+  case String s               -> "str " + s;
+  default                     -> "other";
+};</code></pre>
+    </div>
+  </div>
   <ul>
-    <li><strong>Guards</strong> use <code>when</code>. Order matters — the first matching label wins.</li>
-    <li><strong><code>null</code> handling:</strong> add <code>case null</code> to handle it (otherwise
-      a <code>null</code> selector throws <code>NullPointerException</code>, as before).</li>
-    <li><strong>Exhaustiveness:</strong> over a sealed type or enum, the compiler verifies all cases are
-      covered — no <code>default</code> needed. See <a href="sealed-classes.html">Sealed classes</a>.</li>
+    <li><strong>Guards</strong> use <code>when</code>. The first matching label wins, so order matters.</li>
+    <li><strong><code>null</code></strong> only matches if you add <code>case null</code> (or
+      <code>case null, default</code>); otherwise a null selector throws NPE, as before.</li>
+    <li>Over a sealed type or enum the switch is <strong>exhaustive</strong> — no <code>default</code> needed.</li>
   </ul>
 
-  <h2>4 · Record patterns <span class="badge added">Java 21</span></h2>
-  <p>Destructure a record's components directly, nesting arbitrarily deep.</p>
+  <!-- ============================================================ -->
+  <h2 id="record">5 · Record patterns (destructuring) <span class="badge added">Java 21</span></h2>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before</div>
+    <div class="before"><div class="ba-label">Legacy — manual extraction</div>
       <pre><code class="java">if (obj instanceof Line l) {
   Point a = l.start(), b = l.end();
   int x1 = a.x(), y1 = a.y();
   int x2 = b.x(), y2 = b.y();
-  ...
 }</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After</div>
+    <div class="after"><div class="ba-label">Record pattern (nested)</div>
       <pre><code class="java">if (obj instanceof Line(Point(var x1, var y1),
                         Point(var x2, var y2))) {
-  ...   // all four bound at once
+  // x1,y1,x2,y2 all bound
 }</code></pre>
     </div>
   </div>
-  <pre><code class="java">// combine with switch for clean recursive code
+  <pre><code class="java">// recursion over an expression tree becomes trivial
 sealed interface Expr permits Num, Add {}
 record Num(int v) implements Expr {}
 record Add(Expr l, Expr r) implements Expr {}
@@ -124,42 +180,109 @@ int eval(Expr e) {
   };   // exhaustive, no default
 }</code></pre>
 
-  <h2>5 · Unnamed patterns &amp; variables <code>_</code> <span class="badge added">Java 25</span></h2>
-  <pre><code class="java">if (obj instanceof Point(int x, _)) use(x);      // ignore y
+  <!-- ============================================================ -->
+  <h2 id="unnamed">6 · Unnamed patterns &amp; variables <code>_</code> <span class="badge added">Java 22</span></h2>
+  <pre><code class="java">if (obj instanceof Point(int x, _)) use(x);       // ignore y
 switch (shape) {
-  case Circle(var r)           -> ...;
-  case Rectangle(var w, _)     -> ...;            // ignore height
+  case Rectangle(var w, _) -> useWidth(w);         // ignore height
 }
-catch (NumberFormatException _) { retry(); }      // ignore the exception object
-for (var _ : items) count++;                      // ignore the element</code></pre>
+catch (NumberFormatException _) { retry(); }        // ignore the exception object
+for (var _ : items) count++;                         // ignore the element</code></pre>
 
-  <h2>6 · Primitive type patterns <span class="badge preview">Preview</span></h2>
-  <p>Extends patterns to primitives with safe exactness checks (still preview through Java 26).</p>
+  <!-- ============================================================ -->
+  <h2 id="primitive">7 · Primitive type patterns <span class="badge preview">Preview</span></h2>
+  <p>Extends patterns to primitives with safe <em>exactness</em> checks (still preview through Java 26).</p>
   <pre><code class="java">switch (obj) {
-  case int i    -> ...;
-  case double d -> ...;
+  case int i    -> handleInt(i);
+  case double d -> handleDouble(d);
+  default       -> {}
 }
 if (longValue instanceof int i) { ... }   // matches only if it fits exactly in int</code></pre>
 
-  <h2>Gotchas</h2>
+  <!-- ============================================================ -->
+  <h2 id="rules">8 · Dominance &amp; exhaustiveness</h2>
   <ul>
     <li><strong>Dominance:</strong> a broader pattern can't precede a narrower one — the compiler
-      rejects unreachable cases (put <code>case Integer i when …</code> before the plain <code>case Integer i</code>).</li>
-    <li><strong><code>null</code>:</strong> only matched if you write <code>case null</code> (or
-      <code>case null, default</code>); otherwise NPE on a null selector.</li>
-    <li><strong>Guards vs. patterns:</strong> exhaustiveness ignores <code>when</code> guards — a
-      guarded case never counts toward covering all subtypes.</li>
+      rejects the unreachable case. Put <code>case Integer i when …</code> <em>before</em> the plain
+      <code>case Integer i</code>.</li>
+    <li><strong>Exhaustiveness:</strong> over a sealed type/enum the compiler verifies all cases are
+      covered. Guarded (<code>when</code>) cases <em>don't</em> count toward covering a subtype, so keep
+      an unguarded fallback for that type.</li>
+    <li><strong>Null:</strong> add <code>case null</code> to handle null in-switch instead of guarding before.</li>
   </ul>
 
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">9 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>Case order</td><td>First match wins; guarded/narrower cases must precede broader ones or you get "dominated"/unreachable errors.</td></tr>
+    <tr><td>Null</td><td>Not matched unless <code>case null</code> is present — otherwise NPE on a null selector.</td></tr>
+    <tr><td>Guards &amp; exhaustiveness</td><td>A <code>when</code> guard never satisfies exhaustiveness for its type.</td></tr>
+    <tr><td>Mixing arrow &amp; colon labels</td><td>Not allowed in the same switch — pick one style.</td></tr>
+    <tr><td>Over-nesting record patterns</td><td>Deep destructuring can hurt readability — bind an intermediate where clearer.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">10 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>How patterns help</th></tr>
+    <tr><td>Handling heterogeneous events/messages</td><td><code>switch</code> over a sealed event type, destructuring payloads.</td></tr>
+    <tr><td>Walking a JSON / config / AST tree</td><td>Recursive record patterns replace visitor boilerplate.</td></tr>
+    <tr><td>Mapping domain results to HTTP responses</td><td>Match <code>Ok</code>/<code>Err</code> (see <a href="sealed-classes.html">sealed Result</a>).</td></tr>
+    <tr><td>Cleaning up legacy <code>instanceof</code> chains</td><td>Test+cast+bind collapses each branch to one line.</td></tr>
+    <tr><td>Interpreters / rule engines</td><td>Exhaustive dispatch over a closed set of node types.</td></tr>
+  </table>
+  <h3>Worked example — render a JSON value</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — instanceof + casts + manual recursion</div>
+      <pre><code class="java">String render(Object json) {
+  if (json instanceof Map) {
+    Map&lt;?,?&gt; m = (Map&lt;?,?&gt;) json;
+    StringBuilder sb = new StringBuilder("{");
+    for (var e : m.entrySet())
+      sb.append(e.getKey()).append(":")
+        .append(render(e.getValue())).append(",");
+    return sb.append("}").toString();
+  } else if (json instanceof List) {
+    ...
+  } else if (json instanceof String s) {
+    return "\"" + s + "\"";
+  }
+  return String.valueOf(json);
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Sealed model + switch patterns</div>
+      <pre><code class="java">sealed interface Json permits JObj, JArr, JStr, JNum {}
+record JObj(Map&lt;String,Json&gt; fields) implements Json {}
+record JArr(List&lt;Json&gt; items)        implements Json {}
+record JStr(String value)            implements Json {}
+record JNum(double value)            implements Json {}
+
+String render(Json j) {
+  return switch (j) {
+    case JStr(var s)  -> "\"" + s + "\"";
+    case JNum(var n)  -> String.valueOf(n);
+    case JArr(var xs) -> xs.stream().map(this::render)
+                           .collect(joining(",", "[", "]"));
+    case JObj(var m)  -> m.entrySet().stream()
+        .map(e -> "\"" + e.getKey() + "\":" + render(e.getValue()))
+        .collect(joining(",", "{", "}"));
+  };   // exhaustive — a new Json variant forces an update here
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">11 · Cheat sheet</h2>
   <div class="cheat">
-    <h3>Cheat card</h3>
+    <h3>Pattern matching in one glance</h3>
     <ul>
-      <li><code>switch (x) { case A a -> ...; }</code> — value-returning, no fall-through.</li>
+      <li><code>switch (x) { case A a -> …; }</code> — value-returning, no fall-through.</li>
       <li><code>if (o instanceof String s)</code> — test + bind, flow-scoped.</li>
       <li><code>case Foo f when cond -></code> — guarded pattern.</li>
       <li><code>case Point(var x, var y) -></code> — record destructuring, nestable.</li>
       <li><code>_</code> ignores a binding; <code>case null</code> handles null.</li>
-      <li>Sealed/enum selector ⇒ exhaustive, no <code>default</code>.</li>
+      <li>Sealed/enum selector ⇒ exhaustive, no <code>default</code>; order narrow→broad.</li>
     </ul>
   </div>
 </main>
