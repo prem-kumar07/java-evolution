@@ -1,0 +1,176 @@
+/* ============================================================
+   nav.js — builds the persistent sidebar + topbar chrome from a
+   single SITEMAP, handles active-link highlighting, breadcrumbs,
+   light/dark theme (persisted), sidebar search filter, and the
+   mobile menu. No fetch() — works over file://.
+
+   Each page only needs:
+     <body data-root="../" data-page="versions/java-9.html" data-title="Java 9">
+       <main> ...content... </main>
+       <script src="../assets/nav.js"></script>
+       <script src="../assets/highlight.js"></script>
+     </body>
+   ============================================================ */
+(function () {
+  var SITEMAP = [
+    { title: "Start here", items: [
+      { href: "index.html", label: "Home / Overview" },
+      { href: "quickstart.html", label: "Quick start & tooling" }
+    ]},
+    { title: "By version", items: [
+      { href: "versions/java-9.html",  label: "Java 9" },
+      { href: "versions/java-11.html", label: "Java 11  (+10)  · LTS" },
+      { href: "versions/java-17.html", label: "Java 17  (+12–16)  · LTS" },
+      { href: "versions/java-21.html", label: "Java 21  (+18–20)  · LTS" },
+      { href: "versions/java-25.html", label: "Java 25  (+22–24)  · LTS" },
+      { href: "versions/java-26.html", label: "Java 26" }
+    ]},
+    { title: "Deep dives — language", items: [
+      { href: "topics/var.html",                    label: "var — local-variable type inference" },
+      { href: "topics/records.html",                label: "Records" },
+      { href: "topics/sealed-classes.html",         label: "Sealed classes" },
+      { href: "topics/pattern-matching-switch.html", label: "Pattern matching & switch" },
+      { href: "topics/text-blocks-strings.html",    label: "Text blocks & String APIs" },
+      { href: "topics/modules-jpms.html",           label: "Modules (JPMS)" }
+    ]},
+    { title: "Deep dives — concurrency & APIs", items: [
+      { href: "topics/virtual-threads.html",        label: "Virtual threads" },
+      { href: "topics/structured-concurrency.html", label: "Structured concurrency" },
+      { href: "topics/scoped-values.html",          label: "Scoped values" },
+      { href: "topics/streams-gatherers.html",      label: "Streams & Gatherers" },
+      { href: "topics/ffm-api.html",                label: "Foreign Function & Memory API" }
+    ]}
+  ];
+
+  var body = document.body;
+  var root = body.getAttribute("data-root") || "./";
+  var page = body.getAttribute("data-page") || "index.html";
+  var title = body.getAttribute("data-title") || document.title;
+
+  /* ---------- theme ---------- */
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    try { localStorage.setItem("java-doc-theme", t); } catch (e) {}
+  }
+  var saved;
+  try { saved = localStorage.getItem("java-doc-theme"); } catch (e) {}
+  if (!saved) {
+    saved = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+  }
+  applyTheme(saved);
+
+  /* ---------- build sidebar ---------- */
+  var sidebar = document.createElement("aside");
+  sidebar.id = "sidebar";
+
+  var brand = document.createElement("div");
+  brand.className = "brand";
+  brand.innerHTML = '<span class="logo">Java</span><span>9 → 26 Guide</span>';
+  brand.style.cursor = "pointer";
+  brand.onclick = function () { location.href = root + "index.html"; };
+  sidebar.appendChild(brand);
+
+  var search = document.createElement("input");
+  search.className = "nav-search";
+  search.type = "search";
+  search.placeholder = "Filter pages…";
+  sidebar.appendChild(search);
+
+  var nav = document.createElement("nav");
+  SITEMAP.forEach(function (group) {
+    var gt = document.createElement("div");
+    gt.className = "nav-group-title";
+    gt.textContent = group.title;
+    nav.appendChild(gt);
+    group.items.forEach(function (it) {
+      var a = document.createElement("a");
+      a.href = root + it.href;
+      a.textContent = it.label;
+      a.setAttribute("data-key", it.href);
+      if (it.href === page) a.className = "active";
+      nav.appendChild(a);
+    });
+  });
+  sidebar.appendChild(nav);
+
+  /* ---------- search filter ---------- */
+  search.addEventListener("input", function () {
+    var q = search.value.toLowerCase();
+    nav.querySelectorAll("a").forEach(function (a) {
+      a.style.display = a.textContent.toLowerCase().indexOf(q) >= 0 ? "" : "none";
+    });
+    nav.querySelectorAll(".nav-group-title").forEach(function (gt) {
+      var n = gt.nextElementSibling, any = false;
+      while (n && n.tagName === "A") { if (n.style.display !== "none") any = true; n = n.nextElementSibling; }
+      gt.style.display = any ? "" : "none";
+    });
+  });
+
+  /* ---------- topbar ---------- */
+  var topbar = document.createElement("div");
+  topbar.className = "topbar";
+
+  var left = document.createElement("div");
+  left.style.display = "flex";
+  left.style.alignItems = "center";
+  left.style.gap = "12px";
+
+  var menuBtn = document.createElement("button");
+  menuBtn.className = "menu-toggle";
+  menuBtn.setAttribute("aria-label", "Toggle menu");
+  menuBtn.textContent = "☰";
+  menuBtn.onclick = function () { sidebar.classList.toggle("open"); };
+  left.appendChild(menuBtn);
+
+  var crumbs = document.createElement("div");
+  crumbs.className = "crumbs";
+  crumbs.innerHTML = (page === "index.html")
+    ? "Home"
+    : '<a href="' + root + 'index.html">Home</a> › ' + title;
+  left.appendChild(crumbs);
+  topbar.appendChild(left);
+
+  var themeBtn = document.createElement("button");
+  themeBtn.className = "theme-toggle";
+  function themeLabel() {
+    return (document.documentElement.getAttribute("data-theme") === "dark") ? "☀︎ Light" : "☾ Dark";
+  }
+  themeBtn.textContent = themeLabel();
+  themeBtn.onclick = function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    applyTheme(cur === "dark" ? "light" : "dark");
+    themeBtn.textContent = themeLabel();
+  };
+  topbar.appendChild(themeBtn);
+
+  /* ---------- restructure DOM ---------- */
+  var main = document.querySelector("main");
+  var layout = document.createElement("div");
+  layout.className = "layout";
+  var mainWrap = document.createElement("div");
+  mainWrap.className = "main-wrap";
+  mainWrap.appendChild(topbar);
+  if (main) mainWrap.appendChild(main);
+  layout.appendChild(sidebar);
+  layout.appendChild(mainWrap);
+  body.insertBefore(layout, body.firstChild);
+
+  /* close mobile sidebar on nav click */
+  nav.addEventListener("click", function (e) {
+    if (e.target.tagName === "A") sidebar.classList.remove("open");
+  });
+
+  /* prev / next footer navigation */
+  var flat = [];
+  SITEMAP.forEach(function (g) { g.items.forEach(function (it) { flat.push(it); }); });
+  var idx = flat.findIndex(function (it) { return it.href === page; });
+  if (idx >= 0 && main) {
+    var footer = document.createElement("div");
+    footer.style.cssText = "display:flex;justify-content:space-between;gap:12px;margin-top:48px;border-top:1px solid var(--border);padding-top:20px;";
+    var prev = flat[idx - 1], next = flat[idx + 1];
+    footer.innerHTML =
+      (prev ? '<a href="' + root + prev.href + '">← ' + prev.label + '</a>' : '<span></span>') +
+      (next ? '<a href="' + root + next.href + '" style="text-align:right">' + next.label + ' →</a>' : '<span></span>');
+    main.appendChild(footer);
+  }
+})();

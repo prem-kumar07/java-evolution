@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Records — transparent data carriers</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/records.html" data-title="Records">
+<main>
+  <p class="sec-tag">Deep dive · language</p>
+  <h1>Records <span class="badge added">Java 16</span></h1>
+  <p class="lead">
+    A <code>record</code> is a concise, immutable, transparent carrier for a fixed set of values. You
+    declare the <em>components</em>; the compiler generates the constructor, accessors,
+    <code>equals</code>, <code>hashCode</code> and <code>toString</code>.
+  </p>
+
+  <h2>Why it exists</h2>
+  <p>Most "data classes" are pure boilerplate that's easy to get subtly wrong (a forgotten field in
+  <code>equals</code>). Records make the boilerplate correct and automatic, and signal intent: "this
+  is just data".</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">public final class Point {
+  private final int x, y;
+  public Point(int x, int y) { this.x = x; this.y = y; }
+  public int x() { return x; }
+  public int y() { return y; }
+  @Override public boolean equals(Object o) {
+    if (!(o instanceof Point p)) return false;
+    return x == p.x &amp;&amp; y == p.y;
+  }
+  @Override public int hashCode() { return Objects.hash(x, y); }
+  @Override public String toString() {
+    return "Point[x=" + x + ", y=" + y + "]";
+  }
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After</div>
+      <pre><code class="java">public record Point(int x, int y) { }</code></pre>
+    </div>
+  </div>
+
+  <h2>What the compiler generates</h2>
+  <ul>
+    <li>A <strong>canonical constructor</strong> with all components.</li>
+    <li>A <strong>public accessor</strong> per component: <code>x()</code>, <code>y()</code> (no <code>get</code> prefix).</li>
+    <li><code>equals</code> / <code>hashCode</code> based on all components.</li>
+    <li><code>toString</code> like <code>Point[x=1, y=2]</code>.</li>
+    <li>A <strong>private final field</strong> per component; the class is <code>final</code>.</li>
+  </ul>
+
+  <h2>Customising records</h2>
+  <h3>Compact canonical constructor — validate / normalise</h3>
+  <pre><code class="java">public record Range(int lo, int hi) {
+  public Range {                     // no parameter list, no field assignments
+    if (lo &gt; hi) throw new IllegalArgumentException("lo &gt; hi");
+    // you may reassign params to normalise; fields are set for you afterwards
+  }
+}</code></pre>
+
+  <h3>Extra members that are allowed</h3>
+  <pre><code class="java">public record Point(int x, int y) {
+  static final Point ORIGIN = new Point(0, 0);   // static fields OK
+  public double distanceTo(Point o) {            // instance methods OK
+    return Math.hypot(x - o.x, y - o.y);
+  }
+  public Point {                                 // additional constructors OK (must delegate)
+  }
+  public Point(int v) { this(v, v); }            // extra constructor
+}</code></pre>
+
+  <h2>Rules &amp; gotchas</h2>
+  <ul>
+    <li><strong>Immutable &amp; final:</strong> components are <code>final</code>; a record can't
+      <code>extend</code> anything (it implicitly extends <code>java.lang.Record</code>), but it
+      <em>can</em> <code>implements</code> interfaces.</li>
+    <li><strong>No instance fields beyond components.</strong> You can't add extra non-static state.</li>
+    <li><strong>"Shallowly" immutable:</strong> a component of type <code>List</code> can still be
+      mutated through its reference. Defensively copy in the compact constructor if you need deep immutability:
+      <pre><code class="java">public record Team(String name, List&lt;String&gt; members) {
+  public Team { members = List.copyOf(members); }   // defensive copy
+}</code></pre>
+    </li>
+    <li><strong>Great with pattern matching</strong> — records can be <em>destructured</em>
+      (record patterns, Java 21). See <a href="pattern-matching-switch.html">Pattern matching</a>.</li>
+    <li><strong>Serialization</strong> is driven by the components and the canonical constructor
+      (so validation runs on deserialize — safer than normal classes).</li>
+  </ul>
+
+  <h3>Local records &amp; nested records</h3>
+  <pre><code class="java">List&lt;Order&gt; top = orders.stream().map(o -> {
+  record Scored(Order order, double score) { }     // local record inside a method
+  return new Scored(o, rank(o));
+}).sorted(comparingDouble(Scored::score)).map(Scored::order).toList();</code></pre>
+
+  <h2>Related: record patterns</h2>
+  <pre><code class="java">// destructure directly (Java 21)
+if (obj instanceof Point(int x, int y)) use(x, y);
+switch (shape) {
+  case Circle(Point(var cx, var cy), var r) -> ...;   // nested
+}</code></pre>
+
+  <h2>Evolution</h2>
+  <table class="data">
+    <tr><th>Version</th><th>Change</th></tr>
+    <tr><td>Java 14</td><td>Records — 1st preview (JEP 359).</td></tr>
+    <tr><td>Java 15</td><td>2nd preview (JEP 384).</td></tr>
+    <tr><td>Java 16</td><td><strong>Final</strong> (JEP 395).</td></tr>
+    <tr><td>Java 21</td><td>Record <em>patterns</em> final (JEP 440) — destructuring.</td></tr>
+  </table>
+
+  <div class="cheat">
+    <h3>Cheat card</h3>
+    <ul>
+      <li><code>record Point(int x, int y) {}</code> → ctor + <code>x()/y()</code> + equals/hashCode/toString.</li>
+      <li>Immutable, final, implicitly extends <code>Record</code>; may implement interfaces.</li>
+      <li>Validate in the <strong>compact constructor</strong>; defensively copy mutable components.</li>
+      <li>Accessors have no <code>get</code> prefix.</li>
+      <li>Pairs beautifully with sealed types + pattern matching.</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Foreign Function &amp; Memory API</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/ffm-api.html" data-title="FFM API">
+<main>
+  <p class="sec-tag">Deep dive · API</p>
+  <h1>Foreign Function &amp; Memory API <span class="badge added">Java 22</span></h1>
+  <p class="lead">
+    The FFM API lets pure Java <strong>call native (C) functions</strong> and <strong>access off-heap
+    memory</strong> safely and without writing any C glue. It's the modern, supported replacement for
+    JNI and the old <code>sun.misc.Unsafe</code> tricks.
+  </p>
+
+  <h2>Why it replaces JNI</h2>
+  <table class="data">
+    <tr><th></th><th>JNI (old)</th><th>FFM (Java 22+)</th></tr>
+    <tr><td>Native glue</td><td>Hand-written C, compiled per platform</td><td>None — pure Java</td></tr>
+    <tr><td>Safety</td><td>Easy to crash the JVM</td><td>Bounded, typed, lifetime-checked memory</td></tr>
+    <tr><td>Memory</td><td><code>Unsafe</code>, manual, leak-prone</td><td><code>Arena</code> with deterministic release</td></tr>
+    <tr><td>Ergonomics</td><td>Boilerplate-heavy</td><td>Fluent method handles + layouts</td></tr>
+  </table>
+
+  <h2>Two halves of the API</h2>
+  <h3>1 · Off-heap memory: <code>Arena</code> &amp; <code>MemorySegment</code></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — ByteBuffer / Unsafe</div>
+      <pre><code class="java">ByteBuffer buf = ByteBuffer.allocateDirect(16)
+    .order(ByteOrder.nativeOrder());
+buf.putInt(0, 42);
+int v = buf.getInt(0);
+// no explicit lifetime; freeing is up to the GC/cleaner</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — Arena + MemorySegment</div>
+      <pre><code class="java">try (Arena arena = Arena.ofConfined()) {
+  MemorySegment seg = arena.allocate(ValueLayout.JAVA_INT, 4);
+  seg.setAtIndex(ValueLayout.JAVA_INT, 0, 42);
+  int v = seg.getAtIndex(ValueLayout.JAVA_INT, 0);
+}   // memory released deterministically here</code></pre>
+    </div>
+  </div>
+  <p><strong>Arena controls lifetime &amp; access:</strong> <code>ofConfined()</code> (one thread,
+  cheapest), <code>ofShared()</code> (many threads), <code>ofAuto()</code> (GC-managed),
+  <code>global()</code> (never freed). Access after an arena closes throws instead of corrupting memory.</p>
+
+  <h3>2 · Calling native functions: <code>Linker</code> &amp; method handles</h3>
+  <pre><code class="java">// call C's  size_t strlen(const char *s);
+Linker linker = Linker.nativeLinker();
+SymbolLookup std = linker.defaultLookup();
+
+MethodHandle strlen = linker.downcallHandle(
+    std.find("strlen").orElseThrow(),
+    FunctionDescriptor.of(ValueLayout.JAVA_LONG,      // return: size_t
+                          ValueLayout.ADDRESS));      // arg: char*
+
+try (Arena arena = Arena.ofConfined()) {
+  MemorySegment cString = arena.allocateUtf8String("hello");
+  long len = (long) strlen.invoke(cString);           // -> 5
+}</code></pre>
+
+  <h3>Upcalls — pass a Java method as a C callback</h3>
+  <pre><code class="java">// turn a Java method into a native function pointer (e.g. for qsort's comparator)
+MethodHandle cmp = MethodHandles.lookup().findStatic(
+    MyCmp.class, "compare",
+    MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class));
+MemorySegment cmpPtr = linker.upcallStub(cmp,
+    FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS), arena);</code></pre>
+
+  <h2>jextract — generate bindings automatically</h2>
+  <p>For real libraries you rarely hand-write handles. The <code>jextract</code> tool reads a C header
+  and generates ready-to-use Java bindings:</p>
+  <pre><code class="java">jextract --output src -t org.example.zlib \
+    -l z /usr/include/zlib.h
+// then call generated methods like zlib.compress(...)</code></pre>
+
+  <h2>Gotchas</h2>
+  <ul>
+    <li><strong>Native access is restricted.</strong> Since integrity work, calling native code may
+      require <code>--enable-native-access=&lt;module&gt;</code> (or <code>ALL-UNNAMED</code>) or you'll get warnings/errors.</li>
+    <li><strong>Confined arenas are single-thread.</strong> Sharing a confined segment across threads throws — use <code>ofShared()</code>.</li>
+    <li><strong>Layouts must match the C ABI</strong> exactly (sizes, alignment, endianness). Mismatches corrupt data — prefer <code>jextract</code>.</li>
+    <li><strong>Off-heap memory isn't GC'd on the heap</strong> — the <code>Arena</code> is your allocation lifetime. Use try-with-resources.</li>
+  </ul>
+
+  <h2>Evolution</h2>
+  <table class="data">
+    <tr><th>Version</th><th>Change</th></tr>
+    <tr><td>Java 14–16</td><td>Foreign-Memory Access — incubator.</td></tr>
+    <tr><td>Java 17</td><td>Foreign Function &amp; Memory — incubator (JEP 412).</td></tr>
+    <tr><td>Java 19–21</td><td>Preview (JEPs 424, 434, 442).</td></tr>
+    <tr><td>Java 22</td><td><strong>Final</strong> (JEP 454).</td></tr>
+  </table>
+
+  <div class="cheat">
+    <h3>Cheat card</h3>
+    <ul>
+      <li>Memory: <code>try (Arena a = Arena.ofConfined()) { a.allocate(...); }</code> — deterministic free.</li>
+      <li>Call C: <code>Linker.nativeLinker().downcallHandle(symbol, FunctionDescriptor)</code>.</li>
+      <li>Callbacks: <code>linker.upcallStub(...)</code>.</li>
+      <li>Generate bindings with <code>jextract</code>; match the C ABI via <code>ValueLayout</code>.</li>
+      <li>May need <code>--enable-native-access</code>. Replaces JNI + <code>Unsafe</code>.</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

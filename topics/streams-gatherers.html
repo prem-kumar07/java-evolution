@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streams &amp; Gatherers</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/streams-gatherers.html" data-title="Streams &amp; Gatherers">
+<main>
+  <p class="sec-tag">Deep dive · API</p>
+  <h1>Stream Gatherers <span class="badge added">Java 24</span></h1>
+  <p class="lead">
+    A <code>Gatherer</code> is a <strong>custom intermediate stream operation</strong> — the long-missing
+    counterpart to a custom <code>Collector</code>. Where <code>collect</code> ends a stream,
+    <code>gather</code> transforms it mid-pipeline: windowing, running totals, dedup-by-key, throttling
+    and more.
+  </p>
+
+  <h2>The gap it fills</h2>
+  <p>Streams shipped with a fixed set of intermediate ops (<code>map</code>, <code>filter</code>,
+  <code>limit</code>…). Anything stateful or many-to-one across elements — sliding windows, "stop after
+  N distinct", running averages — meant dropping out of the stream. Gatherers make those first-class
+  and composable.</p>
+
+  <h2>Built-in gatherers</h2>
+  <pre><code class="java">import java.util.stream.Gatherers;
+
+// fixed-size batches
+Stream.of(1,2,3,4,5).gather(Gatherers.windowFixed(2)).toList();
+// [[1,2],[3,4],[5]]
+
+// sliding windows
+Stream.of(1,2,3,4).gather(Gatherers.windowSliding(2)).toList();
+// [[1,2],[2,3],[3,4]]
+
+// running fold (like reduce but emits each step)
+Stream.of(1,2,3,4).gather(Gatherers.scan(() -> 0, Integer::sum)).toList();
+// [1,3,6,10]
+
+// stateful fold to a single value, emitted at the end
+Stream.of("a","b","c").gather(Gatherers.fold(() -> "", String::concat)).toList();
+// ["abc"]
+
+// bounded-parallelism mapping that preserves order
+urls.stream().gather(Gatherers.mapConcurrent(10, this::fetch)).toList();</code></pre>
+
+  <h2>Before &amp; after — sliding windows</h2>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — manual index loop</div>
+      <pre><code class="java">List&lt;List&lt;Integer&gt;&gt; windows = new ArrayList&lt;&gt;();
+for (int i = 0; i + 3 &lt;= xs.size(); i++) {
+  windows.add(List.copyOf(xs.subList(i, i + 3)));
+}
+// breaks the pipeline; needs a materialised list</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After</div>
+      <pre><code class="java">var windows = xs.stream()
+    .gather(Gatherers.windowSliding(3))
+    .toList();      // stays lazy &amp; composable</code></pre>
+    </div>
+  </div>
+
+  <h2>Writing your own gatherer</h2>
+  <p>A gatherer has up to four parts: an <em>initializer</em> (state), an <em>integrator</em> (per
+  element — the core), an optional <em>combiner</em> (for parallel), and an optional <em>finisher</em>.</p>
+  <pre><code class="java">// "distinct by key" as a gatherer
+static &lt;T, K&gt; Gatherer&lt;T, ?, T&gt; distinctBy(Function&lt;T, K&gt; key) {
+  return Gatherer.ofSequential(
+    HashSet::new,                              // initializer: the seen-keys set
+    (seen, item, downstream) -> {              // integrator
+      if (seen.add(key.apply(item)))
+        return downstream.push(item);          // emit only first per key
+      return true;                             // true = keep going
+    });
+}
+
+// usage
+people.stream().gather(distinctBy(Person::city)).toList();</code></pre>
+  <p>The integrator returns <code>false</code> to short-circuit the upstream (e.g. once you've emitted
+  enough) — that's how a gatherer can implement <code>limit</code>-like behaviour.</p>
+
+  <h2>Other recent Stream additions worth knowing</h2>
+  <table class="data">
+    <tr><th>API</th><th>Since</th><th>Use</th></tr>
+    <tr><td><code>Stream.toList()</code></td><td>16</td><td>Unmodifiable list, shorter than <code>collect(toList())</code>.</td></tr>
+    <tr><td><code>Stream.mapMulti</code></td><td>16</td><td>One-to-many without allocating a sub-stream.</td></tr>
+    <tr><td><code>takeWhile</code> / <code>dropWhile</code></td><td>9</td><td>Leading-run slicing.</td></tr>
+    <tr><td><code>Collectors.teeing</code></td><td>12</td><td>Feed a stream to two collectors, then merge.</td></tr>
+    <tr><td><code>Stream.gather</code> + <code>Gatherers</code></td><td>24</td><td>Custom intermediate ops.</td></tr>
+  </table>
+
+  <h2>Gotchas</h2>
+  <ul>
+    <li><strong>Order &amp; parallelism:</strong> supply a combiner only if your state merges correctly in
+      parallel; otherwise use <code>Gatherer.ofSequential(...)</code>.</li>
+    <li><strong><code>mapConcurrent</code> is the sweet spot</strong> for bounded concurrent I/O within a
+      stream — it caps in-flight tasks and preserves encounter order (backed by virtual threads).</li>
+    <li>Gatherers are <em>intermediate</em>: nothing runs until a terminal op (<code>toList</code>,
+      <code>forEach</code>, …) pulls the pipeline.</li>
+  </ul>
+
+  <h2>Evolution</h2>
+  <table class="data">
+    <tr><th>Version</th><th>Change</th></tr>
+    <tr><td>Java 22</td><td>Preview (JEP 461).</td></tr>
+    <tr><td>Java 23</td><td>2nd preview (JEP 473).</td></tr>
+    <tr><td>Java 24</td><td><strong>Final</strong> (JEP 485).</td></tr>
+  </table>
+
+  <div class="cheat">
+    <h3>Cheat card</h3>
+    <ul>
+      <li><code>stream.gather(Gatherers.windowSliding(n))</code> — built-ins: <code>windowFixed, windowSliding, scan, fold, mapConcurrent</code>.</li>
+      <li>Custom: <code>Gatherer.ofSequential(init, integrator[, finisher])</code>.</li>
+      <li>Integrator returns <code>false</code> to short-circuit.</li>
+      <li>Intermediate &amp; lazy; add a combiner only for safe parallel merges.</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

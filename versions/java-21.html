@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java 21 (LTS) — new features</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="versions/java-21.html" data-title="Java 21">
+<main>
+  <p class="sec-tag">September 2023 · <span class="badge lts">LTS</span></p>
+  <h1>Java 21 <span class="badge lts">LTS</span></h1>
+  <p class="lead">
+    The concurrency-defining LTS. <strong>Virtual threads</strong> make blocking code scale to
+    millions of tasks, while <strong>pattern matching for switch</strong> and <strong>record
+    patterns</strong> complete Java's data-oriented programming story.
+  </p>
+  <div class="note"><strong>Folded in:</strong> features from
+  <span class="badge added">18</span> <span class="badge added">19</span>
+  <span class="badge added">20</span> are included and tagged.</div>
+
+  <!-- ============ LANGUAGE ============ -->
+  <h2>1 · Language features</h2>
+
+  <h3>Virtual threads <span class="badge added">Final in 21</span></h3>
+  <p>Lightweight threads managed by the JVM. Write simple blocking code; the runtime handles the scale.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — thread pool, limited</div>
+      <pre><code class="java">var pool = Executors.newFixedThreadPool(200);
+for (var task : tasks) pool.submit(task);
+// ~200 concurrent; more = queueing or OOM</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — one virtual thread per task</div>
+      <pre><code class="java">try (var ex = Executors.newVirtualThreadPerTaskExecutor()) {
+  for (var task : tasks) ex.submit(task);
+}   // millions of concurrent blocking tasks, cheap</code></pre>
+    </div>
+  </div>
+  <p>How they work, pinning, and when to use them → <a href="../topics/virtual-threads.html">Virtual threads deep-dive</a>.</p>
+
+  <h3>Pattern matching for <code>switch</code> <span class="badge added">Final in 21</span></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — if/else chain of casts</div>
+      <pre><code class="java">String s;
+if (obj instanceof Integer i)      s = "int " + i;
+else if (obj instanceof String str) s = "str " + str;
+else                                s = "other";</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — type patterns + guards</div>
+      <pre><code class="java">String s = switch (obj) {
+  case Integer i when i &gt; 100 -> "big int " + i;
+  case Integer i              -> "int " + i;
+  case String str             -> "str " + str;
+  default                     -> "other";
+};</code></pre>
+    </div>
+  </div>
+
+  <h3>Record patterns <span class="badge added">Final in 21</span></h3>
+  <p>Destructure records directly in <code>instanceof</code> and <code>switch</code>, nesting freely.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">if (obj instanceof Point p) {
+  int x = p.x();
+  int y = p.y();
+  ...
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After</div>
+      <pre><code class="java">if (obj instanceof Point(int x, int y)) {
+  ...   // x and y bound directly
+}
+// nested:
+switch (shape) {
+  case Line(Point(var x1,var y1), Point(var x2,var y2)) -> ...;
+}</code></pre>
+    </div>
+  </div>
+  <p>All of pattern matching in one place → <a href="../topics/pattern-matching-switch.html">Pattern matching deep-dive</a>.</p>
+
+  <h3>Previews that landed here</h3>
+  <ul>
+    <li><strong>Unnamed patterns &amp; variables</strong> <code>_</code>
+      <span class="badge preview">Preview in 21</span> (final in 25) — ignore what you don't need:
+      <pre><code class="java">if (obj instanceof Point(int x, _)) { ... }   // ignore y
+catch (Exception _) { ... }
+for (var _ : items) count++;</code></pre>
+    </li>
+    <li><strong>Unnamed classes &amp; instance main</strong>
+      <span class="badge preview">Preview in 21</span> — a gentler <code>main</code> for beginners
+      (evolves into "compact source files" in 25). See <a href="java-25.html">Java 25</a>.</li>
+    <li><strong>String templates</strong> <span class="badge preview">Preview in 21</span> —
+      later <em>withdrawn</em> for redesign, so not covered as a stable feature.</li>
+    <li><strong>Scoped values</strong> &amp; <strong>structured concurrency</strong> begin previewing here
+      → <a href="../topics/scoped-values.html">scoped values</a>, <a href="../topics/structured-concurrency.html">structured concurrency</a>.</li>
+  </ul>
+
+  <!-- ============ APIs ============ -->
+  <h2>2 · New &amp; updated APIs</h2>
+
+  <h3>Sequenced collections <span class="badge added">Added in 21</span></h3>
+  <p>New interfaces give <em>every</em> ordered collection a uniform first/last/reverse vocabulary.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — inconsistent, awkward</div>
+      <pre><code class="java">list.get(0);                 // first
+list.get(list.size() - 1);   // last
+// LinkedHashSet has NO clean "last"; you iterate
+new ArrayList&lt;&gt;(list) then Collections.reverse(...);</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — SequencedCollection</div>
+      <pre><code class="java">list.getFirst();  list.getLast();
+list.addFirst(x); list.addLast(y);
+List&lt;T&gt; rev = list.reversed();     // reversed view
+// same methods on SequencedSet, SequencedMap
+map.firstEntry(); map.reversed();</code></pre>
+    </div>
+  </div>
+
+  <h3>Key Encapsulation Mechanism (KEM) API <span class="badge added">Added in 21</span></h3>
+  <p>Standard API for KEM algorithms — a building block for post-quantum cryptography.</p>
+
+  <!-- ============ TOOLING ============ -->
+  <h2>3 · Tooling</h2>
+  <ul>
+    <li><strong>Simple Web Server</strong> <span class="badge added">Added in 18</span> — a zero-config
+      static file server for testing/prototyping:
+      <pre><code class="java">jwebserver -p 8000 -d /path/to/site</code></pre>
+    </li>
+    <li><strong><code>@snippet</code> in Javadoc</strong> <span class="badge added">Added in 18</span> —
+      real, compilable code examples in docs.</li>
+    <li><strong>Generational ZGC</strong> <span class="badge added">Added in 21</span> — ZGC now keeps a
+      young generation, improving throughput. Enable with
+      <code>-XX:+UseZGC -XX:+ZGenerational</code>.</li>
+  </ul>
+
+  <!-- ============ JVM / OTHER ============ -->
+  <h2>4 · JVM / performance / other</h2>
+  <ul>
+    <li><strong>UTF-8 is the default charset</strong> <span class="badge added">Added in 18</span> —
+      file I/O no longer depends on the platform locale. Watch for behaviour changes on old code that
+      relied on the platform default.</li>
+    <li><strong>Finalization deprecated for removal</strong> <span class="badge added">Added in 18</span> —
+      migrate to <code>Cleaner</code> / try-with-resources.</li>
+    <li><strong>Prepare to disallow dynamic loading of agents</strong> — agents attached at runtime now warn.</li>
+    <li><strong>Linux/RISC-V port</strong> <span class="badge added">Added in 19</span>.</li>
+  </ul>
+
+  <!-- ============ SUMMARY ============ -->
+  <h2>5 · Summary cheat-sheet</h2>
+  <div class="cheat">
+    <h3>Java 21 (LTS) in one glance</h3>
+    <ul>
+      <li><strong>Virtual threads</strong> → <code>newVirtualThreadPerTaskExecutor()</code></li>
+      <li><strong>switch patterns</strong> with <code>when</code> guards + <strong>record patterns</strong> (destructuring)</li>
+      <li><strong>Sequenced collections:</strong> <code>getFirst/getLast/addFirst/addLast/reversed</code></li>
+      <li><strong>Preview:</strong> unnamed <code>_</code>, scoped values, structured concurrency</li>
+      <li><strong>GC:</strong> Generational ZGC</li>
+      <li><strong>Default:</strong> UTF-8 charset; finalization on the way out</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

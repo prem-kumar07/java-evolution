@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Text blocks &amp; String APIs</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/text-blocks-strings.html" data-title="Text blocks &amp; Strings">
+<main>
+  <p class="sec-tag">Deep dive · language + API</p>
+  <h1>Text blocks &amp; modern String APIs <span class="badge added">Java 15</span></h1>
+  <p class="lead">
+    Text blocks are multi-line string literals delimited by <code>"""</code> — no more
+    <code>\n</code>, escaped quotes or <code>+</code> concatenation for JSON, SQL, HTML and the like.
+    Paired with a set of <code>String</code> methods added across 9–15.
+  </p>
+
+  <h2>Text blocks</h2>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">String html = "&lt;html&gt;\n" +
+    "  &lt;body&gt;\n" +
+    "    &lt;p&gt;Hello, \"world\"&lt;/p&gt;\n" +
+    "  &lt;/body&gt;\n" +
+    "&lt;/html&gt;\n";</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 15)</div>
+      <pre><code class="java">String html = """
+    &lt;html&gt;
+      &lt;body&gt;
+        &lt;p&gt;Hello, "world"&lt;/p&gt;
+      &lt;/body&gt;
+    &lt;/html&gt;
+    """;</code></pre>
+    </div>
+  </div>
+
+  <h3>How indentation works (incidental whitespace)</h3>
+  <p>The compiler finds the line with the <strong>least</strong> leading whitespace (including the
+  closing <code>"""</code>) and strips that much from every line. So you can indent the block to match
+  your code without it appearing in the string.</p>
+  <pre><code class="java">String s = """
+        one
+          two
+        """;
+// result: "one\n  two\n"  — the common 8-space margin is removed,
+// the extra 2 spaces before "two" are kept.</code></pre>
+
+  <h3>Key rules</h3>
+  <ul>
+    <li>The opening <code>"""</code> must be followed by a <strong>newline</strong> — content starts on the next line.</li>
+    <li>Where the <strong>closing</strong> <code>"""</code> sits controls the common indentation and whether there's a trailing newline.</li>
+    <li>No need to escape <code>"</code>; escape only <code>"""</code> if it appears literally.</li>
+    <li>You can still use escapes like <code>\t</code>, <code>\n</code>, and <code>\uXXXX</code>.</li>
+  </ul>
+
+  <h3>Two special escapes for text blocks</h3>
+  <pre><code class="java">// \  (backslash at end of line) — suppress the line break
+String oneLine = """
+    Lorem ipsum dolor \
+    sit amet""";              // "Lorem ipsum dolor sit amet"
+
+// \s — a literal space that is NOT stripped as trailing whitespace
+String padded = """
+    key =\s
+    """;                      // keeps the trailing space after '='</code></pre>
+
+  <div class="tip"><strong>Great for:</strong> SQL, JSON, HTML, regexes, embedded scripts, test
+  fixtures — anything multi-line. Combine with <code>String.formatted(...)</code> for templating
+  (Java's dedicated string-template feature was previewed then withdrawn, so <code>formatted</code>
+  / <code>String.format</code> remain the idiomatic approach).</p></div>
+
+  <h2>Modern String &amp; text APIs</h2>
+  <table class="data">
+    <tr><th>Method</th><th>Since</th><th>Does</th></tr>
+    <tr><td><code>isBlank()</code></td><td>11</td><td>true if empty or only whitespace.</td></tr>
+    <tr><td><code>strip() / stripLeading() / stripTrailing()</code></td><td>11</td><td>Unicode-aware trim (<code>trim()</code> only handles ASCII).</td></tr>
+    <tr><td><code>repeat(n)</code></td><td>11</td><td>Repeat the string n times.</td></tr>
+    <tr><td><code>lines()</code></td><td>11</td><td><code>Stream&lt;String&gt;</code> of lines.</td></tr>
+    <tr><td><code>indent(n)</code></td><td>12</td><td>Add/remove n spaces of indentation per line.</td></tr>
+    <tr><td><code>transform(fn)</code></td><td>12</td><td>Apply a function to the whole string (fluent).</td></tr>
+    <tr><td><code>formatted(args)</code></td><td>15</td><td>Instance form of <code>String.format</code>.</td></tr>
+    <tr><td><code>stripIndent()</code></td><td>15</td><td>Apply text-block indentation stripping to any string.</td></tr>
+    <tr><td><code>translateEscapes()</code></td><td>15</td><td>Interpret escape sequences (like the compiler does).</td></tr>
+  </table>
+  <pre><code class="java">"=".repeat(30);
+"  hi  ".strip();                         // "hi"
+"a\nb\nc".lines().count();                 // 3
+"Total: %d items".formatted(count);
+name.transform(String::toUpperCase)
+    .transform(s -> "[" + s + "]");        // fluent pipeline</code></pre>
+
+  <h3>Related helpers</h3>
+  <pre><code class="java">// HexFormat (Java 17) — bytes ↔ hex without manual loops
+HexFormat hf = HexFormat.of();
+String hex = hf.formatHex(new byte[]{10, 20});   // "0a14"
+byte[] b   = hf.parseHex("0a14");</code></pre>
+
+  <h2>Evolution</h2>
+  <table class="data">
+    <tr><th>Version</th><th>Change</th></tr>
+    <tr><td>Java 13</td><td>Text blocks — 1st preview (JEP 355).</td></tr>
+    <tr><td>Java 14</td><td>2nd preview (JEP 368); adds <code>\</code> and <code>\s</code> escapes.</td></tr>
+    <tr><td>Java 15</td><td><strong>Final</strong> (JEP 378).</td></tr>
+  </table>
+
+  <div class="cheat">
+    <h3>Cheat card</h3>
+    <ul>
+      <li>Open with <code>"""</code> + newline; content indentation is relative to the least-indented line.</li>
+      <li>Closing <code>"""</code> position sets margin &amp; trailing newline.</li>
+      <li><code>\</code> = join lines; <code>\s</code> = keep a trailing space.</li>
+      <li>Strings: <code>isBlank, strip, repeat, lines, formatted, transform</code>.</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

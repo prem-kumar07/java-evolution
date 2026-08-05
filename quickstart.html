@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quick start &amp; tooling — Java 9 → 26</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-root="./" data-page="quickstart.html" data-title="Quick start">
+<main>
+  <p class="sec-tag">Set up your machine</p>
+  <h1>Quick start &amp; tooling</h1>
+  <p class="lead">
+    Install one or more JDKs, switch between them, and learn the fastest ways to try
+    features — JShell, single-file programs, preview features and incubator modules.
+  </p>
+
+  <h2>1 · Install a JDK</h2>
+  <p>Pick a build of OpenJDK. Any of these give you the same language; they differ in support/branding:</p>
+  <ul>
+    <li><strong>Eclipse Temurin</strong> (Adoptium) — the popular community default.</li>
+    <li><strong>Oracle JDK</strong> — Oracle's build.</li>
+    <li><strong>Amazon Corretto</strong>, <strong>Azul Zulu</strong>, <strong>Microsoft / Liberica</strong> — vendor builds, often with extras.</li>
+  </ul>
+  <p>Verify what you have:</p>
+  <pre><code class="java">java -version      # runtime version
+javac -version     # compiler version
+java --list-modules | head   # JDK modules available</code></pre>
+
+  <h2>2 · Install &amp; switch between versions</h2>
+  <p>You will want several JDKs installed at once (e.g. 17, 21, 25). Use a version manager.</p>
+
+  <h3>SDKMAN! (macOS / Linux / WSL) — recommended</h3>
+  <pre><code class="java">curl -s "https://get.sdkman.io" | bash        # install SDKMAN
+sdk list java                                  # see available builds
+sdk install java 25-tem                        # install Temurin 25
+sdk install java 21.0.5-tem
+sdk use java 25-tem        # switch for THIS shell only
+sdk default java 21.0.5-tem   # set the global default</code></pre>
+
+  <h3>jenv (per-directory switching)</h3>
+  <pre><code class="java">brew install jenv
+jenv add /Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home
+jenv global 21       # default
+jenv local 25        # pin THIS project (writes .java-version)</code></pre>
+
+  <h3>Homebrew (macOS)</h3>
+  <pre><code class="java">brew install openjdk@25 openjdk@21 openjdk@17</code></pre>
+
+  <h3>Manual — set JAVA_HOME</h3>
+  <div class="ba">
+    <div class="before">
+      <div class="ba-label">macOS / Linux (bash/zsh)</div>
+      <pre><code class="java">export JAVA_HOME=$(/usr/libexec/java_home -v 25)
+export PATH="$JAVA_HOME/bin:$PATH"
+# Linux: JAVA_HOME=/usr/lib/jvm/temurin-25</code></pre>
+    </div>
+    <div class="after">
+      <div class="ba-label">Windows (PowerShell)</div>
+      <pre><code class="java">$env:JAVA_HOME = "C:\Program Files\Java\jdk-25"
+$env:Path = "$env:JAVA_HOME\bin;" + $env:Path</code></pre>
+    </div>
+  </div>
+
+  <h2>3 · JShell — the Java REPL <span class="badge added">Added in 9</span></h2>
+  <p>The fastest way to try a snippet without a class, <code>main</code>, or compile step.</p>
+  <pre><code class="java">jshell                    # start the REPL
+jshell> var xs = List.of(1, 2, 3)
+xs ==> [1, 2, 3]
+jshell> xs.stream().mapToInt(i -> i).sum()
+$2 ==> 6
+jshell> /exit
+
+# useful commands
+jshell> /vars      /methods     /imports     /list
+jshell> /save mysession.jsh    # save your session
+jshell --enable-preview        # REPL with preview features on</code></pre>
+  <div class="tip"><strong>Tip.</strong> Pipe a script in: <code>jshell myscript.jsh</code>, or feed stdin with <code>echo 'System.out.println("hi")' | jshell -</code>.</div>
+
+  <h2>4 · Run a single source file — no compile step <span class="badge added">Added in 11</span></h2>
+  <p>Since Java 11 (JEP 330) you can run a <code>.java</code> file directly; the JDK compiles it in memory.</p>
+  <div class="ba">
+    <div class="before">
+      <div class="ba-label">Before — compile then run</div>
+      <pre><code class="java">// Hello.java
+public class Hello {
+  public static void main(String[] a) {
+    System.out.println("Hi");
+  }
+}
+// terminal:
+javac Hello.java   // -> Hello.class
+java Hello</code></pre>
+    </div>
+    <div class="after">
+      <div class="ba-label">After — run directly</div>
+      <pre><code class="java">// Hello.java  (same file)
+java Hello.java    // compiles + runs in one step
+
+// pass args after the file name:
+java Hello.java arg1 arg2</code></pre>
+    </div>
+  </div>
+
+  <h3>Multi-file source programs <span class="badge added">Added in 22</span></h3>
+  <p>JEP 458 extended this: if the file you launch references other <code>.java</code> files in the
+  same source tree, they are compiled on demand too — no build tool for small programs.</p>
+  <pre><code class="java">java Main.java     # also compiles Helper.java, model/User.java, ... as needed</code></pre>
+
+  <h3>Shebang scripts</h3>
+  <p>Make a Java file executable like a shell script (the file need not end in <code>.java</code>):</p>
+  <pre><code class="java">#!/usr/bin/env java --source 25
+public class App {
+  public static void main(String[] a) { System.out.println("script!"); }
+}
+// then:  chmod +x app  &&  ./app</code></pre>
+
+  <h2>5 · Try <em>preview</em> language features</h2>
+  <p>A <strong>preview feature</strong> is a finished-but-not-permanent language/VM feature. You must
+  opt in at <em>both</em> compile and run time, and pass <code>--release</code> matching your JDK.
+  Examples in this guide that are still preview show a <span class="badge preview">Preview</span> badge.</p>
+  <div class="ba">
+    <div class="before">
+      <div class="ba-label">Compile with preview</div>
+      <pre><code class="java">javac --release 25 --enable-preview Demo.java</code></pre>
+    </div>
+    <div class="after">
+      <div class="ba-label">Run with preview</div>
+      <pre><code class="java">java --enable-preview Demo
+
+# single-file shortcut (compile+run together):
+java --enable-preview --source 25 Demo.java</code></pre>
+    </div>
+  </div>
+  <div class="warn"><strong>Gotcha.</strong> A class file compiled with <code>--enable-preview</code> is
+  tied to that exact JDK version and refuses to run on any other. Preview APIs/syntax can change or be
+  removed in the next release — never ship them to production.</div>
+
+  <h2>6 · Try <em>incubator</em> modules</h2>
+  <p>An <strong>incubator module</strong> is a non-final <em>API</em> (a whole library, e.g. the Vector
+  API) shipped under a <code>jdk.incubator.*</code> module. You add the module rather than flip a
+  preview flag.</p>
+  <pre><code class="java">// compile &amp; run code that uses jdk.incubator.vector
+javac --add-modules jdk.incubator.vector Simd.java
+java  --add-modules jdk.incubator.vector Simd
+
+// see all incubator modules in your JDK:
+java --list-modules | grep incubator</code></pre>
+
+  <table class="data">
+    <tr><th></th><th>Preview feature</th><th>Incubator module</th><th>Experimental</th></tr>
+    <tr><td>What</td><td>Language / JVM feature</td><td>A new API (library)</td><td>VM/GC option</td></tr>
+    <tr><td>Opt-in</td><td><code>--enable-preview</code> + <code>--release</code></td><td><code>--add-modules jdk.incubator.x</code></td><td><code>-XX:+UnlockExperimentalVMOptions</code></td></tr>
+    <tr><td>Stability</td><td>Complete, may change</td><td>Rougher, will change</td><td>May change/vanish</td></tr>
+  </table>
+
+  <h2>7 · Handy everyday commands</h2>
+  <pre><code class="java">jshell                      # REPL
+java File.java              # run single/multi source file
+jpackage --help             # build native installers (Added in 16)
+jwebserver                  # a static file server (Added in 18)
+jdeps --jdk-internals app.jar   # find internal-API usage before upgrading
+java -Xss... -XX:+PrintFlagsFinal -version   # inspect VM flags</code></pre>
+
+  <div class="cheat">
+    <h3>30-second cheat sheet</h3>
+    <ul>
+      <li><strong>Switch JDKs:</strong> <code>sdk use java 25-tem</code></li>
+      <li><strong>Explore:</strong> <code>jshell</code></li>
+      <li><strong>Run a file:</strong> <code>java Hello.java</code></li>
+      <li><strong>Preview:</strong> <code>java --enable-preview --source 25 Demo.java</code></li>
+      <li><strong>Incubator:</strong> <code>java --add-modules jdk.incubator.vector Simd</code></li>
+    </ul>
+  </div>
+
+</main>
+<script src="assets/nav.js"></script>
+<script src="assets/highlight.js"></script>
+</body>
+</html>

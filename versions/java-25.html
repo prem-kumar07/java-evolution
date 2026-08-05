@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java 25 (LTS) — new features</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="versions/java-25.html" data-title="Java 25">
+<main>
+  <p class="sec-tag">September 2025 · <span class="badge lts">LTS</span></p>
+  <h1>Java 25 <span class="badge lts">LTS</span></h1>
+  <p class="lead">
+    The current LTS. A wave of features graduated to <em>final</em>: <strong>scoped values</strong>,
+    <strong>stream gatherers</strong>, the <strong>Foreign Function &amp; Memory API</strong>,
+    <strong>compact source files &amp; instance main</strong>, <strong>flexible constructor bodies</strong>
+    and <strong>module import declarations</strong> — plus real startup wins from Project Leyden.
+  </p>
+  <div class="note"><strong>Folded in:</strong> features from
+  <span class="badge added">22</span> <span class="badge added">23</span>
+  <span class="badge added">24</span> are included and tagged.</div>
+
+  <!-- ============ LANGUAGE ============ -->
+  <h2>1 · Language features</h2>
+
+  <h3>Compact source files &amp; instance <code>main</code> <span class="badge added">Final in 25</span></h3>
+  <p>You can now write a runnable program with no <code>class</code>, no <code>public static</code>,
+  no explicit imports of <code>java.base</code>, and a simple <code>IO</code> helper. The full
+  ceremony is still there when you need it — this just removes it for small programs and learners.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">public class Hello {
+  public static void main(String[] args) {
+    System.out.println("Hello, world");
+  }
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 25)</div>
+      <pre><code class="java">void main() {
+  IO.println("Hello, world");
+}
+// java Hello.java — no class, no static, IO built in</code></pre>
+    </div>
+  </div>
+
+  <h3>Flexible constructor bodies <span class="badge added">Final in 25</span></h3>
+  <p>Run validation/normalisation statements <em>before</em> calling <code>super(...)</code> or
+  <code>this(...)</code> — previously impossible.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — validate after super, or in a helper</div>
+      <pre><code class="java">Range(int lo, int hi) {
+  super();                 // must be first
+  if (lo &gt; hi)             // validation too late
+    throw new IllegalArgumentException();
+  this.lo = lo; this.hi = hi;
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 25)</div>
+      <pre><code class="java">Range(int lo, int hi) {
+  if (lo &gt; hi)             // guard BEFORE super()
+    throw new IllegalArgumentException();
+  super();
+  this.lo = lo; this.hi = hi;
+}</code></pre>
+    </div>
+  </div>
+
+  <h3>Module import declarations <span class="badge added">Final in 25</span></h3>
+  <p>Import <em>every</em> package a module exports in one line — handy in scripts and prototypes.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.function.Function;</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 25)</div>
+      <pre><code class="java">import module java.base;   // all java.base exports at once</code></pre>
+    </div>
+  </div>
+
+  <h3>Unnamed variables &amp; patterns <span class="badge added">Final in 22</span></h3>
+  <pre><code class="java">catch (IOException _) { retry(); }              // don't care about the value
+map.forEach((_, v) -> total += v);
+if (p instanceof Point(int x, _)) use(x);       // ignore y</code></pre>
+
+  <h3>Scoped values <span class="badge added">Final in 25</span></h3>
+  <p>An immutable, safer replacement for <code>ThreadLocal</code>, designed for virtual threads.</p>
+  <pre><code class="java">final static ScopedValue&lt;User&gt; CURRENT = ScopedValue.newInstance();
+
+ScopedValue.where(CURRENT, user).run(() -> handleRequest());
+// deeper in the call stack:
+User u = CURRENT.get();   // bound for this scope only, cannot be mutated</code></pre>
+  <p>Full story → <a href="../topics/scoped-values.html">Scoped values deep-dive</a>.</p>
+
+  <h3>Still previewing in 25</h3>
+  <ul>
+    <li><strong>Primitive types in patterns, <code>instanceof</code> &amp; <code>switch</code></strong>
+      <span class="badge preview">Preview</span> — <code>case int i</code>, etc.</li>
+    <li><strong>Structured concurrency</strong> <span class="badge preview">Preview (5th)</span> →
+      <a href="../topics/structured-concurrency.html">deep-dive</a>.</li>
+    <li><strong>Stable Values</strong> <span class="badge preview">Preview</span> — deferred,
+      write-once immutability (a safe lazy-init primitive):
+      <pre><code class="java">// preview API shape
+StableValue&lt;Logger&gt; logger = StableValue.of();
+Logger l = logger.orElseSet(() -> createLogger());   // computed at most once</code></pre>
+    </li>
+  </ul>
+
+  <!-- ============ APIs ============ -->
+  <h2>2 · New &amp; updated APIs</h2>
+
+  <h3>Stream Gatherers <span class="badge added">Final in 24</span></h3>
+  <p>Custom <em>intermediate</em> operations — the missing counterpart to custom <code>Collector</code>s.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — no clean windowing</div>
+      <pre><code class="java">// sliding windows of 3: manual index loops
+List&lt;List&lt;Integer&gt;&gt; windows = new ArrayList&lt;&gt;();
+for (int i = 0; i + 3 &lt;= xs.size(); i++)
+  windows.add(xs.subList(i, i + 3));</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — Gatherers</div>
+      <pre><code class="java">var windows = xs.stream()
+    .gather(Gatherers.windowSliding(3))
+    .toList();
+// also: fold, scan, mapConcurrent, windowFixed
+</code></pre>
+    </div>
+  </div>
+  <p>Writing your own gatherer → <a href="../topics/streams-gatherers.html">Streams &amp; Gatherers deep-dive</a>.</p>
+
+  <h3>Foreign Function &amp; Memory API <span class="badge added">Final in 22</span></h3>
+  <p>Call native libraries and manage off-heap memory with pure Java — the modern, safe replacement
+  for JNI. → <a href="../topics/ffm-api.html">FFM deep-dive</a>.</p>
+
+  <h3>Cryptography</h3>
+  <pre><code class="java">// Key Derivation Function API (Final in 25)
+KDF hkdf = KDF.getInstance("HKDF-SHA256");
+
+// Quantum-resistant algorithms (Added in 24)
+KeyPairGenerator kem = KeyPairGenerator.getInstance("ML-KEM");   // JEP 496
+Signature       dsa = Signature.getInstance("ML-DSA");          // JEP 497</code></pre>
+
+  <!-- ============ TOOLING ============ -->
+  <h2>3 · Tooling</h2>
+  <ul>
+    <li><strong>Launch multi-file source programs</strong> <span class="badge added">Added in 22</span> —
+      <code>java Main.java</code> compiles referenced sibling files on demand (no build tool). See
+      <a href="../quickstart.html">Quick start</a>.</li>
+    <li><strong>Markdown in Javadoc</strong> <span class="badge added">Added in 23</span> — write doc
+      comments as Markdown (<code>/// ...</code>) instead of HTML tags.</li>
+    <li><strong>Project Leyden — faster startup:</strong> Ahead-of-Time Class Loading &amp; Linking
+      <span class="badge added">Added in 24</span>, plus <strong>AOT command-line ergonomics</strong> and
+      <strong>AOT method profiling</strong> <span class="badge added">Added in 25</span> shift work from
+      run time to a training/build step.</li>
+    <li><strong>JFR upgrades</strong> <span class="badge added">25</span> — CPU-time profiling
+      (experimental), cooperative sampling, method timing &amp; tracing.</li>
+  </ul>
+
+  <!-- ============ JVM / OTHER ============ -->
+  <h2>4 · JVM / performance / other</h2>
+  <ul>
+    <li><strong>Compact Object Headers</strong> <span class="badge added">Final in 25</span> (experimental in 24) —
+      shrinks every object's header from 12/16 to 8 bytes, meaningfully cutting heap use.</li>
+    <li><strong>Virtual threads no longer pinned on <code>synchronized</code></strong>
+      <span class="badge added">Added in 24</span> — a major reliability fix; blocking inside a
+      <code>synchronized</code> block no longer ties up a carrier thread.</li>
+    <li><strong>Generational Shenandoah</strong> <span class="badge added">25</span> and
+      <strong>ZGC generational by default</strong> <span class="badge added">23</span> /
+      non-generational mode removed <span class="badge added">24</span>.</li>
+    <li><strong>32-bit x86 port removed</strong>; <code>sun.misc.Unsafe</code> memory-access methods now warn.</li>
+  </ul>
+
+  <!-- ============ SUMMARY ============ -->
+  <h2>5 · Summary cheat-sheet</h2>
+  <div class="cheat">
+    <h3>Java 25 (LTS) in one glance</h3>
+    <ul>
+      <li><strong>Simpler programs:</strong> <code>void main()</code> + <code>IO.println</code>, <code>import module java.base</code></li>
+      <li><strong>Final:</strong> scoped values, stream gatherers (24), FFM (22), flexible constructors, unnamed <code>_</code> (22)</li>
+      <li><strong>Crypto:</strong> KDF API, ML-KEM / ML-DSA (post-quantum)</li>
+      <li><strong>Startup:</strong> Project Leyden AOT caching</li>
+      <li><strong>Memory:</strong> compact object headers</li>
+      <li><strong>Reliability:</strong> virtual threads no longer pin on <code>synchronized</code></li>
+      <li><strong>Preview:</strong> primitive patterns, structured concurrency, stable values</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

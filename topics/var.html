@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>var — local-variable type inference</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/var.html" data-title="var">
+<main>
+  <p class="sec-tag">Deep dive · language</p>
+  <h1><code>var</code> — local-variable type inference <span class="badge added">Java 10</span></h1>
+  <p class="lead">
+    <code>var</code> lets the compiler infer a local variable's type from its initializer. It is
+    <strong>syntactic sugar, not dynamic typing</strong> — the variable still has one fixed, static
+    type; you just don't write it out.
+  </p>
+
+  <h2>Why it exists</h2>
+  <p>To cut noise where the type is already obvious from the right-hand side, especially with long
+  generic types. It never changes runtime behaviour or performance.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">ByteArrayOutputStream out = new ByteArrayOutputStream();
+Map&lt;String, List&lt;Customer&gt;&gt; byCity = new HashMap&lt;String, List&lt;Customer&gt;&gt;();
+for (Map.Entry&lt;String, List&lt;Customer&gt;&gt; e : byCity.entrySet()) { }</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After</div>
+      <pre><code class="java">var out = new ByteArrayOutputStream();
+var byCity = new HashMap&lt;String, List&lt;Customer&gt;&gt;();
+for (var e : byCity.entrySet()) { }</code></pre>
+    </div>
+  </div>
+
+  <h2>Where you can use it</h2>
+  <pre><code class="java">var x = 10;                         // local variable with initializer
+var list = List.of("a", "b");       // inferred List&lt;String&gt;
+for (var s : list) { }              // enhanced-for loop variable
+for (var i = 0; i &lt; 10; i++) { }    // classic for-loop index
+try (var in = Files.newInputStream(p)) { }   // try-with-resources
+list.forEach((var s) -> print(s));  // lambda parameter (Java 11+)</code></pre>
+
+  <h2>Where you <em>cannot</em> use it</h2>
+  <div class="warn">
+    <pre><code class="java">var x;                      // ✗ no initializer — nothing to infer
+var y = null;               // ✗ null has no type
+var f = () -> 42;           // ✗ lambda needs a target type
+var arr = { 1, 2, 3 };      // ✗ array initializer needs a type
+public var field = 1;       // ✗ fields cannot use var
+var method() { }            // ✗ method return types cannot use var
+void m(var p) { }           // ✗ method parameters cannot use var</code></pre>
+  </div>
+  <p><code>var</code> is <strong>local variables only</strong>: locals, loop variables, try-with-resources, and lambda params.</p>
+
+  <h2>Rules &amp; gotchas</h2>
+  <ul>
+    <li><strong>It's still static typing.</strong> <code>var s = "hi";</code> makes <code>s</code> a
+      <code>String</code> forever — <code>s = 42;</code> won't compile.</li>
+    <li><strong>Inferred type = the initializer's type</strong>, which may be more specific than you want:
+      <pre><code class="java">var list = new ArrayList&lt;String&gt;();   // type is ArrayList&lt;String&gt;, not List&lt;String&gt;</code></pre>
+      If you need the interface type, declare it explicitly.</li>
+    <li><strong>Diamond + var:</strong> <code>var m = new HashMap&lt;&gt;();</code> infers
+      <code>HashMap&lt;Object,Object&gt;</code> — usually not what you want. Give type args on the right.</li>
+    <li><strong><code>var</code> is not a keyword</strong> — it's a reserved type name, so existing
+      variables/methods named <code>var</code> still compile. You cannot name a <em>class</em> <code>var</code>.</li>
+    <li><strong>Readability:</strong> prefer it when the type is obvious from the RHS
+      (<code>new</code>, factory methods). Avoid it when the RHS hides the type
+      (e.g. <code>var result = process();</code>).</li>
+  </ul>
+
+  <div class="tip">
+    <strong>var vs. <code>Object</code>:</strong> <code>var</code> keeps the precise static type (all
+    methods available); <code>Object o = ...</code> erases it (only <code>Object</code> methods).
+    They are completely different.
+  </div>
+
+  <h2>Evolution</h2>
+  <table class="data">
+    <tr><th>Version</th><th>What changed</th></tr>
+    <tr><td>Java 10</td><td><code>var</code> for local variables (JEP 286).</td></tr>
+    <tr><td>Java 11</td><td><code>var</code> allowed in lambda parameters (JEP 323) — enables annotations on them.</td></tr>
+  </table>
+
+  <div class="cheat">
+    <h3>Cheat card</h3>
+    <ul>
+      <li>✅ locals, for/for-each vars, try-with-resources, lambda params (11+)</li>
+      <li>❌ fields, method params/returns, no-initializer, <code>null</code>, bare lambdas/arrays</li>
+      <li>Static type = type of the initializer. Not dynamic. No runtime cost.</li>
+      <li>Reach for the interface type explicitly when you need it.</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Modules (JPMS)</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/modules-jpms.html" data-title="Modules (JPMS)">
+<main>
+  <p class="sec-tag">Deep dive · platform</p>
+  <h1>The Java Platform Module System (JPMS) <span class="badge added">Java 9</span></h1>
+  <p class="lead">
+    A module is a named, self-describing group of packages that declares <strong>what it needs</strong>
+    (<code>requires</code>) and <strong>what it exposes</strong> (<code>exports</code>). It adds strong
+    encapsulation and reliable configuration above the old flat classpath.
+  </p>
+
+  <h2>Why it exists</h2>
+  <ul>
+    <li><strong>Strong encapsulation</strong> — packages not <code>exported</code> are truly hidden, even from reflection.</li>
+    <li><strong>Reliable configuration</strong> — missing/duplicate/cyclic dependencies are caught at startup, not deep into a run ("JAR hell").</li>
+    <li><strong>A scalable platform</strong> — the JDK itself is ~90 modules, so tools like <code>jlink</code> can ship only what you use.</li>
+  </ul>
+
+  <h2>A module in one file: <code>module-info.java</code></h2>
+  <pre><code class="java">// src/com.myapp/module-info.java
+module com.myapp {
+  requires java.net.http;            // I depend on this module
+  requires transitive com.mylib;     // and anyone who requires me also gets com.mylib
+
+  exports com.myapp.api;             // this package is public API
+  exports com.myapp.internal to com.myapp.tests;   // qualified: only to that module
+
+  uses   com.myapp.spi.Plugin;                     // I consume this service
+  provides com.myapp.spi.Plugin
+      with com.myapp.plugins.DefaultPlugin;        // I supply an implementation
+
+  opens  com.myapp.model;            // allow deep reflection (e.g. for frameworks)
+}</code></pre>
+
+  <h2>Directives at a glance</h2>
+  <table class="data">
+    <tr><th>Directive</th><th>Meaning</th></tr>
+    <tr><td><code>requires M</code></td><td>Depend on module M's exported packages.</td></tr>
+    <tr><td><code>requires transitive M</code></td><td>Re-export M to your consumers (implied readability).</td></tr>
+    <tr><td><code>requires static M</code></td><td>Compile-time only (optional at runtime).</td></tr>
+    <tr><td><code>exports P</code></td><td>Make package P readable by all modules.</td></tr>
+    <tr><td><code>exports P to M1, M2</code></td><td>Qualified export — only to named modules.</td></tr>
+    <tr><td><code>opens P</code> / <code>opens P to M</code></td><td>Allow <em>deep reflection</em> into P at runtime (frameworks).</td></tr>
+    <tr><td><code>uses S</code> / <code>provides S with Impl</code></td><td>Consume / provide a <code>ServiceLoader</code> service.</td></tr>
+  </table>
+
+  <h2>exports vs. opens — the key distinction</h2>
+  <div class="ba">
+    <div class="before"><div class="ba-label">exports</div>
+      <pre><code class="java">exports com.myapp.api;
+// Compile &amp; call public types normally.
+// Deep reflection (setAccessible on privates) is STILL blocked.</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">opens</div>
+      <pre><code class="java">opens com.myapp.model;
+// Reflection frameworks (Jackson, Hibernate, Spring)
+// can access private members at runtime.
+// No compile-time access to non-public types.</code></pre>
+    </div>
+  </div>
+
+  <h2>Classpath vs. module path</h2>
+  <table class="data">
+    <tr><th></th><th>Classpath (legacy)</th><th>Module path</th></tr>
+    <tr><td>Flag</td><td><code>-cp</code> / <code>-classpath</code></td><td><code>-p</code> / <code>--module-path</code></td></tr>
+    <tr><td>Encapsulation</td><td>None — everything public is reachable</td><td>Only <code>exported</code> packages</td></tr>
+    <tr><td>A plain JAR becomes</td><td>Part of the "unnamed module"</td><td>An <em>automatic module</em> (name from the JAR) if it has no module-info</td></tr>
+  </table>
+  <pre><code class="java">javac -d out --module-source-path src $(find src -name '*.java')
+java -p out -m com.myapp/com.myapp.Main       # run module/mainclass
+java --list-modules                            # what's available</code></pre>
+
+  <h2>Practical guidance &amp; gotchas</h2>
+  <ul>
+    <li><strong>You don't have to modularise your app</strong> to run on Java 9+. The classpath still
+      works; the "unnamed module" reads everything. Many apps stay on the classpath for years.</li>
+    <li><strong>Automatic modules</strong> bridge non-modular JARs: put a plain JAR on the module path
+      and it gets a module name derived from the filename (or its <code>Automatic-Module-Name</code> manifest entry).</li>
+    <li><strong>Reflection frameworks</strong> need <code>opens</code> (or <code>--add-opens</code> on
+      the command line) — the #1 source of <code>InaccessibleObjectException</code> after migration.</li>
+    <li><strong>Split packages</strong> (the same package in two modules) are forbidden — a common
+      migration snag with older libraries.</li>
+    <li><strong>Escape hatches</strong> for legacy code: <code>--add-modules</code>,
+      <code>--add-exports</code>, <code>--add-opens</code>, <code>--add-reads</code>.</li>
+  </ul>
+
+  <h2>Related tooling</h2>
+  <ul>
+    <li><code>jdeps --jdk-internals app.jar</code> — find uses of encapsulated internals before upgrading.</li>
+    <li><code>jlink</code> — build a minimal runtime image from your modules.</li>
+    <li><strong>Module import declarations</strong> (Java 25) — <code>import module java.base;</code>
+      imports everything a module exports; see <a href="../versions/java-25.html">Java 25</a>.</li>
+  </ul>
+
+  <div class="cheat">
+    <h3>Cheat card</h3>
+    <ul>
+      <li><code>module M { requires …; exports …; }</code> in <code>module-info.java</code>.</li>
+      <li><code>exports</code> = compile/call; <code>opens</code> = runtime deep reflection.</li>
+      <li><code>requires transitive</code> re-exports a dependency; <code>requires static</code> = compile-only.</li>
+      <li>Module path <code>-p</code> vs classpath <code>-cp</code>; plain JARs → automatic modules.</li>
+      <li>Framework broke after upgrade? You probably need <code>opens</code> / <code>--add-opens</code>.</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

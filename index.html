@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java 9 → 26 — Learn the New Features</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-root="./" data-page="index.html" data-title="Home">
+<main>
+
+  <p class="sec-tag">A hands-on reference</p>
+  <h1>Java 9 → 26 — everything new, version by version</h1>
+  <p class="lead">
+    A quick way to learn what changed in Java from 9 to 26 — organised by
+    <strong>language features</strong>, <strong>new APIs</strong>, <strong>tooling</strong> and
+    <strong>JVM/other</strong> changes, with tiny <strong>before → after</strong> snippets so you can
+    see the old way and the new way side by side.
+  </p>
+
+  <div class="note">
+    <strong>How the versions work.</strong> Java ships every 6 months, but only some releases are
+    <span class="badge lts">LTS</span> (long-term support). This guide has a page for each
+    <em>major stepping-stone</em> release — <strong>9, 11, 17, 21, 25, 26</strong> — and folds the
+    features of the in-between releases into the next stepping stone, always tagged with the version
+    that introduced them (e.g. <span class="badge added">Added in 14</span>). So Java 17 also covers
+    the good stuff from 12–16, Java 21 covers 18–20, and Java 25 covers 22–24.
+  </div>
+
+  <h2>Release timeline</h2>
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-date">Sept 2017</div>
+      <div class="tl-title"><a href="versions/java-9.html">Java 9</a></div>
+      <div>Modules (JPMS), JShell, collection factory methods, reactive Flow, HTTP/2 client (incubator).</div>
+    </div>
+    <div class="tl-item lts">
+      <div class="tl-date">Sept 2018 · <span class="badge lts">LTS</span></div>
+      <div class="tl-title"><a href="versions/java-11.html">Java 11</a> <span class="badge added">covers 10</span></div>
+      <div><code>var</code> (from 10), standard HttpClient, run single-file source, new String/Files methods.</div>
+    </div>
+    <div class="tl-item lts">
+      <div class="tl-date">Sept 2021 · <span class="badge lts">LTS</span></div>
+      <div class="tl-title"><a href="versions/java-17.html">Java 17</a> <span class="badge added">covers 12–16</span></div>
+      <div>Records, sealed classes, switch expressions, text blocks, pattern matching for <code>instanceof</code>, helpful NPEs.</div>
+    </div>
+    <div class="tl-item lts">
+      <div class="tl-date">Sept 2023 · <span class="badge lts">LTS</span></div>
+      <div class="tl-title"><a href="versions/java-21.html">Java 21</a> <span class="badge added">covers 18–20</span></div>
+      <div>Virtual threads, pattern matching for switch, record patterns, sequenced collections.</div>
+    </div>
+    <div class="tl-item lts">
+      <div class="tl-date">Sept 2025 · <span class="badge lts">LTS</span></div>
+      <div class="tl-title"><a href="versions/java-25.html">Java 25</a> <span class="badge added">covers 22–24</span></div>
+      <div>Scoped values (final), stream gatherers, FFM API (final), compact source files & instance main, module import declarations.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-date">March 2026</div>
+      <div class="tl-title"><a href="versions/java-26.html">Java 26</a></div>
+      <div>HTTP/3 client, AOT object caching, lazy/stable constants, structured concurrency &amp; primitive patterns advance.</div>
+    </div>
+  </div>
+
+  <h2>Jump in</h2>
+  <div class="card-grid">
+    <a class="card" href="quickstart.html">
+      <h3>⚡ Quick start</h3>
+      <p>Install JDKs, switch between versions, JShell, run preview / incubator / single-file code.</p>
+    </a>
+    <a class="card" href="versions/java-9.html">
+      <h3>📦 Browse by version</h3>
+      <p>What each release added, with 5 sections and before/after code per feature.</p>
+    </a>
+    <a class="card" href="topics/records.html">
+      <h3>🔬 Deep-dive topics</h3>
+      <p>Full pages on records, sealed classes, pattern matching, virtual threads and more.</p>
+    </a>
+  </div>
+
+  <h2>Deep-dive topics</h2>
+  <p>The most important new concepts each get their own page — full details, rules, gotchas and how they evolved from preview to final:</p>
+  <div class="card-grid">
+    <a class="card" href="topics/var.html"><h3>var</h3><p>Local-variable type inference (Java 10).</p></a>
+    <a class="card" href="topics/records.html"><h3>Records</h3><p>Transparent data carriers (Java 16).</p></a>
+    <a class="card" href="topics/sealed-classes.html"><h3>Sealed classes</h3><p>Controlled inheritance (Java 17).</p></a>
+    <a class="card" href="topics/pattern-matching-switch.html"><h3>Pattern matching &amp; switch</h3><p>instanceof, switch, records, primitives.</p></a>
+    <a class="card" href="topics/text-blocks-strings.html"><h3>Text blocks &amp; Strings</h3><p>Multiline literals + new String APIs.</p></a>
+    <a class="card" href="topics/modules-jpms.html"><h3>Modules (JPMS)</h3><p>The module system from Java 9.</p></a>
+    <a class="card" href="topics/virtual-threads.html"><h3>Virtual threads</h3><p>Millions of cheap threads (Java 21).</p></a>
+    <a class="card" href="topics/structured-concurrency.html"><h3>Structured concurrency</h3><p>Treat task groups as one unit.</p></a>
+    <a class="card" href="topics/scoped-values.html"><h3>Scoped values</h3><p>Immutable per-thread data (Java 25).</p></a>
+    <a class="card" href="topics/streams-gatherers.html"><h3>Streams &amp; Gatherers</h3><p>Custom intermediate operations (Java 24).</p></a>
+    <a class="card" href="topics/ffm-api.html"><h3>Foreign Function &amp; Memory</h3><p>Call native code, no JNI (Java 22).</p></a>
+  </div>
+
+  <div class="tip">
+    <strong>Tip.</strong> Every code block uses <span class="badge">before</span> /
+    <span class="badge">after</span> pairs where it helps. Use the <kbd>☾ Dark</kbd> toggle
+    (top-right) and the sidebar filter to find things fast. Everything works offline —
+    it's just static HTML files.
+  </div>
+
+</main>
+<script src="assets/nav.js"></script>
+<script src="assets/highlight.js"></script>
+</body>
+</html>

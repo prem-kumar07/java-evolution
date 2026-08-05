@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java 17 (LTS) — new features</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="versions/java-17.html" data-title="Java 17">
+<main>
+  <p class="sec-tag">September 2021 · <span class="badge lts">LTS</span></p>
+  <h1>Java 17 <span class="badge lts">LTS</span></h1>
+  <p class="lead">
+    A landmark LTS. Over 12–17 the language gained modern data modelling — <strong>records</strong>,
+    <strong>sealed classes</strong>, <strong>switch expressions</strong>, <strong>text blocks</strong>
+    and <strong>pattern matching</strong> — turning verbose boilerplate into a few readable lines.
+  </p>
+  <div class="note"><strong>Folded in:</strong> features from
+  <span class="badge added">12</span> <span class="badge added">13</span>
+  <span class="badge added">14</span> <span class="badge added">15</span>
+  <span class="badge added">16</span> are included and tagged with the version that introduced them.</div>
+
+  <!-- ============ LANGUAGE ============ -->
+  <h2>1 · Language features</h2>
+
+  <h3>Switch expressions <span class="badge added">Final in 14</span></h3>
+  <p><code>switch</code> can return a value, uses arrow labels (no fall-through), and <code>yield</code> for blocks.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — statement, fall-through, mutable var</div>
+      <pre><code class="java">int days;
+switch (month) {
+  case JAN: case MAR: case MAY:
+    days = 31; break;
+  case FEB:
+    days = 28; break;
+  default:
+    days = 30;
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — expression</div>
+      <pre><code class="java">int days = switch (month) {
+  case JAN, MAR, MAY -> 31;
+  case FEB           -> 28;
+  default            -> 30;
+};    // exhaustive, no break, one assignment</code></pre>
+    </div>
+  </div>
+
+  <h3>Records <span class="badge added">Final in 16</span></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — ~40 lines of boilerplate</div>
+      <pre><code class="java">public final class Point {
+  private final int x, y;
+  public Point(int x, int y){this.x=x;this.y=y;}
+  public int x(){return x;} public int y(){return y;}
+  public boolean equals(Object o){ /* ... */ }
+  public int hashCode(){ /* ... */ }
+  public String toString(){ /* ... */ }
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After</div>
+      <pre><code class="java">public record Point(int x, int y) { }
+// constructor, x()/y(), equals, hashCode,
+// toString — all generated.</code></pre>
+    </div>
+  </div>
+  <p>Everything about records → <a href="../topics/records.html">Records deep-dive</a>.</p>
+
+  <h3>Sealed classes <span class="badge added">Final in 17</span></h3>
+  <p>Restrict which types may extend/implement yours — the compiler then knows the full set.</p>
+  <pre><code class="java">public sealed interface Shape permits Circle, Square, Rectangle { }
+public record Circle(double r) implements Shape { }
+public record Square(double side) implements Shape { }
+public record Rectangle(double w, double h) implements Shape { }</code></pre>
+  <p>Full rules (<code>permits</code>, <code>final</code>/<code>sealed</code>/<code>non-sealed</code>) →
+  <a href="../topics/sealed-classes.html">Sealed classes deep-dive</a>.</p>
+
+  <h3>Pattern matching for <code>instanceof</code> <span class="badge added">Final in 16</span></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">if (obj instanceof String) {
+  String s = (String) obj;   // redundant cast
+  return s.length();
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 16)</div>
+      <pre><code class="java">if (obj instanceof String s) {   // binds s
+  return s.length();
+}</code></pre>
+    </div>
+  </div>
+
+  <h3>Text blocks <span class="badge added">Final in 15</span></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">String json = "{\n" +
+    "  \"name\": \"Ada\",\n" +
+    "  \"age\": 36\n" +
+    "}";</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 15)</div>
+      <pre><code class="java">String json = """
+    {
+      "name": "Ada",
+      "age": 36
+    }""";</code></pre>
+    </div>
+  </div>
+  <p>Indentation rules &amp; string APIs → <a href="../topics/text-blocks-strings.html">Text blocks deep-dive</a>.</p>
+
+  <h3>Pattern matching for <code>switch</code> <span class="badge preview">Preview in 17</span></h3>
+  <p>Preview here; became final in 21. See the <a href="../topics/pattern-matching-switch.html">Pattern matching deep-dive</a>.</p>
+  <pre><code class="java">String describe = switch (shape) {          // preview in 17
+  case Circle c    -> "circle r=" + c.r();
+  case Square s    -> "square " + s.side();
+  case null        -> "nothing";
+  default          -> "other";
+};</code></pre>
+
+  <!-- ============ APIs ============ -->
+  <h2>2 · New &amp; updated APIs</h2>
+
+  <h3><code>Stream.toList()</code> <span class="badge added">Added in 16</span></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">List&lt;String&gt; names = stream
+    .map(User::name)
+    .collect(Collectors.toList());</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 16)</div>
+      <pre><code class="java">List&lt;String&gt; names = stream
+    .map(User::name)
+    .toList();   // shorter, unmodifiable</code></pre>
+    </div>
+  </div>
+
+  <h3>Other API additions</h3>
+  <pre><code class="java">// Stream.mapMulti — one-to-many without a temporary stream (Added in 16)
+stream.mapMulti((user, consumer) -> user.roles().forEach(consumer));
+
+// Collectors.teeing — combine two collectors (Added in 12)
+var stats = nums.stream().collect(Collectors.teeing(
+    Collectors.summingInt(i -> i),
+    Collectors.counting(),
+    (sum, count) -> "sum=" + sum + " count=" + count));
+
+// String extras (Added in 12 / 15)
+"line".indent(4);          "  txt  ".stripIndent();
+"Hi %s".formatted("Ada");  "abc".transform(String::toUpperCase);
+
+// HexFormat (Added in 17)
+String hex = HexFormat.of().formatHex(new byte[]{1, 2, 3});   // "010203"
+
+// Enhanced pseudorandom generators (Added in 17)
+RandomGenerator rng = RandomGeneratorFactory.of("Xoshiro256PlusPlus").create(42);</code></pre>
+
+  <!-- ============ TOOLING ============ -->
+  <h2>3 · Tooling</h2>
+  <ul>
+    <li><strong>Helpful NullPointerExceptions</strong> <span class="badge added">Added in 14</span> —
+      the message now names the exact expression that was null:
+      <pre><code class="java">// Cannot invoke "String.length()" because "&lt;local2&gt;.name" is null</code></pre>
+    </li>
+    <li><strong>jpackage</strong> <span class="badge added">Added in 16</span> — build native
+      installers (<code>.dmg</code>, <code>.msi</code>, <code>.deb</code>) from your app + a runtime.</li>
+    <li>The JDK source moved from <strong>Mercurial to Git &amp; GitHub</strong>
+      <span class="badge added">Added in 16</span>.</li>
+  </ul>
+
+  <!-- ============ JVM / OTHER ============ -->
+  <h2>4 · JVM / performance / other</h2>
+  <ul>
+    <li><strong>ZGC</strong> and <strong>Shenandoah</strong> low-pause collectors reached
+      <em>production</em> <span class="badge added">Added in 15</span>.</li>
+    <li><strong>Strong encapsulation of JDK internals by default</strong>
+      <span class="badge added">16</span> <span class="badge jep">JEP 403 (17)</span> — reflective
+      access to <code>sun.*</code>/internal APIs now fails unless explicitly opened. A key migration
+      hurdle: run <code>jdeps --jdk-internals</code> before upgrading.</li>
+    <li><strong>macOS/AArch64 (Apple Silicon) port</strong> and a new <strong>macOS rendering
+      pipeline</strong> (Metal) <span class="badge added">Added in 17</span>.</li>
+    <li><strong>Always-strict floating point</strong> restored (<code>strictfp</code> everywhere).</li>
+    <li>RMI Activation removed; Security Manager deprecated for removal; Applet API deprecated for removal.</li>
+    <li><strong>Foreign Function &amp; Memory API</strong> begins incubating
+      <span class="badge added">Added in 17</span> → <a href="../topics/ffm-api.html">FFM deep-dive</a>.</li>
+  </ul>
+
+  <!-- ============ SUMMARY ============ -->
+  <h2>5 · Summary cheat-sheet</h2>
+  <div class="cheat">
+    <h3>Java 17 (LTS) in one glance</h3>
+    <ul>
+      <li><strong>records</strong> (16) · <strong>sealed</strong> (17) · <strong>text blocks</strong> (15)</li>
+      <li><strong>switch expressions</strong> (14) · <strong>instanceof patterns</strong> (16) · switch patterns (preview)</li>
+      <li><strong>Streams:</strong> <code>toList()</code> (16), <code>mapMulti</code> (16), <code>teeing</code> (12)</li>
+      <li><strong>APIs:</strong> <code>HexFormat</code>, <code>RandomGenerator</code>, richer <code>String</code></li>
+      <li><strong>Diagnostics:</strong> helpful NPEs (14); <strong>jpackage</strong> (16)</li>
+      <li><strong>Migration watch-out:</strong> JDK internals strongly encapsulated</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

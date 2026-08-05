@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java 26 — new features</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="versions/java-26.html" data-title="Java 26">
+<main>
+  <p class="sec-tag">March 2026</p>
+  <h1>Java 26</h1>
+  <p class="lead">
+    A feature release that pushes performance and platform integrity forward: <strong>HTTP/3</strong>
+    in the HTTP client, more <strong>AOT startup caching</strong>, a faster <strong>G1</strong>, and
+    the "<strong>final means final</strong>" integrity work — while structured concurrency and
+    primitive patterns edge closer to final.
+  </p>
+  <div class="note"><strong>Non-LTS.</strong> Java 26 is a 6-month feature release. Production teams on
+  LTS should track these as <em>previews of what's coming</em>; the next LTS will consolidate them.</div>
+
+  <!-- ============ LANGUAGE ============ -->
+  <h2>1 · Language features</h2>
+
+  <h3>Prepare to Make <code>final</code> Mean Final <span class="badge jep">JEP 500</span></h3>
+  <p>Part of the "integrity by default" effort. Historically, libraries could mutate
+  <code>final</code> fields via deep reflection (<code>setAccessible</code>). Java 26 begins warning
+  on this so a future release can enforce that <code>final</code> truly is final — enabling
+  constant-folding optimisations and safer code.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — silently allowed</div>
+      <pre><code class="java">Field f = obj.getClass().getDeclaredField("id");
+f.setAccessible(true);
+f.setInt(obj, 999);      // mutates a final field — worked</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 26)</div>
+      <pre><code class="java">// same code now emits a warning; a future release
+// will throw. Opt back in per-module only if needed:
+//   --enable-final-field-mutation=&lt;module&gt;</code></pre>
+    </div>
+  </div>
+
+  <h3>Primitive types in patterns, <code>instanceof</code> &amp; <code>switch</code> <span class="badge preview">Preview (4th)</span></h3>
+  <p>Extends pattern matching to primitives, with exactness checks that replace error-prone casts.</p>
+  <pre><code class="java">Object o = 42;
+switch (o) {
+  case int i    -> System.out.println("int " + i);
+  case double d -> System.out.println("double " + d);
+  default       -> {}
+}
+// and safe range checks:
+if (bigValue instanceof int i) { ... }   // only matches if it fits in int</code></pre>
+
+  <h3>Structured concurrency <span class="badge preview">Preview (6th)</span></h3>
+  <p>Approaching final. Run a group of subtasks as one unit with automatic cancellation/joining →
+  <a href="../topics/structured-concurrency.html">deep-dive</a>.</p>
+
+  <!-- ============ APIs ============ -->
+  <h2>2 · New &amp; updated APIs</h2>
+
+  <h3>HTTP/3 for the HTTP Client <span class="badge jep">JEP 517</span></h3>
+  <p>The <code>java.net.http.HttpClient</code> (from Java 11) now speaks HTTP/3 (QUIC over UDP) —
+  lower latency and better behaviour on lossy networks.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — HTTP/1.1 or /2</div>
+      <pre><code class="java">HttpClient client = HttpClient.newBuilder()
+    .version(HttpClient.Version.HTTP_2)
+    .build();</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 26)</div>
+      <pre><code class="java">HttpClient client = HttpClient.newBuilder()
+    .version(HttpClient.Version.HTTP_3)
+    .build();
+// same request/response API — only the transport changes</code></pre>
+    </div>
+  </div>
+
+  <h3>Lazy Constants <span class="badge preview">Preview (2nd)</span></h3>
+  <p>The feature previewed as "Stable Values" in Java 25, now renamed. A safe primitive for
+  compute-once, thread-safe lazy initialisation that the JIT can treat like a constant.</p>
+  <pre><code class="java">// preview API shape
+LazyConstant&lt;Config&gt; config = LazyConstant.of(() -> loadConfig());
+Config c = config.get();   // loadConfig() runs at most once, then folded as a constant</code></pre>
+
+  <h3>Also previewing / incubating</h3>
+  <ul>
+    <li><strong>PEM encodings of cryptographic objects</strong> <span class="badge preview">Preview (2nd)</span> —
+      read/write keys &amp; certificates in PEM text directly.</li>
+    <li><strong>Vector API</strong> <span class="badge">11th incubator</span> — SIMD math; still
+      incubating pending Project Valhalla.</li>
+  </ul>
+
+  <!-- ============ TOOLING / JVM ============ -->
+  <h2>3 · Tooling</h2>
+  <ul>
+    <li><strong>Ahead-of-Time Object Caching with Any GC</strong> <span class="badge jep">JEP 516</span> —
+      Project Leyden's AOT cache (warmed classes/objects) now works regardless of the selected
+      garbage collector, widening who can benefit from faster startup.</li>
+  </ul>
+
+  <h2>4 · JVM / performance / other</h2>
+  <ul>
+    <li><strong>G1: improved throughput by reducing synchronization</strong> <span class="badge jep">JEP 522</span> —
+      less overhead in the default collector.</li>
+    <li><strong>Applet API removed</strong> <span class="badge removed">Removed</span> — the last of the
+      applet era is gone (deprecated back in 17).</li>
+  </ul>
+
+  <!-- ============ SUMMARY ============ -->
+  <h2>5 · Summary cheat-sheet</h2>
+  <div class="cheat">
+    <h3>Java 26 in one glance</h3>
+    <ul>
+      <li><strong>HTTP/3:</strong> <code>.version(HttpClient.Version.HTTP_3)</code></li>
+      <li><strong>Integrity:</strong> "final means final" — deep reflection on final fields warns</li>
+      <li><strong>Startup:</strong> AOT object caching with any GC</li>
+      <li><strong>Perf:</strong> faster G1; Applet API removed</li>
+      <li><strong>Preview:</strong> primitive patterns (4th), structured concurrency (6th), lazy constants (2nd)</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

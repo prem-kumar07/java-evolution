@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sealed classes &amp; interfaces</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/sealed-classes.html" data-title="Sealed classes">
+<main>
+  <p class="sec-tag">Deep dive · language</p>
+  <h1>Sealed classes &amp; interfaces <span class="badge added">Java 17</span></h1>
+  <p class="lead">
+    A <code>sealed</code> type explicitly lists which classes may extend or implement it. This gives
+    you a <strong>closed, known set of subtypes</strong> — the foundation for exhaustive pattern
+    matching and safe modelling of "one of a fixed set of shapes".
+  </p>
+
+  <h2>Why it exists</h2>
+  <p>Before, a type was either <code>final</code> (no subtypes) or fully open (anyone, anywhere could
+  subclass). There was no way to say "these three and no others". Sealed types fill that gap and let
+  the compiler reason about the complete hierarchy.</p>
+
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — open, or a hand-rolled enum-of-classes</div>
+      <pre><code class="java">public abstract class Shape { }
+// anyone can extend Shape anywhere — the compiler
+// can never know the full list, so switches always
+// need a default and can silently miss a new case.</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — sealed</div>
+      <pre><code class="java">public sealed interface Shape
+    permits Circle, Square, Rectangle { }
+
+public record Circle(double r)             implements Shape { }
+public record Square(double side)          implements Shape { }
+public record Rectangle(double w, double h) implements Shape { }</code></pre>
+    </div>
+  </div>
+
+  <h2>The three choices every permitted subtype must make</h2>
+  <p>A class that extends a sealed type must itself declare how <em>its</em> hierarchy continues:</p>
+  <pre><code class="java">public sealed interface Shape permits Circle, Quadrilateral { }
+
+public final     record Circle(double r) implements Shape { }   // final: no further subtypes
+public sealed    interface Quadrilateral extends Shape
+                 permits Square, Rectangle { }                  // sealed: continues the closed set
+public non-sealed class Rectangle implements Quadrilateral { }  // non-sealed: re-opens for anyone</code></pre>
+  <table class="data">
+    <tr><th>Modifier</th><th>Meaning</th></tr>
+    <tr><td><code>final</code></td><td>Leaf — cannot be extended further.</td></tr>
+    <tr><td><code>sealed</code></td><td>Continues the closed hierarchy with its own <code>permits</code>.</td></tr>
+    <tr><td><code>non-sealed</code></td><td>Deliberately re-opens the type to unrestricted extension.</td></tr>
+  </table>
+
+  <h2>Rules</h2>
+  <ul>
+    <li>Permitted subtypes must be <strong>accessible</strong> to the sealed type and, unless in the
+      same file, in the <strong>same module</strong> (or same package for the unnamed module).</li>
+    <li>You may <strong>omit <code>permits</code></strong> if all subtypes are in the <em>same source
+      file</em> — the compiler infers them:
+      <pre><code class="java">sealed interface Expr permits Num, Add { }   // permits optional if all are below in this file
+record Num(int v) implements Expr { }
+record Add(Expr l, Expr r) implements Expr { }</code></pre>
+    </li>
+    <li>Every permitted subtype must <strong>directly extend/implement</strong> the sealed type.</li>
+    <li>Records are implicitly <code>final</code>, so they fit permitted lists perfectly.</li>
+  </ul>
+
+  <h2>The payoff: exhaustive switches</h2>
+  <p>Because the compiler knows every subtype, a <code>switch</code> over a sealed type needs
+  <strong>no <code>default</code></strong> — and if you later add a subtype, every switch that didn't
+  handle it fails to compile. Compile-time safety instead of a silent runtime bug.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — needs default, misses new cases silently</div>
+      <pre><code class="java">double area(Shape s) {
+  if (s instanceof Circle c) return Math.PI*c.r()*c.r();
+  if (s instanceof Square sq) return sq.side()*sq.side();
+  throw new IllegalStateException("unknown shape"); // runtime!
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — exhaustive, checked at compile time</div>
+      <pre><code class="java">double area(Shape s) {
+  return switch (s) {              // no default needed
+    case Circle c      -> Math.PI * c.r() * c.r();
+    case Square sq     -> sq.side() * sq.side();
+    case Rectangle r   -> r.w() * r.h();
+  };
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="tip"><strong>Sealed + records + pattern matching = "algebraic data types".</strong>
+  Model a closed set of cases as sealed records, then <code>switch</code> over them exhaustively —
+  the modern, type-safe alternative to the visitor pattern. See
+  <a href="pattern-matching-switch.html">Pattern matching</a>.</div>
+
+  <h2>Evolution</h2>
+  <table class="data">
+    <tr><th>Version</th><th>Change</th></tr>
+    <tr><td>Java 15</td><td>1st preview (JEP 360).</td></tr>
+    <tr><td>Java 16</td><td>2nd preview (JEP 397).</td></tr>
+    <tr><td>Java 17</td><td><strong>Final</strong> (JEP 409).</td></tr>
+    <tr><td>Java 21</td><td>Exhaustive switch over sealed types finalised alongside switch patterns.</td></tr>
+  </table>
+
+  <div class="cheat">
+    <h3>Cheat card</h3>
+    <ul>
+      <li><code>sealed interface X permits A, B { }</code> — closed subtype set.</li>
+      <li>Each subtype is <code>final</code>, <code>sealed</code>, or <code>non-sealed</code>.</li>
+      <li><code>permits</code> optional when subtypes share the file.</li>
+      <li>Same module/package requirement for permitted types.</li>
+      <li>Enables <code>switch</code> with no <code>default</code> + compile-time exhaustiveness.</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

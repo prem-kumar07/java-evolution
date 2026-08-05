@@ -1,0 +1,47 @@
+# Java 9 → 26 — Learn the New Features
+
+An offline, self-contained HTML reference for everything new in Java from **9 to 26**,
+organised by version and by deep-dive topic, with concise **before → after** code snippets.
+
+## How to open
+
+Just open `index.html` in any browser — no server, no build step, no internet required.
+
+```bash
+open index.html          # macOS
+xdg-open index.html      # Linux
+start index.html         # Windows
+```
+
+## What's inside
+
+```
+index.html            Overview + release timeline + links to everything
+quickstart.html       Install JDKs, switch versions, JShell, preview/incubator, single-file launch
+
+versions/             One page per stepping-stone release (5 sections + before/after each)
+  java-9.html         Modules, JShell, collection factories, Flow
+  java-11.html  (LTS) var (10), HttpClient, single-file launch, String/Files APIs
+  java-17.html  (LTS) records, sealed, switch expressions, text blocks, patterns  (folds in 12–16)
+  java-21.html  (LTS) virtual threads, switch patterns, record patterns, sequenced collections  (18–20)
+  java-25.html  (LTS) scoped values, gatherers, FFM, compact source files, module imports  (22–24)
+  java-26.html        HTTP/3, AOT object caching, faster G1, "final means final"
+
+topics/               Deep-dive pages
+  var, records, sealed-classes, pattern-matching-switch, text-blocks-strings, modules-jpms,
+  virtual-threads, structured-concurrency, scoped-values, streams-gatherers, ffm-api
+
+assets/
+  style.css           Light/dark theme, responsive layout
+  nav.js              Sidebar/topbar, theme toggle, search filter (built from one sitemap)
+  highlight.js        Tiny self-contained Java syntax highlighter (no CDN)
+```
+
+## Conventions
+
+- Skipped releases (10, 12–16, 18–20, 22–24) are folded into the next LTS page, each feature
+  tagged with the version that introduced it, e.g. **Added in 14**.
+- Badges: **LTS**, **Added in N**, **Preview**, **Removed**, **JEP nnn**.
+- JEP lists were verified against the OpenJDK project pages.
+
+Use the **☾ Dark** toggle (top-right) and the sidebar **filter** box to navigate quickly.

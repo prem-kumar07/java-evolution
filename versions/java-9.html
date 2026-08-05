@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java 9 — new features</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="versions/java-9.html" data-title="Java 9">
+<main>
+  <p class="sec-tag">September 2017</p>
+  <h1>Java 9</h1>
+  <p class="lead">
+    The big one: the <strong>module system (JPMS)</strong> reorganised the JDK itself. Also arrived:
+    <strong>JShell</strong>, <strong>collection factory methods</strong>, a reactive
+    <strong>Flow</strong> API, and many smaller language tidy-ups.
+  </p>
+
+  <!-- ============ LANGUAGE ============ -->
+  <h2>1 · Language features</h2>
+
+  <h3>Private methods in interfaces</h3>
+  <p>Interfaces got <code>default</code> methods in Java 8; now they can share code through
+  <code>private</code> (and <code>private static</code>) helpers.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before (Java 8)</div>
+      <pre><code class="java">interface Logger {
+  default void info(String m)  { log("INFO", m); }
+  default void error(String m) { log("ERROR", m); }
+  // no way to hide this shared helper
+  default void log(String lvl, String m) {
+    System.out.println(lvl + ": " + m);
+  }
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 9)</div>
+      <pre><code class="java">interface Logger {
+  default void info(String m)  { log("INFO", m); }
+  default void error(String m) { log("ERROR", m); }
+  private void log(String lvl, String m) {   // hidden
+    System.out.println(lvl + ": " + m);
+  }
+}</code></pre>
+    </div>
+  </div>
+
+  <h3>Try-with-resources on effectively-final variables</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">// must declare a fresh variable inside the ()
+try (BufferedReader r = reader) {
+  ...
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 9)</div>
+      <pre><code class="java">BufferedReader reader = ...;   // effectively final
+try (reader) {                 // use it directly
+  ...
+}</code></pre>
+    </div>
+  </div>
+
+  <h3>Diamond with anonymous classes · <code>@SafeVarargs</code> on private methods · <code>_</code> banned</h3>
+  <pre><code class="java">Callable&lt;String&gt; c = new Callable&lt;&gt;() { ... };  // diamond now allowed here
+@SafeVarargs private void f(List&lt;String&gt;... xs) { }   // allowed on private methods
+int _ = 3;   // COMPILE ERROR: '_' is now a reserved name (paving way for future use)</code></pre>
+
+  <!-- ============ APIs ============ -->
+  <h2>2 · New &amp; updated APIs</h2>
+
+  <h3>Immutable collection factory methods</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">List&lt;String&gt; list = Collections.unmodifiableList(
+    Arrays.asList("a", "b", "c"));
+Map&lt;String,Integer&gt; m = new HashMap&lt;&gt;();
+m.put("a", 1); m.put("b", 2);
+m = Collections.unmodifiableMap(m);</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After</div>
+      <pre><code class="java">List&lt;String&gt;  list = List.of("a", "b", "c");
+Set&lt;String&gt;   set  = Set.of("a", "b");
+Map&lt;String,Integer&gt; m = Map.of("a", 1, "b", 2);
+// truly immutable, null-hostile, compact</code></pre>
+    </div>
+  </div>
+
+  <h3>Stream additions: <code>takeWhile</code>, <code>dropWhile</code>, <code>ofNullable</code>, ranged <code>iterate</code></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">// stop at first element ≥ 5 — awkward
+list.stream()
+    .filter(x -> x &lt; 5)   // keeps ALL &lt;5, not just the leading run
+    ...;</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 9)</div>
+      <pre><code class="java">list.stream().takeWhile(x -> x &lt; 5);   // leading run only
+list.stream().dropWhile(x -> x &lt; 5);   // skip leading run
+Stream.ofNullable(maybeNull);          // 0- or 1-element stream
+Stream.iterate(1, n -> n &lt; 100, n -> n * 2);  // for-style with predicate</code></pre>
+    </div>
+  </div>
+
+  <h3>Optional: <code>ifPresentOrElse</code>, <code>or</code>, <code>stream</code></h3>
+  <pre><code class="java">opt.ifPresentOrElse(this::use, this::handleEmpty);   // no more if/else on isPresent()
+Optional&lt;User&gt; u = primary.or(() -> fallbackLookup());  // lazy fallback
+List&lt;User&gt; users = optionals.stream().flatMap(Optional::stream).toList();  // drop empties</code></pre>
+
+  <h3>Process API — inspect &amp; control OS processes</h3>
+  <pre><code class="java">ProcessHandle self = ProcessHandle.current();
+System.out.println(self.pid());
+ProcessHandle.allProcesses()
+    .filter(p -> p.info().command().isPresent())
+    .forEach(p -> System.out.println(p.pid() + " " + p.info().command().get()));</code></pre>
+
+  <h3>Reactive Streams — <code>java.util.concurrent.Flow</code></h3>
+  <p>Standard interfaces (<code>Publisher</code>, <code>Subscriber</code>, <code>Processor</code>,
+  <code>Subscription</code>) for back-pressured async streams — the basis libraries like RxJava/Reactor interoperate with.</p>
+
+  <!-- ============ TOOLING ============ -->
+  <h2>3 · Tooling</h2>
+  <ul>
+    <li><strong>JShell</strong> — the official REPL. See the <a href="../quickstart.html">Quick start</a>.</li>
+    <li><strong>jlink</strong> — assemble a minimal custom runtime image containing only the modules your app needs.
+      <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre>
+    </li>
+    <li><strong>Multi-release JARs</strong> — one JAR, version-specific class files under
+      <code>META-INF/versions/N/</code>, so a library can use newer APIs when run on newer JDKs.</li>
+    <li><strong>Unified JVM logging</strong> — one <code>-Xlog</code> framework for all JVM logs:
+      <pre><code class="java">java -Xlog:gc*=info:file=gc.log:time,uptime app</code></pre>
+    </li>
+    <li><strong>New HTML5 Javadoc</strong> with a search box.</li>
+  </ul>
+
+  <!-- ============ JVM / OTHER ============ -->
+  <h2>4 · JVM / performance / other</h2>
+  <ul>
+    <li><strong>The Module System (JPMS)</strong> <span class="badge jep">JEP 261</span> — the headline
+      change. The JDK is split into <code>~90</code> modules; you can declare your own with
+      <code>module-info.java</code>. Full walkthrough on the
+      <a href="../topics/modules-jpms.html">Modules deep-dive</a>.</li>
+    <li><strong>G1 is the default garbage collector</strong> (replacing Parallel GC).</li>
+    <li><strong>Compact Strings</strong> — <code>String</code> stores Latin-1 in a byte[] instead of
+      char[] when possible, cutting memory use — invisible to your code.</li>
+    <li><strong>HTTP/2 client (incubator)</strong> under <code>jdk.incubator.httpclient</code> —
+      becomes the standard <code>java.net.http.HttpClient</code> in
+      <a href="java-11.html">Java 11</a>.</li>
+    <li>Applet API and several old GC combinations deprecated.</li>
+  </ul>
+
+  <!-- ============ SUMMARY ============ -->
+  <h2>5 · Summary cheat-sheet</h2>
+  <div class="cheat">
+    <h3>Java 9 in one glance</h3>
+    <ul>
+      <li><strong>Modules:</strong> <code>module-info.java</code>, <code>requires</code>/<code>exports</code> → <a href="../topics/modules-jpms.html">deep dive</a></li>
+      <li><strong>Collections:</strong> <code>List.of / Set.of / Map.of</code></li>
+      <li><strong>Streams:</strong> <code>takeWhile / dropWhile / ofNullable / iterate(seed, hasNext, next)</code></li>
+      <li><strong>Optional:</strong> <code>ifPresentOrElse / or / stream</code></li>
+      <li><strong>Interfaces:</strong> <code>private</code> methods</li>
+      <li><strong>Tools:</strong> <code>jshell</code>, <code>jlink</code>, multi-release JARs, <code>-Xlog</code></li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

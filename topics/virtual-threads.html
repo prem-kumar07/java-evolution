@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Virtual threads</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/virtual-threads.html" data-title="Virtual threads">
+<main>
+  <p class="sec-tag">Deep dive · concurrency</p>
+  <h1>Virtual threads <span class="badge added">Java 21</span></h1>
+  <p class="lead">
+    Virtual threads are extremely lightweight threads scheduled by the JVM, not the OS. They let you
+    write plain <strong>blocking, thread-per-request</strong> code that scales to
+    <strong>millions</strong> of concurrent tasks — no callbacks, no reactive plumbing.
+  </p>
+
+  <h2>The problem they solve</h2>
+  <p>An OS (platform) thread is expensive (~1&nbsp;MB stack, costly context switches), so you pool a
+  few hundred and never block them carelessly. That forced a choice: simple-but-limited
+  thread-per-request, or scalable-but-complex async/reactive code. Virtual threads remove the choice —
+  block freely, and the JVM parks the virtual thread and reuses the underlying OS thread.</p>
+
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — bounded pool, careful blocking</div>
+      <pre><code class="java">ExecutorService pool = Executors.newFixedThreadPool(200);
+for (Request r : requests) {
+  pool.submit(() -> {
+    var user = db.load(r.userId());   // blocks a precious OS thread
+    return render(user);
+  });
+}
+// &gt;200 concurrent requests queue up</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — a thread per task</div>
+      <pre><code class="java">try (var ex = Executors.newVirtualThreadPerTaskExecutor()) {
+  for (Request r : requests) {
+    ex.submit(() -> {
+      var user = db.load(r.userId());  // blocking is cheap now
+      return render(user);
+    });
+  }
+}   // millions of concurrent tasks, same simple code</code></pre>
+    </div>
+  </div>
+
+  <h2>Creating virtual threads</h2>
+  <pre><code class="java">// 1. one-off
+Thread t = Thread.ofVirtual().start(() -> work());
+t.join();
+
+// 2. a builder / factory
+ThreadFactory vf = Thread.ofVirtual().name("worker-", 0).factory();
+
+// 3. an executor (recommended for task fan-out)
+try (var ex = Executors.newVirtualThreadPerTaskExecutor()) {
+  Future&lt;String&gt; f = ex.submit(() -> fetch());
+}
+
+// platform (old) thread for comparison:
+Thread p = Thread.ofPlatform().start(() -> work());</code></pre>
+
+  <h2>How they work: carriers &amp; mounting</h2>
+  <ul>
+    <li>Virtual threads run on a small pool of <strong>carrier</strong> (platform) threads — by default
+      a ForkJoinPool sized to the CPU count.</li>
+    <li>When a virtual thread hits a blocking call (I/O, <code>sleep</code>, locks), it
+      <strong>unmounts</strong> from its carrier so the carrier can run another virtual thread. When
+      the blocking call completes, it <strong>remounts</strong> (possibly on a different carrier).</li>
+    <li>Its stack lives on the heap, so a virtual thread costs bytes, not megabytes.</li>
+  </ul>
+
+  <h2>Rules &amp; gotchas</h2>
+  <ul>
+    <li><strong>Don't pool virtual threads.</strong> They're cheap and disposable — create one per task.
+      Pooling defeats the purpose.</li>
+    <li><strong>Pinning:</strong> in Java 21 a virtual thread stayed "pinned" to its carrier while
+      inside a <code>synchronized</code> block or a native call, which could starve the carrier pool.
+      <span class="badge added">Fixed in 24</span> — <code>synchronized</code> no longer pins
+      (JEP 491). On 21–23, prefer <code>ReentrantLock</code> over <code>synchronized</code> around
+      blocking I/O.</li>
+    <li><strong>They don't make CPU-bound work faster.</strong> The win is for I/O-bound / high-concurrency
+      workloads. CPU-bound work is still limited by cores.</li>
+    <li><strong>ThreadLocal still works but is discouraged</strong> at massive scale (per-thread copies
+      add up). Prefer <a href="scoped-values.html">scoped values</a>.</li>
+    <li><strong>Semaphores, not pools, for limiting</strong> a scarce downstream resource:
+      <pre><code class="java">Semaphore db = new Semaphore(50);   // cap concurrent DB calls
+// inside each virtual thread:
+db.acquire(); try { query(); } finally { db.release(); }</code></pre>
+    </li>
+  </ul>
+
+  <div class="tip"><strong>Rule of thumb:</strong> keep writing straightforward blocking code, run each
+  request/task on its own virtual thread, and use structured concurrency to manage groups of subtasks.</div>
+
+  <h2>Pairs with</h2>
+  <ul>
+    <li><a href="structured-concurrency.html">Structured concurrency</a> — manage a group of subtasks as one unit.</li>
+    <li><a href="scoped-values.html">Scoped values</a> — share immutable per-request context safely.</li>
+  </ul>
+
+  <h2>Evolution</h2>
+  <table class="data">
+    <tr><th>Version</th><th>Change</th></tr>
+    <tr><td>Java 19</td><td>Preview (JEP 425).</td></tr>
+    <tr><td>Java 20</td><td>2nd preview (JEP 436).</td></tr>
+    <tr><td>Java 21</td><td><strong>Final</strong> (JEP 444).</td></tr>
+    <tr><td>Java 24</td><td>No longer pinned by <code>synchronized</code> (JEP 491).</td></tr>
+  </table>
+
+  <div class="cheat">
+    <h3>Cheat card</h3>
+    <ul>
+      <li><code>Executors.newVirtualThreadPerTaskExecutor()</code> — one virtual thread per task.</li>
+      <li><code>Thread.ofVirtual().start(r)</code> for one-offs.</li>
+      <li>Cheap → <strong>don't pool</strong>. Limit downstream with a <code>Semaphore</code>.</li>
+      <li>Great for I/O-bound concurrency; no help for CPU-bound work.</li>
+      <li>Prefer scoped values over ThreadLocal; on 21–23 avoid <code>synchronized</code> around blocking I/O.</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>
