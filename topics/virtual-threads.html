@@ -3,102 +3,546 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Virtual threads</title>
+  <title>Virtual threads — complete guide</title>
   <link rel="stylesheet" href="../assets/style.css">
 </head>
 <body data-root="../" data-page="topics/virtual-threads.html" data-title="Virtual threads">
 <main>
-  <p class="sec-tag">Deep dive · concurrency</p>
-  <h1>Virtual threads <span class="badge added">Java 21</span></h1>
+  <p class="sec-tag">Deep dive · concurrency · complete guide</p>
+  <h1>Virtual threads <span class="badge added">Final in Java 21</span></h1>
   <p class="lead">
-    Virtual threads are extremely lightweight threads scheduled by the JVM, not the OS. They let you
-    write plain <strong>blocking, thread-per-request</strong> code that scales to
-    <strong>millions</strong> of concurrent tasks — no callbacks, no reactive plumbing.
+    Virtual threads are extremely cheap threads managed by the JVM instead of the operating system.
+    They let you keep writing <strong>simple, blocking, one-thread-per-task</strong> code while scaling
+    to <strong>millions</strong> of concurrent tasks — the performance of async, with the simplicity of
+    plain threads.
   </p>
 
-  <h2>The problem they solve</h2>
-  <p>An OS (platform) thread is expensive (~1&nbsp;MB stack, costly context switches), so you pool a
-  few hundred and never block them carelessly. That forced a choice: simple-but-limited
-  thread-per-request, or scalable-but-complex async/reactive code. Virtual threads remove the choice —
-  block freely, and the JVM parks the virtual thread and reuses the underlying OS thread.</p>
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#what">1. What is a virtual thread?</a>
+    <a href="#compare">2. Platform vs virtual threads</a>
+    <a href="#arch">3. Architecture &amp; how it works</a>
+    <a href="#create">4. Creating virtual threads</a>
+    <a href="#executors">5. Executors &amp; task fan-out</a>
+    <a href="#lifecycle">6. Lifecycle &amp; mount/unmount</a>
+    <a href="#pinning">7. Pinning (and the JDK 24 fix)</a>
+    <a href="#sc">8. With structured concurrency</a>
+    <a href="#sv">9. With scoped values</a>
+    <a href="#spring">10. Spring Boot</a>
+    <a href="#webflux">11. vs WebFlux / reactive</a>
+    <a href="#pitfalls">12. Pitfalls</a>
+    <a href="#monitoring">13. Monitoring &amp; debugging</a>
+    <a href="#migration">14. Migration guide</a>
+    <a href="#cheat">15. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="what">1 · What is a virtual thread?</h2>
+  <p>A normal Java thread (a <em>platform thread</em>) is a thin wrapper around an
+  <strong>operating-system thread</strong>. OS threads are expensive: each reserves ~1&nbsp;MB of
+  stack, and switching between them means a trip into the kernel. So you can realistically only have a
+  few thousand — which is why we hide them behind <strong>thread pools</strong> and try never to block
+  them.</p>
+  <p>A <strong>virtual thread</strong> is not tied to an OS thread. Its stack lives on the Java heap,
+  and the JVM runs many virtual threads on a small pool of real OS threads, parking a virtual thread
+  whenever it blocks and reusing the OS thread for someone else. A virtual thread costs
+  <strong>a few hundred bytes</strong>, so you can have <strong>millions</strong>.</p>
+
+  <div class="tip">
+    <strong>Easy analogy.</strong> Platform threads are like giving every restaurant customer their own
+    private chef (expensive, you run out fast). Virtual threads are like a few chefs serving a huge
+    dining room: while one order waits in the oven (blocked on I/O), the chef cooks someone else's dish.
+    Same chefs, far more customers served.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="compare">2 · Platform vs virtual threads</h2>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 760 300" role="img" aria-label="Platform threads map one-to-one to OS threads; virtual threads share a few carrier OS threads">
+      <defs>
+        <marker id="vtA1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" class="dg-line" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <line x1="380" y1="12" x2="380" y2="288" class="dg-line-dash"/>
+      <!-- LEFT: platform -->
+      <text x="24" y="26" class="dg-title">Platform threads — 1 : 1</text>
+      <rect x="24"  y="50"  width="96" height="34" rx="8" class="dg-accent"/>
+      <rect x="24"  y="104" width="96" height="34" rx="8" class="dg-accent"/>
+      <rect x="24"  y="158" width="96" height="34" rx="8" class="dg-accent"/>
+      <text x="72" y="71"  text-anchor="middle" class="dg-text">Thread</text>
+      <text x="72" y="125" text-anchor="middle" class="dg-text">Thread</text>
+      <text x="72" y="179" text-anchor="middle" class="dg-text">Thread</text>
+      <rect x="176" y="50"  width="96" height="34" rx="8" class="dg-box"/>
+      <rect x="176" y="104" width="96" height="34" rx="8" class="dg-box"/>
+      <rect x="176" y="158" width="96" height="34" rx="8" class="dg-box"/>
+      <text x="224" y="71"  text-anchor="middle" class="dg-soft">OS thread</text>
+      <text x="224" y="125" text-anchor="middle" class="dg-soft">OS thread</text>
+      <text x="224" y="179" text-anchor="middle" class="dg-soft">OS thread</text>
+      <line x1="120" y1="67"  x2="174" y2="67"  class="dg-line" marker-end="url(#vtA1)"/>
+      <line x1="120" y1="121" x2="174" y2="121" class="dg-line" marker-end="url(#vtA1)"/>
+      <line x1="120" y1="175" x2="174" y2="175" class="dg-line" marker-end="url(#vtA1)"/>
+      <rect x="150" y="228" width="150" height="36" rx="8" class="dg-box-alt"/>
+      <text x="225" y="251" text-anchor="middle" class="dg-soft">OS / kernel scheduler</text>
+      <line x1="224" y1="192" x2="224" y2="226" class="dg-line" marker-end="url(#vtA1)"/>
+      <!-- RIGHT: virtual -->
+      <text x="404" y="26" class="dg-title">Virtual threads — M : N</text>
+      <g>
+        <circle cx="430" cy="56"  r="12" class="dg-accent-solid"/>
+        <circle cx="430" cy="88"  r="12" class="dg-accent-solid"/>
+        <circle cx="430" cy="120" r="12" class="dg-accent-solid"/>
+        <circle cx="430" cy="152" r="12" class="dg-accent-solid"/>
+        <circle cx="430" cy="184" r="12" class="dg-accent-solid"/>
+        <circle cx="430" cy="216" r="12" class="dg-accent-solid"/>
+        <text x="430" y="60"  text-anchor="middle" class="dg-on-accent">V</text>
+        <text x="430" y="92"  text-anchor="middle" class="dg-on-accent">V</text>
+        <text x="430" y="124" text-anchor="middle" class="dg-on-accent">V</text>
+        <text x="430" y="156" text-anchor="middle" class="dg-on-accent">V</text>
+        <text x="430" y="188" text-anchor="middle" class="dg-on-accent">V</text>
+        <text x="430" y="220" text-anchor="middle" class="dg-on-accent">V</text>
+      </g>
+      <text x="430" y="244" text-anchor="middle" class="dg-soft">millions of VTs</text>
+      <rect x="556" y="70"  width="118" height="38" rx="8" class="dg-box"/>
+      <rect x="556" y="150" width="118" height="38" rx="8" class="dg-box"/>
+      <text x="615" y="93"  text-anchor="middle" class="dg-soft">Carrier (OS)</text>
+      <text x="615" y="173" text-anchor="middle" class="dg-soft">Carrier (OS)</text>
+      <line x1="443" y1="90"  x2="554" y2="89"  class="dg-line" marker-end="url(#vtA1)"/>
+      <line x1="443" y1="120" x2="554" y2="95"  class="dg-line" marker-end="url(#vtA1)"/>
+      <line x1="443" y1="152" x2="554" y2="169" class="dg-line" marker-end="url(#vtA1)"/>
+      <line x1="443" y1="184" x2="554" y2="175" class="dg-line" marker-end="url(#vtA1)"/>
+      <rect x="556" y="232" width="118" height="34" rx="8" class="dg-box-alt"/>
+      <text x="615" y="254" text-anchor="middle" class="dg-soft">OS scheduler</text>
+      <line x1="615" y1="188" x2="615" y2="230" class="dg-line" marker-end="url(#vtA1)"/>
+      <line x1="615" y1="108" x2="615" y2="230" class="dg-line" marker-end="url(#vtA1)"/>
+    </svg>
+    <figcaption>Each platform thread owns one OS thread for its whole life. Many virtual threads
+    time-share a few <em>carrier</em> OS threads — only while actually running.</figcaption>
+  </figure>
+
+  <table class="data">
+    <tr><th></th><th>Platform thread</th><th>Virtual thread</th></tr>
+    <tr><td>Backed by</td><td>One OS thread (1:1)</td><td>Heap stack, runs on a shared carrier (M:N)</td></tr>
+    <tr><td>Memory</td><td>~1 MB stack reserved</td><td>~hundreds of bytes, grows/shrinks</td></tr>
+    <tr><td>Practical count</td><td>Thousands</td><td>Millions</td></tr>
+    <tr><td>Creation cost</td><td>High — so we pool them</td><td>Trivial — never pool them</td></tr>
+    <tr><td>Blocking</td><td>Wastes a precious OS thread</td><td>Cheap — the carrier is released</td></tr>
+    <tr><td>Best for</td><td>CPU-bound work</td><td>I/O-bound, high-concurrency work</td></tr>
+    <tr><td>Scheduler</td><td>OS kernel</td><td>JVM (a ForkJoinPool)</td></tr>
+  </table>
 
   <div class="ba">
-    <div class="before"><div class="ba-label">Before — bounded pool, careful blocking</div>
-      <pre><code class="java">ExecutorService pool = Executors.newFixedThreadPool(200);
+    <div class="before"><div class="ba-label">Legacy — bounded pool, careful not to block</div>
+      <pre><code class="java">// You size a pool and guard it, because OS
+// threads are scarce and blocking wastes them.
+ExecutorService pool = Executors.newFixedThreadPool(200);
+
 for (Request r : requests) {
   pool.submit(() -> {
-    var user = db.load(r.userId());   // blocks a precious OS thread
-    return render(user);
+    var user  = userService.load(r.userId());   // blocks!
+    var orders = orderService.list(r.userId());  // blocks!
+    return render(user, orders);
   });
 }
-// &gt;200 concurrent requests queue up</code></pre>
+// &gt; 200 in-flight requests → they queue and latency spikes.</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After — a thread per task</div>
-      <pre><code class="java">try (var ex = Executors.newVirtualThreadPerTaskExecutor()) {
+    <div class="after"><div class="ba-label">Virtual threads — one per task, block freely</div>
+      <pre><code class="java">// One virtual thread per request. Blocking is fine:
+// the carrier is freed while this VT waits.
+try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
   for (Request r : requests) {
-    ex.submit(() -> {
-      var user = db.load(r.userId());  // blocking is cheap now
-      return render(user);
+    exec.submit(() -> {
+      var user   = userService.load(r.userId());   // blocks cheaply
+      var orders = orderService.list(r.userId());   // blocks cheaply
+      return render(user, orders);
     });
   }
-}   // millions of concurrent tasks, same simple code</code></pre>
+}   // 100k+ concurrent requests, same simple code.</code></pre>
     </div>
   </div>
 
-  <h2>Creating virtual threads</h2>
-  <pre><code class="java">// 1. one-off
-Thread t = Thread.ofVirtual().start(() -> work());
+  <!-- ============================================================ -->
+  <h2 id="arch">3 · Architecture &amp; how it works</h2>
+  <p>Three pieces make virtual threads work:</p>
+  <ul>
+    <li><strong>Carrier threads</strong> — a small pool of real OS threads (a dedicated
+      <code>ForkJoinPool</code>, sized to CPU cores by default) that actually execute code.</li>
+    <li><strong>The JVM scheduler</strong> — decides which virtual thread runs on which carrier.</li>
+    <li><strong>Continuations</strong> — the low-level mechanism that lets a virtual thread's call
+      stack be <em>captured to the heap</em> and resumed later. This is what makes "pause here, come
+      back later" possible without an OS thread.</li>
+  </ul>
+  <p>The key verbs are <strong>mount</strong> and <strong>unmount</strong>: a virtual thread is
+  <em>mounted</em> on a carrier while running, and <em>unmounts</em> (its stack is copied to the heap)
+  the instant it blocks. The freed carrier immediately runs another virtual thread. When the blocking
+  call finishes, the virtual thread is re-mounted — possibly on a different carrier.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 760 250" role="img" aria-label="Timeline of a carrier thread running virtual thread A, which unmounts on blocking I/O so virtual thread B can run, then A remounts">
+      <defs>
+        <marker id="vtA2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <text x="24" y="24" class="dg-title">Carrier thread C1 over time  →</text>
+      <line x1="24" y1="120" x2="736" y2="120" class="dg-line" marker-end="url(#vtA2)"/>
+      <!-- segments on the lane -->
+      <rect x="40"  y="100" width="180" height="40" rx="6" class="dg-accent"/>
+      <text x="130" y="124" text-anchor="middle" class="dg-text">VT-A running</text>
+      <rect x="250" y="100" width="220" height="40" rx="6" class="dg-good-box"/>
+      <text x="360" y="124" text-anchor="middle" class="dg-text">VT-B running</text>
+      <rect x="500" y="100" width="180" height="40" rx="6" class="dg-accent"/>
+      <text x="590" y="124" text-anchor="middle" class="dg-text">VT-A resumes</text>
+      <!-- annotations -->
+      <text x="235" y="66" text-anchor="middle" class="dg-soft">VT-A blocks on I/O</text>
+      <text x="235" y="82" text-anchor="middle" class="dg-soft">→ unmounts (stack → heap)</text>
+      <line x1="235" y1="88" x2="235" y2="98" class="dg-line" marker-end="url(#vtA2)"/>
+      <text x="500" y="180" text-anchor="middle" class="dg-soft">I/O completes</text>
+      <text x="500" y="196" text-anchor="middle" class="dg-soft">→ VT-A remounts</text>
+      <line x1="500" y1="164" x2="500" y2="142" class="dg-line" marker-end="url(#vtA2)"/>
+    </svg>
+    <figcaption>While VT-A waits on I/O it is unmounted, so the same carrier runs VT-B. No OS thread
+    sits idle. This is why a handful of carriers can serve millions of mostly-waiting tasks.</figcaption>
+  </figure>
+
+  <!-- ============================================================ -->
+  <h2 id="create">4 · Creating virtual threads</h2>
+  <p>Four ways, from lowest to highest level:</p>
+  <pre><code class="java">// (a) Fire-and-forget, unnamed
+Thread t = Thread.startVirtualThread(() -> doWork());
 t.join();
 
-// 2. a builder / factory
-ThreadFactory vf = Thread.ofVirtual().name("worker-", 0).factory();
+// (b) Builder — name, uncaught handler, not-yet-started
+Thread t2 = Thread.ofVirtual()
+    .name("worker-", 0)          // worker-0, worker-1, ...
+    .start(() -> doWork());
 
-// 3. an executor (recommended for task fan-out)
-try (var ex = Executors.newVirtualThreadPerTaskExecutor()) {
-  Future&lt;String&gt; f = ex.submit(() -> fetch());
+// (c) A ThreadFactory (plug into existing APIs)
+ThreadFactory factory = Thread.ofVirtual().factory();
+
+// (d) The recommended way for many tasks — an executor
+try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
+  Future&lt;String&gt; f = exec.submit(() -> fetch());
+  System.out.println(f.get());
 }
 
-// platform (old) thread for comparison:
-Thread p = Thread.ofPlatform().start(() -> work());</code></pre>
+// For comparison, an explicit platform thread:
+Thread p = Thread.ofPlatform().name("io").start(() -> doWork());</code></pre>
+  <div class="note"><strong>Check at runtime:</strong> <code>Thread.currentThread().isVirtual()</code>
+  returns <code>true</code> inside a virtual thread.</div>
 
-  <h2>How they work: carriers &amp; mounting</h2>
-  <ul>
-    <li>Virtual threads run on a small pool of <strong>carrier</strong> (platform) threads — by default
-      a ForkJoinPool sized to the CPU count.</li>
-    <li>When a virtual thread hits a blocking call (I/O, <code>sleep</code>, locks), it
-      <strong>unmounts</strong> from its carrier so the carrier can run another virtual thread. When
-      the blocking call completes, it <strong>remounts</strong> (possibly on a different carrier).</li>
-    <li>Its stack lives on the heap, so a virtual thread costs bytes, not megabytes.</li>
-  </ul>
-
-  <h2>Rules &amp; gotchas</h2>
-  <ul>
-    <li><strong>Don't pool virtual threads.</strong> They're cheap and disposable — create one per task.
-      Pooling defeats the purpose.</li>
-    <li><strong>Pinning:</strong> in Java 21 a virtual thread stayed "pinned" to its carrier while
-      inside a <code>synchronized</code> block or a native call, which could starve the carrier pool.
-      <span class="badge added">Fixed in 24</span> — <code>synchronized</code> no longer pins
-      (JEP 491). On 21–23, prefer <code>ReentrantLock</code> over <code>synchronized</code> around
-      blocking I/O.</li>
-    <li><strong>They don't make CPU-bound work faster.</strong> The win is for I/O-bound / high-concurrency
-      workloads. CPU-bound work is still limited by cores.</li>
-    <li><strong>ThreadLocal still works but is discouraged</strong> at massive scale (per-thread copies
-      add up). Prefer <a href="scoped-values.html">scoped values</a>.</li>
-    <li><strong>Semaphores, not pools, for limiting</strong> a scarce downstream resource:
-      <pre><code class="java">Semaphore db = new Semaphore(50);   // cap concurrent DB calls
+  <!-- ============================================================ -->
+  <h2 id="executors">5 · Executors &amp; task fan-out</h2>
+  <p><code>newVirtualThreadPerTaskExecutor()</code> creates a <em>fresh virtual thread for every
+  submitted task</em> — there is no pool and no queue. It implements <code>ExecutorService</code>, so
+  it drops straight into existing code, and it's <code>AutoCloseable</code> (close = wait for all tasks).</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — parallel calls via a pool + futures</div>
+      <pre><code class="java">ExecutorService pool = Executors.newFixedThreadPool(8);
+try {
+  Future&lt;User&gt;  uf = pool.submit(() -> loadUser(id));
+  Future&lt;Stats&gt; sf = pool.submit(() -> loadStats(id));
+  return new Page(uf.get(), sf.get());
+} finally {
+  pool.shutdown();
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Virtual threads</div>
+      <pre><code class="java">try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
+  Future&lt;User&gt;  uf = exec.submit(() -> loadUser(id));
+  Future&lt;Stats&gt; sf = exec.submit(() -> loadStats(id));
+  return new Page(uf.get(), sf.get());
+}
+// (for related tasks, structured concurrency is even better — see §8)</code></pre>
+    </div>
+  </div>
+  <div class="warn"><strong>Limit scarce resources with a <code>Semaphore</code>, not a pool.</strong>
+  If a downstream system only tolerates 50 concurrent calls, don't shrink the thread pool — keep
+  one-VT-per-task and gate the call:
+  <pre><code class="java">Semaphore db = new Semaphore(50);
 // inside each virtual thread:
-db.acquire(); try { query(); } finally { db.release(); }</code></pre>
-    </li>
-  </ul>
+db.acquire();
+try { return jdbc.query(sql); } finally { db.release(); }</code></pre>
+  </div>
 
-  <div class="tip"><strong>Rule of thumb:</strong> keep writing straightforward blocking code, run each
-  request/task on its own virtual thread, and use structured concurrency to manage groups of subtasks.</div>
+  <!-- ============================================================ -->
+  <h2 id="lifecycle">6 · Lifecycle &amp; mount/unmount</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 190" role="img" aria-label="Virtual thread lifecycle: new, runnable, running while mounted, parked while unmounted on blocking, then terminated">
+      <defs>
+        <marker id="vtA3" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="20"  y="70" width="90"  height="44" rx="8" class="dg-box"/>
+      <text x="65"  y="97" text-anchor="middle" class="dg-text">NEW</text>
+      <rect x="150" y="70" width="110" height="44" rx="8" class="dg-box"/>
+      <text x="205" y="97" text-anchor="middle" class="dg-text">RUNNABLE</text>
+      <rect x="300" y="70" width="140" height="44" rx="8" class="dg-accent"/>
+      <text x="370" y="90" text-anchor="middle" class="dg-text">RUNNING</text>
+      <text x="370" y="106" text-anchor="middle" class="dg-soft">(mounted)</text>
+      <rect x="490" y="70" width="150" height="44" rx="8" class="dg-good-box"/>
+      <text x="565" y="90" text-anchor="middle" class="dg-text">WAITING</text>
+      <text x="565" y="106" text-anchor="middle" class="dg-soft">(unmounted)</text>
+      <rect x="670" y="70" width="80"  height="44" rx="8" class="dg-box-alt"/>
+      <text x="710" y="97" text-anchor="middle" class="dg-soft">TERMINATED</text>
+      <line x1="110" y1="92" x2="148" y2="92" class="dg-line" marker-end="url(#vtA3)"/>
+      <line x1="260" y1="92" x2="298" y2="92" class="dg-line" marker-end="url(#vtA3)"/>
+      <line x1="440" y1="86" x2="488" y2="86" class="dg-line" marker-end="url(#vtA3)"/>
+      <text x="464" y="60" text-anchor="middle" class="dg-soft">blocks</text>
+      <path d="M488,104 C465,140 415,140 372,116" class="dg-line" marker-end="url(#vtA3)"/>
+      <text x="430" y="150" text-anchor="middle" class="dg-soft">I/O done → remount</text>
+      <line x1="440" y1="98" x2="668" y2="98" class="dg-line-dash" marker-end="url(#vtA3)"/>
+      <text x="560" y="130" text-anchor="middle" class="dg-soft">work finishes</text>
+    </svg>
+    <figcaption>A virtual thread bounces between RUNNING (mounted on a carrier) and WAITING
+    (unmounted, stack parked on the heap) every time it blocks and resumes — often thousands of times
+    in its life — until its task returns.</figcaption>
+  </figure>
 
-  <h2>Pairs with</h2>
-  <ul>
-    <li><a href="structured-concurrency.html">Structured concurrency</a> — manage a group of subtasks as one unit.</li>
-    <li><a href="scoped-values.html">Scoped values</a> — share immutable per-request context safely.</li>
-  </ul>
+  <!-- ============================================================ -->
+  <h2 id="pinning">7 · Pinning (and the JDK 24 fix)</h2>
+  <p><strong>Pinning</strong> is when a virtual thread <em>cannot unmount</em> even though it's
+  blocked, so it holds its carrier hostage. Enough pinned threads and the carrier pool starves — you
+  lose the whole benefit.</p>
+  <p>In <strong>Java 21–23</strong> the two causes were:</p>
+  <ol>
+    <li>Blocking inside a <code>synchronized</code> block or method.</li>
+    <li>Calling a native method / foreign function while blocked.</li>
+  </ol>
+  <p><strong>Java 24 (JEP 491) removed the <code>synchronized</code> cause entirely</strong> — the big
+  one. Native-call pinning remains but is rare in application code.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 760 220" role="img" aria-label="Pinned virtual thread holds its carrier so others queue; non-pinned unmounts and frees the carrier">
+      <text x="24" y="26" class="dg-title">Pinned (synchronized, JDK 21–23)</text>
+      <rect x="24" y="44" width="330" height="52" rx="8" class="dg-warn-box"/>
+      <rect x="34" y="54" width="150" height="32" rx="6" class="dg-warn" opacity="0.85"/>
+      <text x="109" y="75" text-anchor="middle" class="dg-on-accent">VT-A blocked &amp; STUCK</text>
+      <text x="270" y="75" text-anchor="middle" class="dg-soft">carrier can't be reused</text>
+      <text x="24" y="128" class="dg-soft">VT-B, VT-C … wait even though the carrier is idle-but-held.</text>
+
+      <text x="24" y="168" class="dg-title" style="fill:var(--lts-bg)">Not pinned (ReentrantLock / JDK 24+)</text>
+      <rect x="24" y="184" width="330" height="28" rx="6" class="dg-good-box"/>
+      <text x="189" y="203" text-anchor="middle" class="dg-text">VT-A unmounts → carrier free → VT-B runs</text>
+
+      <!-- right: fix summary -->
+      <rect x="404" y="44" width="332" height="168" rx="10" class="dg-box-alt"/>
+      <text x="420" y="70" class="dg-title">How to avoid it</text>
+      <text x="420" y="96"  class="dg-text">• Prefer ReentrantLock over synchronized</text>
+      <text x="420" y="120" class="dg-text">   around blocking I/O (needed on 21–23)</text>
+      <text x="420" y="146" class="dg-text">• Upgrade to JDK 24+ → synchronized OK</text>
+      <text x="420" y="172" class="dg-text">• Detect: -Djdk.tracePinnedThreads=full</text>
+      <text x="420" y="196" class="dg-text">   or the JFR VirtualThreadPinned event</text>
+    </svg>
+    <figcaption>Pinning defeats the point of virtual threads. On 21–23, keep <code>synchronized</code>
+    away from blocking calls; on 24+ the JVM handles it.</figcaption>
+  </figure>
+
+  <div class="ba">
+    <div class="before"><div class="ba-label">Pins the carrier (JDK 21–23)</div>
+      <pre><code class="java">private final Object lock = new Object();
+
+Result read() {
+  synchronized (lock) {        // VT can't unmount here...
+    return jdbc.query(sql);    // ...and this call BLOCKS → pinned
+  }
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Does not pin</div>
+      <pre><code class="java">private final ReentrantLock lock = new ReentrantLock();
+
+Result read() {
+  lock.lock();                 // VT can unmount while holding it
+  try {
+    return jdbc.query(sql);    // blocks cheaply
+  } finally { lock.unlock(); }
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="sc">8 · Relationship with structured concurrency</h2>
+  <p>Virtual threads make it cheap to run <em>each subtask on its own thread</em>. Structured
+  concurrency gives those subtasks a <strong>parent scope</strong> so they start together and are
+  joined or cancelled together — no leaks, clear error handling. Think: virtual threads are the cheap
+  workers; structured concurrency is the manager that owns them.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Raw virtual-thread executor — manual coordination</div>
+      <pre><code class="java">try (var ex = Executors.newVirtualThreadPerTaskExecutor()) {
+  var uf = ex.submit(() -> loadUser(id));
+  var of = ex.submit(() -> loadOrders(id));
+  // if loadUser fails, loadOrders keeps running (waste);
+  // cancellation is on you.
+  return new Page(uf.get(), of.get());
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Structured concurrency — one unit of work</div>
+      <pre><code class="java">try (var scope = StructuredTaskScope.open()) {   // Java 25 API
+  var user   = scope.fork(() -> loadUser(id));
+  var orders = scope.fork(() -> loadOrders(id));
+  scope.join();                 // fail-fast: one error cancels siblings
+  return new Page(user.get(), orders.get());
+}</code></pre>
+    </div>
+  </div>
+  <p>Full details on the <a href="structured-concurrency.html">Structured concurrency</a> page.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="sv">9 · Relationship with scoped values</h2>
+  <p><code>ThreadLocal</code> was tolerable when threads were few and pooled. With
+  <strong>millions</strong> of virtual threads, per-thread copies add up and the usual "set in a pool
+  thread and forget to clear it" bugs get worse. <a href="scoped-values.html">Scoped values</a> are
+  the intended companion: immutable, automatically unbound at the end of a scope, and inherited by
+  forked subtasks.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">ThreadLocal — mutable, must clean up</div>
+      <pre><code class="java">static final ThreadLocal&lt;User&gt; CUR = new ThreadLocal&lt;&gt;();
+CUR.set(user);
+try { handle(); } finally { CUR.remove(); }   // leak if forgotten</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">ScopedValue — immutable, self-cleaning</div>
+      <pre><code class="java">static final ScopedValue&lt;User&gt; CUR = ScopedValue.newInstance();
+ScopedValue.where(CUR, user).run(() -> handle());  // auto-unbound
+// deeper code: CUR.get()</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="spring">10 · Virtual threads in Spring Boot</h2>
+  <p>Spring Boot 3.2+ (on Java 21+) has first-class support. One property makes Tomcat/Jetty serve each
+  request on a virtual thread, and <code>@Async</code> / scheduling use them too.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — tune the platform thread pool</div>
+      <pre><code class="java"># application.properties — bounded worker pool
+server.tomcat.threads.max=200
+# high concurrency → requests queue behind 200 threads</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Spring Boot 3.2+ — enable virtual threads</div>
+      <pre><code class="java"># application.properties
+spring.threads.virtual.enabled=true
+# each HTTP request now runs on its own virtual thread;
+# your @RestController code stays 100% blocking &amp; simple.</code></pre>
+    </div>
+  </div>
+  <pre><code class="java">// Your controller doesn't change at all — just write blocking code:
+@GetMapping("/orders/{id}")
+public OrderView get(@PathVariable String id) {
+  var order  = orderClient.fetch(id);     // blocking REST call
+  var items  = inventoryClient.items(id); // blocking REST call
+  return OrderView.of(order, items);
+}</code></pre>
+  <div class="warn"><strong>Watch your connection pools.</strong> With virtual threads you may suddenly
+  have thousands of concurrent DB calls hitting a HikariCP pool sized for 10. The bottleneck moves from
+  threads to connections — size pools and add back-pressure (a <code>Semaphore</code>) deliberately.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="webflux">11 · Virtual threads vs WebFlux / reactive</h2>
+  <p>Before virtual threads, the only way to serve huge concurrency on the JVM without a thread per
+  request was <strong>reactive programming</strong> (Project Reactor / Spring WebFlux, RxJava). It works,
+  but it's a different, harder programming model: everything becomes <code>Mono</code>/<code>Flux</code>,
+  stack traces are cryptic, and debugging is painful. Virtual threads deliver similar scalability while
+  letting you keep ordinary imperative, blocking code.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">WebFlux / Reactor — non-blocking, but complex</div>
+      <pre><code class="java">Mono&lt;Page&gt; page(String id) {
+  return userClient.get(id)                 // Mono&lt;User&gt;
+      .zipWith(orderClient.list(id))        // Mono&lt;Orders&gt;
+      .map(t -> new Page(t.getT1(), t.getT2()))
+      .timeout(Duration.ofSeconds(2))
+      .onErrorResume(e -> Mono.just(Page.empty()));
+}
+// scalable, but a whole new mental model &amp; toolchain</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Virtual threads — plain, blocking, readable</div>
+      <pre><code class="java">Page page(String id) {
+  var user   = userClient.get(id);    // blocking
+  var orders = orderClient.list(id);  // blocking
+  return new Page(user, orders);
+}
+// scales the same for I/O-bound work; ordinary stack traces,
+// debuggers and try/catch just work</code></pre>
+    </div>
+  </div>
+  <table class="data">
+    <tr><th></th><th>Reactive (WebFlux)</th><th>Virtual threads</th></tr>
+    <tr><td>Model</td><td>Async, callback/operator chains</td><td>Plain blocking code</td></tr>
+    <tr><td>Learning curve</td><td>Steep</td><td>None (it's just threads)</td></tr>
+    <tr><td>Debugging / stack traces</td><td>Hard</td><td>Normal</td></tr>
+    <tr><td>Back-pressure</td><td>Built in</td><td>Do it yourself (Semaphore/queues)</td></tr>
+    <tr><td>Streaming (SSE, infinite streams)</td><td>Excellent</td><td>Possible but less natural</td></tr>
+    <tr><td>When to choose</td><td>Heavy streaming / already reactive</td><td>Most request/response services</td></tr>
+  </table>
+  <div class="tip"><strong>Rule of thumb:</strong> for typical request→call-a-few-services→respond
+  workloads, virtual threads give you reactive-level scalability with none of the complexity. Keep
+  reactive for genuine streaming and existing reactive codebases.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">12 · Pitfalls &amp; anti-patterns</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Why it hurts</th><th>Do instead</th></tr>
+    <tr><td>Pooling virtual threads</td><td>Defeats the design; adds queuing</td><td>One VT per task (<code>newVirtualThreadPerTaskExecutor</code>)</td></tr>
+    <tr><td><code>synchronized</code> around blocking I/O (21–23)</td><td>Pins the carrier</td><td><code>ReentrantLock</code>, or upgrade to 24+</td></tr>
+    <tr><td>Heavy <code>ThreadLocal</code> use</td><td>Millions of copies; leaks</td><td><a href="scoped-values.html">Scoped values</a></td></tr>
+    <tr><td>CPU-bound work on VTs</td><td>No speed-up; just overhead</td><td>Platform threads / fixed pool sized to cores</td></tr>
+    <tr><td>Unbounded fan-out to a small resource</td><td>Overwhelms DB / API pools</td><td>Gate with a <code>Semaphore</code></td></tr>
+    <tr><td>Long <code>synchronized</code> caches</td><td>Contention shows up at scale</td><td>Concurrent data structures</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="monitoring">13 · Monitoring &amp; debugging</h2>
+  <pre><code class="java">// 1. Detect pinning (JDK 21–23): logs a stack trace whenever a VT pins
+java -Djdk.tracePinnedThreads=full -jar app.jar
+
+// 2. Thread dump that INCLUDES virtual threads (grouped by scope)
+jcmd &lt;pid&gt; Thread.dump_to_file -format=json threads.json
+
+// 3. JDK Flight Recorder events to record &amp; analyse:
+//    jdk.VirtualThreadStart / End       — creation rate
+//    jdk.VirtualThreadPinned            — pinning (with stack &amp; duration)
+//    jdk.VirtualThreadSubmitFailed      — scheduler back-pressure
+java -XX:StartFlightRecording=filename=rec.jfr,settings=profile -jar app.jar
+
+// 4. Tune the carrier pool size if truly needed (default = CPU count)
+java -Djdk.virtualThreadScheduler.parallelism=16 -jar app.jar</code></pre>
+  <div class="note"><strong>Micrometer / Actuator</strong> expose executor and (with config) pinning
+  metrics, so you can alarm on pinning in production rather than reading logs.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="migration">14 · Migration guide</h2>
+  <ol class="steps">
+    <li><strong>Get on Java 21+ (ideally 24+/25).</strong> 24+ removes <code>synchronized</code> pinning
+      — a big reason to prefer it.</li>
+    <li><strong>Switch task execution to per-task virtual threads.</strong> Replace
+      <code>newFixedThreadPool(n)</code> used for I/O with
+      <code>newVirtualThreadPerTaskExecutor()</code>. Leave CPU-bound pools alone.</li>
+    <li><strong>Hunt for pinning.</strong> Run with <code>-Djdk.tracePinnedThreads=full</code> (21–23)
+      or watch the JFR pinned event; swap hot <code>synchronized</code>+I/O for <code>ReentrantLock</code>.</li>
+    <li><strong>Replace <code>ThreadLocal</code> context</strong> (request/user/tenant) with
+      <a href="scoped-values.html">scoped values</a>.</li>
+    <li><strong>Right-size downstream pools &amp; add back-pressure.</strong> The bottleneck moves from
+      threads to DB connections / API limits — cap them with a <code>Semaphore</code>.</li>
+    <li><strong>Group related subtasks</strong> with <a href="structured-concurrency.html">structured
+      concurrency</a> for clean cancellation and error handling.</li>
+    <li><strong>Framework flip:</strong> Spring Boot 3.2+ →
+      <code>spring.threads.virtual.enabled=true</code>. Then load-test.</li>
+  </ol>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">15 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>Virtual threads in one glance</h3>
+    <ul>
+      <li><strong>Create/run:</strong> <code>Executors.newVirtualThreadPerTaskExecutor()</code>; or <code>Thread.startVirtualThread(r)</code>.</li>
+      <li><strong>Never pool</strong> them; <strong>gate</strong> scarce resources with a <code>Semaphore</code>.</li>
+      <li><strong>Great for I/O-bound</strong> concurrency; use platform threads for CPU-bound work.</li>
+      <li><strong>Pinning:</strong> avoid <code>synchronized</code>+blocking on 21–23 (fixed in 24); detect with <code>-Djdk.tracePinnedThreads=full</code> / JFR.</li>
+      <li><strong>Context:</strong> prefer <a href="scoped-values.html">scoped values</a> over ThreadLocal.</li>
+      <li><strong>Coordinate</strong> groups with <a href="structured-concurrency.html">structured concurrency</a>.</li>
+      <li><strong>Spring Boot 3.2+:</strong> <code>spring.threads.virtual.enabled=true</code>.</li>
+      <li><strong>vs Reactive:</strong> same scale for request/response, far simpler code.</li>
+    </ul>
+  </div>
 
   <h2>Evolution</h2>
   <table class="data">
@@ -106,19 +550,8 @@ db.acquire(); try { query(); } finally { db.release(); }</code></pre>
     <tr><td>Java 19</td><td>Preview (JEP 425).</td></tr>
     <tr><td>Java 20</td><td>2nd preview (JEP 436).</td></tr>
     <tr><td>Java 21</td><td><strong>Final</strong> (JEP 444).</td></tr>
-    <tr><td>Java 24</td><td>No longer pinned by <code>synchronized</code> (JEP 491).</td></tr>
+    <tr><td>Java 24</td><td><code>synchronized</code> no longer pins (JEP 491).</td></tr>
   </table>
-
-  <div class="cheat">
-    <h3>Cheat card</h3>
-    <ul>
-      <li><code>Executors.newVirtualThreadPerTaskExecutor()</code> — one virtual thread per task.</li>
-      <li><code>Thread.ofVirtual().start(r)</code> for one-offs.</li>
-      <li>Cheap → <strong>don't pool</strong>. Limit downstream with a <code>Semaphore</code>.</li>
-      <li>Great for I/O-bound concurrency; no help for CPU-bound work.</li>
-      <li>Prefer scoped values over ThreadLocal; on 21–23 avoid <code>synchronized</code> around blocking I/O.</li>
-    </ul>
-  </div>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>

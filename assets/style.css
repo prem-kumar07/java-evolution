@@ -316,6 +316,80 @@ kbd {
   border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px;
 }
 
+/* ---------- Diagrams (inline SVG, theme-aware) ---------- */
+.diagram {
+  margin: 1.6em 0;
+  padding: 18px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: center;
+}
+.diagram svg { max-width: 100%; height: auto; }
+.diagram figcaption {
+  font-size: .85rem;
+  color: var(--text-soft);
+  margin-top: 12px;
+  text-align: center;
+}
+/* SVG element classes bound to theme variables */
+.dg-box       { fill: var(--bg); stroke: var(--border); stroke-width: 1.5; }
+.dg-box-alt   { fill: var(--bg-alt); stroke: var(--border); stroke-width: 1.5; }
+.dg-accent    { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+.dg-accent-solid { fill: var(--accent); }
+.dg-good      { fill: var(--lts-bg); }
+.dg-good-box  { fill: color-mix(in srgb, var(--lts-bg) 15%, var(--bg)); stroke: var(--lts-bg); stroke-width: 1.5; }
+.dg-warn      { fill: var(--preview-bg); }
+.dg-warn-box  { fill: color-mix(in srgb, var(--preview-bg) 15%, var(--bg)); stroke: var(--preview-bg); stroke-width: 1.5; }
+.dg-line      { stroke: var(--text-soft); stroke-width: 2; fill: none; }
+.dg-line-dash { stroke: var(--text-soft); stroke-width: 2; fill: none; stroke-dasharray: 5 4; }
+.dg-title     { fill: var(--text); font: 700 14px -apple-system, sans-serif; }
+.dg-text      { fill: var(--text); font: 13px -apple-system, sans-serif; }
+.dg-text-sm   { fill: var(--text); font: 11px ui-monospace, monospace; }
+.dg-soft      { fill: var(--text-soft); font: 12px -apple-system, sans-serif; }
+.dg-on-accent { fill: #fff; font: 12px -apple-system, sans-serif; }
+
+/* ---------- Numbered steps ---------- */
+ol.steps { counter-reset: step; list-style: none; padding-left: 0; }
+ol.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding: 4px 0 12px 44px;
+  margin: 0;
+}
+ol.steps > li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: 0;
+  width: 30px; height: 30px;
+  background: var(--accent); color: #fff;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: .9rem;
+}
+
+/* state pill */
+.pill {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: .78rem; font-weight: 600;
+  background: var(--badge-bg); color: var(--badge-text);
+  border: 1px solid var(--border);
+}
+
+/* small table-of-contents box for long pages */
+.page-toc {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin: 1.4em 0;
+  columns: 2;
+  column-gap: 28px;
+  font-size: .9rem;
+}
+.page-toc a { display: block; padding: 2px 0; text-decoration: none; }
+.page-toc a:hover { text-decoration: underline; }
+@media (max-width: 640px) { .page-toc { columns: 1; } }
+
 /* ---------- Global search (topbar) ---------- */
 .gsearch-wrap { position: relative; flex: 1 1 auto; max-width: 440px; margin: 0 16px; }
 .gsearch {
