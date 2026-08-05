@@ -13,8 +13,17 @@
   <p class="lead">
     The first LTS after 8 and the baseline most teams migrated to. Headliners: <code>var</code>
     (introduced in 10), the standard <strong>HttpClient</strong>, <strong>running a single source
-    file</strong> without compiling, and a batch of convenient <code>String</code>/<code>Files</code> methods.
+    file</strong> without compiling, and a batch of convenient <code>String</code>/<code>Files</code>/<code>Collection</code> methods.
   </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">var</span><span class="lbl">type inference (from 10)</span></div>
+    <div class="stat"><span class="num">HttpClient</span><span class="lbl">standard, HTTP/2 + async</span></div>
+    <div class="stat"><span class="num">String</span><span class="lbl">isBlank / strip / repeat / lines</span></div>
+    <div class="stat"><span class="num">java App.java</span><span class="lbl">run source, no compile</span></div>
+    <div class="stat"><span class="num">LTS</span><span class="lbl">covers Java 10</span></div>
+  </div>
+
   <div class="note"><strong>Folded in:</strong> features from <span class="badge added">Java 10</span>
   are included here and tagged, since 10 was a non-LTS stepping-stone.</div>
 
@@ -23,11 +32,10 @@
     <ul>
       <li><strong>Java EE &amp; CORBA modules removed</strong> — <code>java.xml.bind</code> (JAXB),
         <code>java.xml.ws</code> (JAX-WS), <code>java.activation</code>, <code>java.corba</code> are
-        gone. Add them as explicit Maven/Gradle dependencies. This is the #1 upgrade break from 8.</li>
+        gone. Add them as explicit Maven/Gradle dependencies. The #1 upgrade break from 8.</li>
       <li><strong>JavaFX is no longer bundled</strong> — use OpenJFX as a separate dependency.</li>
       <li><strong>Nashorn JavaScript engine deprecated</strong> (removed in 15).</li>
       <li><strong>No more JRE / Server JRE</strong> downloads — ship a runtime with <code>jlink</code>.</li>
-      <li>Single JDK: Oracle JDK and OpenJDK are functionally identical (licensing differs).</li>
     </ul>
   </div>
 
@@ -35,29 +43,44 @@
   <h2>1 · Language features</h2>
 
   <h3><code>var</code> — local-variable type inference <span class="badge added">Added in 10</span></h3>
+  <p><em>Why it matters:</em> drops the redundant left-hand type when it's obvious from the initializer.
+  It's still static typing — no runtime cost.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
-      <pre><code class="java">Map&lt;String, List&lt;Integer&gt;&gt; scores = new HashMap&lt;String, List&lt;Integer&gt;&gt;();
-for (Map.Entry&lt;String, List&lt;Integer&gt;&gt; e : scores.entrySet()) { ... }</code></pre>
+      <pre><code class="java">Map&lt;String, List&lt;Integer&gt;&gt; scores =
+    new HashMap&lt;String, List&lt;Integer&gt;&gt;();
+for (Map.Entry&lt;String, List&lt;Integer&gt;&gt; e : scores.entrySet()) { }</code></pre>
     </div>
     <div class="after"><div class="ba-label">After (Java 10)</div>
       <pre><code class="java">var scores = new HashMap&lt;String, List&lt;Integer&gt;&gt;();
-for (var e : scores.entrySet()) { ... }   // type inferred</code></pre>
+for (var e : scores.entrySet()) { }   // type inferred</code></pre>
     </div>
   </div>
-  <p>Full rules, where it works and where it doesn't → <a href="../topics/var.html"><code>var</code> deep-dive</a>.</p>
+  <p>Full rules → <a href="../topics/var.html"><code>var</code> deep-dive</a>.</p>
 
   <h3><code>var</code> in lambda parameters <span class="badge added">Added in 11</span></h3>
-  <p>Lets you attach annotations/modifiers to inferred lambda params.</p>
-  <pre><code class="java">list.forEach((var x) -> System.out.println(x));
-map.forEach((@NonNull var k, @NonNull var v) -> ...);   // annotations now possible</code></pre>
+  <p><em>Why it matters:</em> lets you put annotations/modifiers on inferred lambda parameters.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — no place for the annotation</div>
+      <pre><code class="java">map.forEach((k, v) -> use(k, v));
+// can't annotate k or v</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 11)</div>
+      <pre><code class="java">map.forEach((@NonNull var k, @NonNull var v) -> use(k, v));</code></pre>
+    </div>
+  </div>
+
+  <h3>Nest-based access control <span class="badge added">Added in 11</span></h3>
+  <p><em>Why it matters:</em> nested and outer classes can access each other's <code>private</code>
+  members directly. Before, <code>javac</code> generated synthetic bridge methods to fake it; now the
+  JVM understands "nests" natively (also fixes some reflection quirks).</p>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
   <h3>Standard HTTP Client — <code>java.net.http</code></h3>
-  <p>Modern client with HTTP/2, WebSocket and async support; replaces the clunky
-  <code>HttpURLConnection</code> (incubated in 9, standard in 11).</p>
+  <p><em>Why it matters:</em> a modern client with HTTP/2, WebSocket and async support, replacing the
+  clunky <code>HttpURLConnection</code> (incubated in 9, standard in 11).</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — HttpURLConnection</div>
       <pre><code class="java">URL url = new URL("https://api.example.com");
@@ -75,16 +98,25 @@ HttpRequest req = HttpRequest.newBuilder()
 HttpResponse&lt;String&gt; res =
     client.send(req, BodyHandlers.ofString());
 String body = res.body();
-// or async: client.sendAsync(req, ...).thenApply(...)</code></pre>
+// async: client.sendAsync(req, BodyHandlers.ofString())
+//              .thenApply(HttpResponse::body);</code></pre>
     </div>
   </div>
 
   <h3>New <code>String</code> methods</h3>
-  <pre><code class="java">"  ".isBlank();              // true
-" hi ".strip();              // "hi"  (Unicode-aware; trim() is not)
-"=".repeat(20);              // "===================="
-"a\nb\nc".lines()            // Stream&lt;String&gt; of lines
-        .forEach(System.out::println);</code></pre>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — hand-rolled helpers</div>
+      <pre><code class="java">boolean blank = s.trim().isEmpty();
+String bar = String.join("", Collections.nCopies(20, "="));
+for (String line : text.split("\\R")) process(line);</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 11)</div>
+      <pre><code class="java">boolean blank = s.isBlank();
+String bar = "=".repeat(20);
+text.lines().forEach(this::process);
+" hi ".strip();   // Unicode-aware (trim() is ASCII-only)</code></pre>
+    </div>
+  </div>
 
   <h3>Files: read/write a whole string in one call</h3>
   <div class="ba">
@@ -99,21 +131,57 @@ Files.writeString(path, text);</code></pre>
     </div>
   </div>
 
+  <h3>Immutable copies &amp; unmodifiable collectors <span class="badge added">Added in 10</span></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">List&lt;String&gt; snapshot =
+    Collections.unmodifiableList(new ArrayList&lt;&gt;(src));
+List&lt;String&gt; names = stream
+    .map(User::name)
+    .collect(collectingAndThen(toList(),
+             Collections::unmodifiableList));</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 10)</div>
+      <pre><code class="java">List&lt;String&gt; snapshot = List.copyOf(src);       // immutable copy
+List&lt;String&gt; names = stream
+    .map(User::name)
+    .collect(toUnmodifiableList());              // + toUnmodifiableSet/Map</code></pre>
+    </div>
+  </div>
+
   <h3>Other handy additions</h3>
-  <pre><code class="java">Optional.isEmpty();                       // Added in 11 (complements isPresent)
-opt.orElseThrow();                        // Added in 10: throws if empty, no arg
-List.copyOf(other);                       // Added in 10: immutable copy
-"abc".chars();                            // etc.
-Collection.toArray(String[]::new);        // Added in 11: nicer than toArray(new String[0])
-Predicate.not(String::isBlank);           // Added in 11</code></pre>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">if (!opt.isPresent()) handleEmpty();
+User u = opt.orElseThrow(() -> new NoSuchElementException());
+String[] arr = list.toArray(new String[0]);
+list.removeIf(s -> s == null || s.isBlank());</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After</div>
+      <pre><code class="java">if (opt.isEmpty()) handleEmpty();          // Added in 11
+User u = opt.orElseThrow();                 // Added in 10 (no-arg)
+String[] arr = list.toArray(String[]::new); // Added in 11
+list.removeIf(Predicate.not(String::isBlank)); // Predicate.not, Added in 11</code></pre>
+    </div>
+  </div>
 
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>
+  <h3>Run a single source file — no compile step <span class="badge jep">JEP 330</span></h3>
+  <p><em>Why it matters:</em> scripting in Java without a build tool or <code>.class</code> files.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">javac Hello.java   // -&gt; Hello.class
+java Hello</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 11)</div>
+      <pre><code class="java">java Hello.java    // compiles + runs in one step
+java Hello.java arg1 arg2</code></pre>
+    </div>
+  </div>
   <ul>
-    <li><strong>Run a single source file</strong> <span class="badge jep">JEP 330</span>:
-      <code>java Hello.java</code> — no <code>javac</code> step. Great for scripts. See <a href="../quickstart.html">Quick start</a>.</li>
     <li><strong>Flight Recorder (JFR)</strong> <span class="badge jep">JEP 328</span> — low-overhead
-      production profiling, now open-source and built in: <code>java -XX:StartFlightRecording ...</code></li>
+      production profiling, now open-source &amp; built in: <code>java -XX:StartFlightRecording ...</code></li>
     <li><strong>Application Class-Data Sharing</strong> <span class="badge added">Added in 10</span> —
       share class metadata across JVMs to cut startup time.</li>
   </ul>
@@ -122,11 +190,10 @@ Predicate.not(String::isBlank);           // Added in 11</code></pre>
   <h2>4 · JVM / performance / other</h2>
   <ul>
     <li><strong>ZGC</strong> (experimental) &amp; <strong>Epsilon</strong> (no-op) garbage collectors introduced.</li>
+    <li><strong>Parallel full GC for G1</strong> <span class="badge added">Added in 10</span> — shorter worst-case pauses.</li>
     <li><strong>TLS 1.3</strong> support.</li>
-    <li><strong>Nashorn JavaScript engine deprecated</strong>; <strong>Java EE &amp; CORBA modules removed</strong>
-      (<code>java.xml.bind</code>, etc.) — a common migration snag from Java 8.</li>
-    <li><strong>Parallel full GC for G1</strong> <span class="badge added">Added in 10</span> and
-      <strong>time-based release versioning</strong> <span class="badge added">Added in 10</span>.</li>
+    <li><strong>Time-based release versioning</strong> <span class="badge added">Added in 10</span> and
+      <strong>root certificates</strong> shipped with OpenJDK.</li>
     <li>Oracle JDK &amp; OpenJDK builds became functionally identical.</li>
   </ul>
 
@@ -136,12 +203,13 @@ Predicate.not(String::isBlank);           // Added in 11</code></pre>
     <h3>Java 11 (LTS) in one glance</h3>
     <ul>
       <li><strong>var</strong> for locals (10) &amp; lambda params (11) → <a href="../topics/var.html">deep dive</a></li>
-      <li><strong>HttpClient:</strong> <code>HttpClient.newHttpClient()</code>, sync + async, HTTP/2</li>
+      <li><strong>HttpClient:</strong> sync + async, HTTP/2, WebSocket</li>
       <li><strong>String:</strong> <code>isBlank / strip / repeat / lines</code></li>
       <li><strong>Files:</strong> <code>readString / writeString</code></li>
+      <li><strong>Collections:</strong> <code>List.copyOf</code>, <code>toUnmodifiableList</code> (10); <code>toArray(String[]::new)</code> (11)</li>
       <li><strong>Optional:</strong> <code>isEmpty (11)</code>, <code>orElseThrow() (10)</code></li>
       <li><strong>Tooling:</strong> <code>java File.java</code>, JFR built-in</li>
-      <li><strong>Migration watch-outs:</strong> Java EE/CORBA modules removed, Nashorn deprecated</li>
+      <li><strong>Migration:</strong> Java EE/CORBA removed, Nashorn deprecated</li>
     </ul>
   </div>
 </main>
