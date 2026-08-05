@@ -314,10 +314,19 @@ java -Xss... -XX:+PrintFlagsFinal -version   # inspect VM flags</code></pre>
   <p class="sec-tag">September 2017</p>
   <h1>Java 9</h1>
   <p class="lead">
-    The big one: the <strong>module system (JPMS)</strong> reorganised the JDK itself. Also arrived:
-    <strong>JShell</strong>, <strong>collection factory methods</strong>, a reactive
-    <strong>Flow</strong> API, and many smaller language tidy-ups.
+    The big structural release: the <strong>module system (JPMS)</strong> reorganised the JDK itself.
+    Alongside it came <strong>JShell</strong>, <strong>collection factory methods</strong>, a reactive
+    <strong>Flow</strong> API, <code>CompletableFuture</code> timeouts, the Stack-Walking API and many
+    smaller language tidy-ups.
   </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">Modules</span><span class="lbl">JPMS — modular JDK (~90 modules)</span></div>
+    <div class="stat"><span class="num">JShell</span><span class="lbl">official REPL</span></div>
+    <div class="stat"><span class="num">List.of()</span><span class="lbl">immutable collection factories</span></div>
+    <div class="stat"><span class="num">Flow</span><span class="lbl">reactive streams</span></div>
+    <div class="stat"><span class="num">jlink</span><span class="lbl">custom runtime images</span></div>
+  </div>
 
   <div class="gotcha">
     <strong>⚠ Migration watch-outs (8 → 9).</strong>
@@ -336,14 +345,15 @@ java -Xss... -XX:+PrintFlagsFinal -version   # inspect VM flags</code></pre>
   <h2>1 · Language features</h2>
 
   <h3>Private methods in interfaces</h3>
-  <p>Interfaces got <code>default</code> methods in Java 8; now they can share code through
-  <code>private</code> (and <code>private static</code>) helpers.</p>
+  <p><em>Why it matters:</em> Java 8 gave interfaces <code>default</code> methods, but there was no way
+  to share logic between them without exposing it. <code>private</code> (and <code>private static</code>)
+  interface methods fix that.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before (Java 8)</div>
       <pre><code class="java">interface Logger {
   default void info(String m)  { log("INFO", m); }
   default void error(String m) { log("ERROR", m); }
-  // no way to hide this shared helper
+  // shared helper is forced to be public
   default void log(String lvl, String m) {
     System.out.println(lvl + ": " + m);
   }
@@ -353,7 +363,7 @@ java -Xss... -XX:+PrintFlagsFinal -version   # inspect VM flags</code></pre>
       <pre><code class="java">interface Logger {
   default void info(String m)  { log("INFO", m); }
   default void error(String m) { log("ERROR", m); }
-  private void log(String lvl, String m) {   // hidden
+  private void log(String lvl, String m) {   // hidden helper
     System.out.println(lvl + ": " + m);
   }
 }</code></pre>
@@ -361,30 +371,47 @@ java -Xss... -XX:+PrintFlagsFinal -version   # inspect VM flags</code></pre>
   </div>
 
   <h3>Try-with-resources on effectively-final variables</h3>
+  <p><em>Why it matters:</em> removes a pointless extra variable when the resource already exists.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">// must declare a fresh variable inside the ()
+BufferedReader reader = openReader();
 try (BufferedReader r = reader) {
-  ...
+  return r.readLine();
 }</code></pre>
     </div>
     <div class="after"><div class="ba-label">After (Java 9)</div>
-      <pre><code class="java">BufferedReader reader = ...;   // effectively final
-try (reader) {                 // use it directly
-  ...
+      <pre><code class="java">BufferedReader reader = openReader();   // effectively final
+try (reader) {                          // use it directly
+  return reader.readLine();
 }</code></pre>
     </div>
   </div>
 
-  <h3>Diamond with anonymous classes · <code>@SafeVarargs</code> on private methods · <code>_</code> banned</h3>
-  <pre><code class="java">Callable&lt;String&gt; c = new Callable&lt;&gt;() { ... };  // diamond now allowed here
-@SafeVarargs private void f(List&lt;String&gt;... xs) { }   // allowed on private methods
-int _ = 3;   // COMPILE ERROR: '_' is now a reserved name (paving way for future use)</code></pre>
+  <h3>Enhanced <code>@Deprecated</code></h3>
+  <p><em>Why it matters:</em> deprecation can now state <em>when</em> and whether removal is planned, so
+  tools and readers know how urgent it is.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">@Deprecated
+public void oldApi() { }    // deprecated... since when? removed when?</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 9)</div>
+      <pre><code class="java">@Deprecated(since = "9", forRemoval = true)
+public void oldApi() { }    // compilers warn louder for forRemoval</code></pre>
+    </div>
+  </div>
+
+  <h3>Small clean-ups: diamond on anonymous classes · <code>@SafeVarargs</code> on private methods · <code>_</code> banned</h3>
+  <pre><code class="java">Callable&lt;String&gt; c = new Callable&lt;&gt;() { ... };     // diamond now allowed here
+@SafeVarargs private void f(List&lt;String&gt;... xs) { }  // allowed on private methods
+int _ = 3;   // COMPILE ERROR: '_' is now reserved (for future language use)</code></pre>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
   <h3>Immutable collection factory methods</h3>
+  <p><em>Why it matters:</em> creating small immutable collections was verbose and error-prone.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">List&lt;String&gt; list = Collections.unmodifiableList(
@@ -397,30 +424,100 @@ m = Collections.unmodifiableMap(m);</code></pre>
       <pre><code class="java">List&lt;String&gt;  list = List.of("a", "b", "c");
 Set&lt;String&gt;   set  = Set.of("a", "b");
 Map&lt;String,Integer&gt; m = Map.of("a", 1, "b", 2);
-// truly immutable, null-hostile, compact</code></pre>
+// immutable, null-hostile, compact</code></pre>
     </div>
   </div>
 
   <h3>Stream additions: <code>takeWhile</code>, <code>dropWhile</code>, <code>ofNullable</code>, ranged <code>iterate</code></h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
-      <pre><code class="java">// stop at first element ≥ 5 — awkward
+      <pre><code class="java">// "take the leading run &lt; 5" — no clean way
 list.stream()
     .filter(x -> x &lt; 5)   // keeps ALL &lt;5, not just the leading run
-    ...;</code></pre>
+    .collect(toList());</code></pre>
     </div>
     <div class="after"><div class="ba-label">After (Java 9)</div>
-      <pre><code class="java">list.stream().takeWhile(x -> x &lt; 5);   // leading run only
-list.stream().dropWhile(x -> x &lt; 5);   // skip leading run
-Stream.ofNullable(maybeNull);          // 0- or 1-element stream
-Stream.iterate(1, n -> n &lt; 100, n -> n * 2);  // for-style with predicate</code></pre>
+      <pre><code class="java">list.stream().takeWhile(x -> x &lt; 5).toList();   // leading run only
+list.stream().dropWhile(x -> x &lt; 5).toList();   // skip leading run
+Stream.ofNullable(maybeNull);                    // 0- or 1-element stream
+Stream.iterate(1, n -> n &lt; 100, n -> n * 2);     // for-style with predicate</code></pre>
     </div>
   </div>
 
-  <h3>Optional: <code>ifPresentOrElse</code>, <code>or</code>, <code>stream</code></h3>
-  <pre><code class="java">opt.ifPresentOrElse(this::use, this::handleEmpty);   // no more if/else on isPresent()
-Optional&lt;User&gt; u = primary.or(() -> fallbackLookup());  // lazy fallback
-List&lt;User&gt; users = optionals.stream().flatMap(Optional::stream).toList();  // drop empties</code></pre>
+  <h3>New Collectors: <code>filtering</code> &amp; <code>flatMapping</code></h3>
+  <p><em>Why it matters:</em> filter/flatten <em>inside</em> a downstream collector (e.g. within a
+  <code>groupingBy</code>), which plain <code>filter</code> can't do without dropping empty groups.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — filter drops empty groups</div>
+      <pre><code class="java">Map&lt;Dept, List&lt;Employee&gt;&gt; m = employees.stream()
+    .filter(e -> e.salary() &gt; 100_000)          // dept with none disappears
+    .collect(groupingBy(Employee::dept));</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 9)</div>
+      <pre><code class="java">Map&lt;Dept, List&lt;Employee&gt;&gt; m = employees.stream()
+    .collect(groupingBy(Employee::dept,
+             filtering(e -> e.salary() &gt; 100_000, toList())));
+// every dept kept; empty list where none match</code></pre>
+    </div>
+  </div>
+
+  <h3><code>Optional</code>: <code>ifPresentOrElse</code>, <code>or</code>, <code>stream</code></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">if (opt.isPresent()) use(opt.get());
+else handleEmpty();
+
+List&lt;User&gt; users = new ArrayList&lt;&gt;();
+for (Optional&lt;User&gt; o : optionals)
+  o.ifPresent(users::add);</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 9)</div>
+      <pre><code class="java">opt.ifPresentOrElse(this::use, this::handleEmpty);
+Optional&lt;User&gt; u = primary.or(() -> fallbackLookup());   // lazy fallback
+List&lt;User&gt; users = optionals.stream()
+    .flatMap(Optional::stream).toList();                 // drop empties</code></pre>
+    </div>
+  </div>
+
+  <h3><code>CompletableFuture</code>: timeouts &amp; delays</h3>
+  <p><em>Why it matters:</em> before Java 9 you needed an external scheduler to time out an async task.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">// bolt on a timeout with a separate scheduler... fiddly
+CompletableFuture&lt;String&gt; f = callAsync();
+scheduler.schedule(() -> f.completeExceptionally(
+    new TimeoutException()), 2, SECONDS);</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 9)</div>
+      <pre><code class="java">CompletableFuture&lt;String&gt; f = callAsync()
+    .orTimeout(2, SECONDS)                    // fail if too slow
+    .completeOnTimeout("default", 2, SECONDS);// or fall back to a value
+CompletableFuture.delayedExecutor(1, SECONDS);// delayed execution</code></pre>
+    </div>
+  </div>
+
+  <h3>Stack-Walking API</h3>
+  <p><em>Why it matters:</em> a lazy, efficient way to inspect the call stack, replacing the costly
+  <code>Throwable.getStackTrace()</code> trick.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">// build a whole throwable just to read the caller
+StackTraceElement[] st = new Throwable().getStackTrace();
+String caller = st[1].getClassName();</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 9)</div>
+      <pre><code class="java">Class&lt;?&gt; caller = StackWalker
+    .getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
+    .walk(s -> s.skip(1).findFirst()
+                .map(StackWalker.StackFrame::getDeclaringClass)
+                .orElseThrow());   // lazy, no full trace built</code></pre>
+    </div>
+  </div>
+
+  <h3>Reactive Streams — <code>java.util.concurrent.Flow</code></h3>
+  <p><em>Why it matters:</em> standard interfaces (<code>Publisher</code>, <code>Subscriber</code>,
+  <code>Processor</code>, <code>Subscription</code>) for back-pressured async streams, so libraries like
+  RxJava/Reactor can interoperate.</p>
 
   <h3>Process API — inspect &amp; control OS processes</h3>
   <pre><code class="java">ProcessHandle self = ProcessHandle.current();
@@ -429,22 +526,22 @@ ProcessHandle.allProcesses()
     .filter(p -> p.info().command().isPresent())
     .forEach(p -> System.out.println(p.pid() + " " + p.info().command().get()));</code></pre>
 
-  <h3>Reactive Streams — <code>java.util.concurrent.Flow</code></h3>
-  <p>Standard interfaces (<code>Publisher</code>, <code>Subscriber</code>, <code>Processor</code>,
-  <code>Subscription</code>) for back-pressured async streams — the basis libraries like RxJava/Reactor interoperate with.</p>
-
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>
+  <h3>JShell — the REPL</h3>
+  <p><em>Why it matters:</em> try an expression instantly without a class, <code>main</code>, or compile step.</p>
+  <pre><code class="java">jshell&gt; var xs = List.of(1, 2, 3)
+xs ==&gt; [1, 2, 3]
+jshell&gt; xs.stream().mapToInt(i -&gt; i).sum()
+$2 ==&gt; 6</code></pre>
+  <h3>jlink · multi-release JARs · unified logging</h3>
   <ul>
-    <li><strong>JShell</strong> — the official REPL. See the <a href="#pg-quickstart-html">Quick start</a>.</li>
-    <li><strong>jlink</strong> — assemble a minimal custom runtime image containing only the modules your app needs.
-      <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre>
-    </li>
-    <li><strong>Multi-release JARs</strong> — one JAR, version-specific class files under
-      <code>META-INF/versions/N/</code>, so a library can use newer APIs when run on newer JDKs.</li>
+    <li><strong>jlink</strong> — assemble a minimal runtime with only the modules you need:
+      <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre></li>
+    <li><strong>Multi-release JARs</strong> — one JAR carrying version-specific classes under
+      <code>META-INF/versions/N/</code>, so a library can use newer APIs on newer JDKs.</li>
     <li><strong>Unified JVM logging</strong> — one <code>-Xlog</code> framework for all JVM logs:
-      <pre><code class="java">java -Xlog:gc*=info:file=gc.log:time,uptime app</code></pre>
-    </li>
+      <pre><code class="java">java -Xlog:gc*=info:file=gc.log:time,uptime app</code></pre></li>
     <li><strong>New HTML5 Javadoc</strong> with a search box.</li>
   </ul>
 
@@ -452,15 +549,16 @@ ProcessHandle.allProcesses()
   <h2>4 · JVM / performance / other</h2>
   <ul>
     <li><strong>The Module System (JPMS)</strong> <span class="badge jep">JEP 261</span> — the headline
-      change. The JDK is split into <code>~90</code> modules; you can declare your own with
-      <code>module-info.java</code>. Full walkthrough on the
-      <a href="#pg-topics-modules-jpms-html">Modules deep-dive</a>.</li>
-    <li><strong>G1 is the default garbage collector</strong> (replacing Parallel GC).</li>
-    <li><strong>Compact Strings</strong> — <code>String</code> stores Latin-1 in a byte[] instead of
-      char[] when possible, cutting memory use — invisible to your code.</li>
+      change; the JDK is split into ~90 modules and you can declare your own with
+      <code>module-info.java</code>. Full walkthrough → <a href="#pg-topics-modules-jpms-html">Modules deep-dive</a>.</li>
+    <li><strong>G1 is the default garbage collector</strong> (replacing Parallel GC), plus a pluggable
+      <strong>Garbage-Collector Interface</strong>.</li>
+    <li><strong>Compact Strings</strong> — <code>String</code> stores Latin-1 in a <code>byte[]</code>
+      instead of <code>char[]</code> when possible, cutting memory — invisible to your code.</li>
     <li><strong>HTTP/2 client (incubator)</strong> under <code>jdk.incubator.httpclient</code> —
-      becomes the standard <code>java.net.http.HttpClient</code> in
-      <a href="#pg-versions-java-11-html">Java 11</a>.</li>
+      becomes the standard <code>java.net.http.HttpClient</code> in <a href="#pg-versions-java-11-html">Java 11</a>.</li>
+    <li><strong>VarHandle / Variable Handles</strong> <span class="badge jep">JEP 193</span> — typed,
+      safe low-level access to fields/arrays (an <code>Unsafe</code> alternative).</li>
     <li>Applet API and several old GC combinations deprecated.</li>
   </ul>
 
@@ -469,11 +567,12 @@ ProcessHandle.allProcesses()
   <div class="cheat">
     <h3>Java 9 in one glance</h3>
     <ul>
-      <li><strong>Modules:</strong> <code>module-info.java</code>, <code>requires</code>/<code>exports</code> → <a href="#pg-topics-modules-jpms-html">deep dive</a></li>
+      <li><strong>Modules:</strong> <code>module-info.java</code> → <a href="#pg-topics-modules-jpms-html">deep dive</a></li>
       <li><strong>Collections:</strong> <code>List.of / Set.of / Map.of</code></li>
-      <li><strong>Streams:</strong> <code>takeWhile / dropWhile / ofNullable / iterate(seed, hasNext, next)</code></li>
+      <li><strong>Streams:</strong> <code>takeWhile / dropWhile / ofNullable / iterate(seed, hasNext, next)</code>; Collectors <code>filtering / flatMapping</code></li>
       <li><strong>Optional:</strong> <code>ifPresentOrElse / or / stream</code></li>
-      <li><strong>Interfaces:</strong> <code>private</code> methods</li>
+      <li><strong>Async:</strong> <code>CompletableFuture.orTimeout / completeOnTimeout / delayedExecutor</code></li>
+      <li><strong>Interfaces:</strong> <code>private</code> methods; <strong>@Deprecated</strong> gains <code>since</code>/<code>forRemoval</code></li>
       <li><strong>Tools:</strong> <code>jshell</code>, <code>jlink</code>, multi-release JARs, <code>-Xlog</code></li>
     </ul>
   </div>
