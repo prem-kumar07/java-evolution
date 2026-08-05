@@ -27,7 +27,8 @@
       "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand var to full guide \\(compile-time diagram, style guidance\\) — all 11 topic pages done *)",
       "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand Java 9 version page: stat banner + more features with before/after *)",
       "Bash(open versions/java-9.html)",
-      "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand Java 11 version page: stat banner + more features with before/after *)"
+      "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand Java 11 version page: stat banner + more features with before/after *)",
+      "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand Java 17 version page: stat banner + more features \\(compact numbers, unix sockets, mapMulti\\) *)"
     ]
   }
 }
