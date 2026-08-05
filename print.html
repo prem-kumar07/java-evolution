@@ -1049,10 +1049,19 @@ name.transform(String::toUpperCase);</code></pre>
   <p class="sec-tag">September 2023 · <span class="badge lts">LTS</span></p>
   <h1>Java 21 <span class="badge lts">LTS</span></h1>
   <p class="lead">
-    The concurrency-defining LTS. <strong>Virtual threads</strong> make blocking code scale to
-    millions of tasks, while <strong>pattern matching for switch</strong> and <strong>record
-    patterns</strong> complete Java's data-oriented programming story.
+    The concurrency-defining LTS. <strong>Virtual threads</strong> make blocking code scale to millions
+    of tasks, while <strong>pattern matching for switch</strong> and <strong>record patterns</strong>
+    complete Java's data-oriented programming story. Plus sequenced collections and generational ZGC.
   </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">virtual threads</span><span class="lbl">millions of cheap threads</span></div>
+    <div class="stat"><span class="num">switch patterns</span><span class="lbl">+ guards, final</span></div>
+    <div class="stat"><span class="num">record patterns</span><span class="lbl">destructuring</span></div>
+    <div class="stat"><span class="num">Sequenced</span><span class="lbl">getFirst/getLast/reversed</span></div>
+    <div class="stat"><span class="num">LTS</span><span class="lbl">covers 18–20</span></div>
+  </div>
+
   <div class="note"><strong>Folded in:</strong> features from
   <span class="badge added">18</span> <span class="badge added">19</span>
   <span class="badge added">20</span> are included and tagged.</div>
@@ -1061,14 +1070,14 @@ name.transform(String::toUpperCase);</code></pre>
     <strong>⚠ Migration watch-outs (17 → 21).</strong>
     <ul>
       <li><strong>UTF-8 is the default charset</strong> <span class="badge added">since 18</span> —
-        code that relied on the platform default (file reads/writes, <code>new String(bytes)</code>)
-        can change behaviour. Set charsets explicitly.</li>
-      <li><strong>Virtual-thread pinning:</strong> on 21–23, blocking inside a <code>synchronized</code>
-        block pins the carrier thread and can starve the pool. Prefer <code>ReentrantLock</code> around
-        blocking I/O (fixed in 24).</li>
-      <li><strong>Dynamic loading of agents warns</strong> — attaching agents at runtime is on the way to being disallowed.</li>
-      <li><strong>Finalization deprecated for removal</strong> <span class="badge added">18</span> — migrate to <code>Cleaner</code>.</li>
-      <li><strong>String templates</strong> that you may have tried in 21 previews were later withdrawn — don't depend on them.</li>
+        code relying on the platform default (file reads/writes, <code>new String(bytes)</code>) can
+        change behaviour. Set charsets explicitly.</li>
+      <li><strong>Virtual-thread pinning:</strong> on 21–23, blocking inside <code>synchronized</code>
+        pins the carrier and can starve the pool. Prefer <code>ReentrantLock</code> around blocking I/O
+        (fixed in 24).</li>
+      <li><strong>Dynamic loading of agents warns</strong>; <strong>finalization deprecated for
+        removal</strong> <span class="badge added">18</span> — migrate to <code>Cleaner</code>.</li>
+      <li><strong>String templates</strong> tried in 21 previews were later withdrawn — don't depend on them.</li>
     </ul>
   </div>
 
@@ -1076,9 +1085,10 @@ name.transform(String::toUpperCase);</code></pre>
   <h2>1 · Language features</h2>
 
   <h3>Virtual threads <span class="badge added">Final in 21</span></h3>
-  <p>Lightweight threads managed by the JVM. Write simple blocking code; the runtime handles the scale.</p>
+  <p><em>Why it matters:</em> write simple blocking code that scales to millions of concurrent tasks —
+  the runtime frees the OS thread while a virtual thread waits.</p>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before — thread pool, limited</div>
+    <div class="before"><div class="ba-label">Before — bounded pool</div>
       <pre><code class="java">var pool = Executors.newFixedThreadPool(200);
 for (var task : tasks) pool.submit(task);
 // ~200 concurrent; more = queueing or OOM</code></pre>
@@ -1089,13 +1099,13 @@ for (var task : tasks) pool.submit(task);
 }   // millions of concurrent blocking tasks, cheap</code></pre>
     </div>
   </div>
-  <p>How they work, pinning, and when to use them → <a href="#pg-topics-virtual-threads-html">Virtual threads deep-dive</a>.</p>
+  <p>Architecture, pinning, Spring Boot, migration → <a href="#pg-topics-virtual-threads-html">Virtual threads deep-dive</a>.</p>
 
   <h3>Pattern matching for <code>switch</code> <span class="badge added">Final in 21</span></h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — if/else chain of casts</div>
       <pre><code class="java">String s;
-if (obj instanceof Integer i)      s = "int " + i;
+if (obj instanceof Integer i)       s = "int " + i;
 else if (obj instanceof String str) s = "str " + str;
 else                                s = "other";</code></pre>
     </div>
@@ -1110,79 +1120,99 @@ else                                s = "other";</code></pre>
   </div>
 
   <h3>Record patterns <span class="badge added">Final in 21</span></h3>
-  <p>Destructure records directly in <code>instanceof</code> and <code>switch</code>, nesting freely.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">if (obj instanceof Point p) {
   int x = p.x();
   int y = p.y();
-  ...
 }</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After</div>
-      <pre><code class="java">if (obj instanceof Point(int x, int y)) {
-  ...   // x and y bound directly
-}
-// nested:
+    <div class="after"><div class="ba-label">After — destructure (nested)</div>
+      <pre><code class="java">if (obj instanceof Point(int x, int y)) { }
 switch (shape) {
   case Line(Point(var x1,var y1), Point(var x2,var y2)) -> ...;
 }</code></pre>
     </div>
   </div>
-  <p>All of pattern matching in one place → <a href="#pg-topics-pattern-matching-switch-html">Pattern matching deep-dive</a>.</p>
+  <p>All of pattern matching → <a href="#pg-topics-pattern-matching-switch-html">Pattern matching deep-dive</a>.</p>
 
   <h3>Previews that landed here</h3>
   <ul>
     <li><strong>Unnamed patterns &amp; variables</strong> <code>_</code>
       <span class="badge preview">Preview in 21</span> (final in 25) — ignore what you don't need:
-      <pre><code class="java">if (obj instanceof Point(int x, _)) { ... }   // ignore y
-catch (Exception _) { ... }
-for (var _ : items) count++;</code></pre>
-    </li>
+      <pre><code class="java">if (obj instanceof Point(int x, _)) { }   // ignore y
+catch (Exception _) { }
+for (var _ : items) count++;</code></pre></li>
     <li><strong>Unnamed classes &amp; instance main</strong>
-      <span class="badge preview">Preview in 21</span> — a gentler <code>main</code> for beginners
-      (evolves into "compact source files" in 25). See <a href="#pg-versions-java-25-html">Java 25</a>.</li>
-    <li><strong>String templates</strong> <span class="badge preview">Preview in 21</span> —
-      later <em>withdrawn</em> for redesign, so not covered as a stable feature.</li>
-    <li><strong>Scoped values</strong> &amp; <strong>structured concurrency</strong> begin previewing here
-      → <a href="#pg-topics-scoped-values-html">scoped values</a>, <a href="#pg-topics-structured-concurrency-html">structured concurrency</a>.</li>
+      <span class="badge preview">Preview in 21</span> — evolves into "compact source files" in 25
+      (see <a href="#pg-versions-java-25-html">Java 25</a>).</li>
+    <li><strong>Scoped values</strong> &amp; <strong>structured concurrency</strong> begin previewing here →
+      <a href="#pg-topics-scoped-values-html">scoped values</a>, <a href="#pg-topics-structured-concurrency-html">structured concurrency</a>.</li>
   </ul>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
   <h3>Sequenced collections <span class="badge added">Added in 21</span></h3>
-  <p>New interfaces give <em>every</em> ordered collection a uniform first/last/reverse vocabulary.</p>
+  <p><em>Why it matters:</em> before, every ordered collection expressed "first/last/reverse"
+  differently — and <code>LinkedHashSet</code> had no clean "last" at all. New interfaces
+  (<code>SequencedCollection</code>, <code>SequencedSet</code>, <code>SequencedMap</code>) give a uniform vocabulary.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — inconsistent, awkward</div>
       <pre><code class="java">list.get(0);                 // first
 list.get(list.size() - 1);   // last
-// LinkedHashSet has NO clean "last"; you iterate
-new ArrayList&lt;&gt;(list) then Collections.reverse(...);</code></pre>
+var copy = new ArrayList&lt;&gt;(list);
+Collections.reverse(copy);   // reversed
+// LinkedHashSet: no direct "last" — must iterate</code></pre>
     </div>
     <div class="after"><div class="ba-label">After — SequencedCollection</div>
       <pre><code class="java">list.getFirst();  list.getLast();
 list.addFirst(x); list.addLast(y);
 List&lt;T&gt; rev = list.reversed();     // reversed view
-// same methods on SequencedSet, SequencedMap
-map.firstEntry(); map.reversed();</code></pre>
+// same on SequencedSet / SequencedMap:
+map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
     </div>
   </div>
 
   <h3>Key Encapsulation Mechanism (KEM) API <span class="badge added">Added in 21</span></h3>
-  <p>Standard API for KEM algorithms — a building block for post-quantum cryptography.</p>
+  <p><em>Why it matters:</em> a standard API for KEM algorithms — a building block for post-quantum cryptography.</p>
 
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>
+
+  <h3>Code snippets in Javadoc — <code>@snippet</code> <span class="badge added">Added in 18</span></h3>
+  <p><em>Why it matters:</em> old <code>{@code ...}</code> examples were plain text — never compiled, so
+  they rotted. <code>@snippet</code> examples are real, can be validated against actual source files, and
+  support highlighting/regions.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — {@code}, unchecked plain text</div>
+      <pre><code class="java">/**
+ * Example:
+ * &lt;pre&gt;{@code
+ *   var list = List.of(1, 2, 3);
+ *   int sum = list.stream().mapToInt(i -&gt; i).sum();
+ * }&lt;/pre&gt;
+ */</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — @snippet (validated, highlightable)</div>
+      <pre><code class="java">/**
+ * Example:
+ * {@snippet :
+ *   var list = List.of(1, 2, 3);      // @highlight substring="List"
+ *   int sum = list.stream().mapToInt(i -> i).sum();
+ * }
+ */
+// or pull from a real file:  {@snippet file="Demo.java" region="sum"}</code></pre>
+    </div>
+  </div>
+
+  <h3>Simple Web Server &amp; Generational ZGC</h3>
   <ul>
     <li><strong>Simple Web Server</strong> <span class="badge added">Added in 18</span> — a zero-config
       static file server for testing/prototyping:
-      <pre><code class="java">jwebserver -p 8000 -d /path/to/site</code></pre>
-    </li>
-    <li><strong><code>@snippet</code> in Javadoc</strong> <span class="badge added">Added in 18</span> —
-      real, compilable code examples in docs.</li>
+      <pre><code class="java">jwebserver -p 8000 -d /path/to/site</code></pre></li>
     <li><strong>Generational ZGC</strong> <span class="badge added">Added in 21</span> — ZGC now keeps a
-      young generation, improving throughput. Enable with
+      young generation, improving throughput:
       <code>-XX:+UseZGC -XX:+ZGenerational</code>.</li>
   </ul>
 
@@ -1190,11 +1220,12 @@ map.firstEntry(); map.reversed();</code></pre>
   <h2>4 · JVM / performance / other</h2>
   <ul>
     <li><strong>UTF-8 is the default charset</strong> <span class="badge added">Added in 18</span> —
-      file I/O no longer depends on the platform locale. Watch for behaviour changes on old code that
-      relied on the platform default.</li>
+      file I/O no longer depends on the platform locale. Watch behaviour changes in old code.</li>
     <li><strong>Finalization deprecated for removal</strong> <span class="badge added">Added in 18</span> —
       migrate to <code>Cleaner</code> / try-with-resources.</li>
-    <li><strong>Prepare to disallow dynamic loading of agents</strong> — agents attached at runtime now warn.</li>
+    <li><strong>Core reflection reimplemented on method handles</strong> <span class="badge added">18</span> —
+      faster reflective calls, internal change.</li>
+    <li><strong>Internet-address resolution SPI</strong> <span class="badge added">18</span> — pluggable host resolution (custom DNS).</li>
     <li><strong>Linux/RISC-V port</strong> <span class="badge added">Added in 19</span>.</li>
   </ul>
 
@@ -1204,10 +1235,11 @@ map.firstEntry(); map.reversed();</code></pre>
     <h3>Java 21 (LTS) in one glance</h3>
     <ul>
       <li><strong>Virtual threads</strong> → <code>newVirtualThreadPerTaskExecutor()</code></li>
-      <li><strong>switch patterns</strong> with <code>when</code> guards + <strong>record patterns</strong> (destructuring)</li>
+      <li><strong>switch patterns</strong> with <code>when</code> guards + <strong>record patterns</strong></li>
       <li><strong>Sequenced collections:</strong> <code>getFirst/getLast/addFirst/addLast/reversed</code></li>
+      <li><strong>Javadoc:</strong> <code>@snippet</code> validated examples (18)</li>
+      <li><strong>Tooling:</strong> <code>jwebserver</code> (18); <strong>GC:</strong> Generational ZGC</li>
       <li><strong>Preview:</strong> unnamed <code>_</code>, scoped values, structured concurrency</li>
-      <li><strong>GC:</strong> Generational ZGC</li>
       <li><strong>Default:</strong> UTF-8 charset; finalization on the way out</li>
     </ul>
   </div>
