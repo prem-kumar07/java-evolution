@@ -50,7 +50,7 @@
 <a href="#pg-topics-modules-jpms-html">Modules (JPMS)</a>
 <a href="#pg-topics-virtual-threads-html">Virtual threads — complete guide</a>
 <a href="#pg-topics-structured-concurrency-html">Structured concurrency — complete guide</a>
-<a href="#pg-topics-scoped-values-html">Scoped values</a>
+<a href="#pg-topics-scoped-values-html">Scoped values — complete guide</a>
 <a href="#pg-topics-streams-gatherers-html">Streams &amp; Gatherers</a>
 <a href="#pg-topics-ffm-api-html">Foreign Function &amp; Memory API</a>
 </div>
@@ -3284,26 +3284,54 @@ try {
   </table>
 </section>
 <section id="pg-topics-scoped-values-html" class="print-page">
-  <p class="sec-tag">Deep dive · concurrency</p>
-  <h1>Scoped values <span class="badge added">Java 25</span></h1>
+  <p class="sec-tag">Deep dive · concurrency · complete guide</p>
+  <h1>Scoped values <span class="badge added">Final in Java 25</span></h1>
   <p class="lead">
-    A <code>ScopedValue</code> shares immutable data with methods further down the call stack
+    A <code>ScopedValue</code> shares immutable data with code further down the call stack
     <strong>without passing it as a parameter</strong> — a modern, safer, virtual-thread-friendly
     replacement for many uses of <code>ThreadLocal</code>.
   </p>
 
-  <h2>Why not just ThreadLocal?</h2>
+  <div class="hero-stats">
+    <div class="stat"><span class="num">immutable</span><span class="lbl">no <code>set()</code> to misuse</span></div>
+    <div class="stat"><span class="num">auto</span><span class="lbl">unbound at scope end</span></div>
+    <div class="stat"><span class="num">inherited</span><span class="lbl">by forked subtasks</span></div>
+    <div class="stat"><span class="num">0 leaks</span><span class="lbl">no <code>remove()</code> to forget</span></div>
+    <div class="stat"><span class="num">Java 25</span><span class="lbl">final (preview in 21)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    <code>ThreadLocal</code> is mutable (anyone can <code>set()</code> it any time), leaks unless you
+    remember <code>remove()</code>, and is copied into every child thread — painful with
+    <strong>millions</strong> of <a href="#pg-topics-virtual-threads-html">virtual threads</a>. Scoped values give
+    you the same "ambient context" without those hazards: bound for a well-defined scope, immutable, and
+    cleaned up automatically.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#vs">1. Why not ThreadLocal?</a>
+    <a href="#basic">2. Declare, bind, read</a>
+    <a href="#model">3. How binding works</a>
+    <a href="#rebind">4. run / call / multiple / rebinding</a>
+    <a href="#sc">5. With structured concurrency</a>
+    <a href="#pitfalls">6. Pitfalls</a>
+    <a href="#realworld">7. Real-world use cases</a>
+    <a href="#cheat">8. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="vs">1 · Why not ThreadLocal?</h2>
   <table class="data">
     <tr><th></th><th>ThreadLocal</th><th>ScopedValue</th></tr>
     <tr><td>Mutability</td><td>Mutable any time (<code>set</code>)</td><td>Immutable; bound for a scope only</td></tr>
-    <tr><td>Lifetime</td><td>Until removed (leaks if you forget <code>remove()</code>)</td><td>Auto-unbound when the scope block exits</td></tr>
-    <tr><td>Inheritance</td><td>Copied to child threads (expensive)</td><td>Shared by structure, no copying</td></tr>
-    <tr><td>At scale</td><td>Costly with millions of virtual threads</td><td>Designed for it</td></tr>
+    <tr><td>Lifetime</td><td>Until <code>remove()</code> (leaks if forgotten)</td><td>Auto-unbound when the block exits</td></tr>
+    <tr><td>Inheritance</td><td>Copied into child threads (costly)</td><td>Shared by structure, no copy</td></tr>
+    <tr><td>At VT scale</td><td>Expensive with millions of threads</td><td>Designed for it</td></tr>
+    <tr><td>Reasoning</td><td>"Who set this, and is it stale?"</td><td>Value is fixed for the dynamic extent</td></tr>
   </table>
-
-  <h2>Before &amp; after</h2>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before — ThreadLocal, mutable, leak-prone</div>
+    <div class="before"><div class="ba-label">Legacy — ThreadLocal, mutable, must clean up</div>
       <pre><code class="java">static final ThreadLocal&lt;User&gt; CURRENT = new ThreadLocal&lt;&gt;();
 
 void handle(Request r) {
@@ -3311,11 +3339,11 @@ void handle(Request r) {
   try {
     process();               // deep code calls CURRENT.get()
   } finally {
-    CURRENT.remove();        // MUST remember, or you leak / see stale data
+    CURRENT.remove();        // MUST remember or you leak / see stale data
   }
 }</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After — ScopedValue, immutable, self-cleaning</div>
+    <div class="after"><div class="ba-label">ScopedValue — immutable, self-cleaning</div>
       <pre><code class="java">static final ScopedValue&lt;User&gt; CURRENT = ScopedValue.newInstance();
 
 void handle(Request r) {
@@ -3325,13 +3353,53 @@ void handle(Request r) {
     </div>
   </div>
 
-  <h2>Reading the value</h2>
-  <pre><code class="java">void process() {
-  User u = CURRENT.get();          // whatever was bound in the enclosing scope
-  if (CURRENT.isBound()) { ... }   // check before get() to avoid an exception
+  <!-- ============================================================ -->
+  <h2 id="basic">2 · Declare, bind, read</h2>
+  <pre><code class="java">// declare once (shared, final)
+static final ScopedValue&lt;User&gt; CURRENT = ScopedValue.newInstance();
+
+// bind for a scope
+ScopedValue.where(CURRENT, user).run(() -> process());
+
+// read anywhere inside that scope
+void process() {
+  User u = CURRENT.get();          // the value bound above
+  if (CURRENT.isBound()) { ... }   // guard before get() to avoid an exception
 }</code></pre>
 
-  <h2>Binding: <code>run</code> vs <code>call</code>, and multiple values</h2>
+  <!-- ============================================================ -->
+  <h2 id="model">3 · How binding works</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 240" role="img" aria-label="where(V, value).run(...) creates a binding visible down the call stack and to forked subtasks, and unbound when run returns">
+      <defs>
+        <marker id="svA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="40" y="20" width="430" height="200" rx="12" class="dg-accent" fill-opacity="0.22"/>
+      <text x="60" y="44" class="dg-title">ScopedValue.where(CURRENT, user).run( … )</text>
+      <text x="60" y="62" class="dg-soft">binding is live for everything called inside run()</text>
+      <rect x="70" y="78"  width="240" height="34" rx="7" class="dg-box"/>
+      <text x="190" y="100" text-anchor="middle" class="dg-text-sm">handle() → process()</text>
+      <rect x="70" y="122" width="240" height="34" rx="7" class="dg-box"/>
+      <text x="190" y="144" text-anchor="middle" class="dg-text-sm">deep code: CURRENT.get() ✓</text>
+      <rect x="70" y="170" width="240" height="34" rx="7" class="dg-good-box"/>
+      <text x="190" y="192" text-anchor="middle" class="dg-text-sm">forked subtask: CURRENT.get() ✓</text>
+      <line x1="190" y1="112" x2="190" y2="120" class="dg-line" marker-end="url(#svA)"/>
+      <line x1="190" y1="156" x2="190" y2="168" class="dg-line" marker-end="url(#svA)"/>
+      <!-- outside -->
+      <rect x="510" y="100" width="210" height="46" rx="8" class="dg-box-alt"/>
+      <text x="615" y="122" text-anchor="middle" class="dg-text">outside the scope</text>
+      <text x="615" y="140" text-anchor="middle" class="dg-soft">CURRENT.get() → throws</text>
+      <path d="M470,120 L508,120" class="dg-line-dash" marker-end="url(#svA)"/>
+      <text x="490" y="112" text-anchor="middle" class="dg-soft">run() returns → unbound</text>
+    </svg>
+    <figcaption>The value exists only during the dynamic extent of <code>run</code>/<code>call</code> —
+    visible to everything it calls (and to forked subtasks), gone the moment it returns. It can't leak.</figcaption>
+  </figure>
+
+  <!-- ============================================================ -->
+  <h2 id="rebind">4 · run / call / multiple / rebinding</h2>
   <pre><code class="java">// run: no result;  call: returns a value / may throw checked exceptions
 String out = ScopedValue.where(CURRENT, user).call(() -> render());
 
@@ -3340,12 +3408,17 @@ ScopedValue.where(CURRENT, user)
            .where(TENANT, tenant)
            .run(() -> handle());
 
-// rebind for a narrower scope (does not mutate — shadows within the nested block)
-ScopedValue.where(CURRENT, adminUser).run(() -> doPrivileged());</code></pre>
+// rebinding = a nested, narrower scope (does NOT mutate — it shadows)
+ScopedValue.where(CURRENT, adminUser).run(() -> doPrivileged());
 
-  <h2>Works across subtasks with structured concurrency</h2>
-  <p>A scoped value bound in a scope is visible to every subtask forked inside it — the clean way to
-  propagate request context to concurrent work.</p>
+// provide a fallback instead of throwing when unbound
+User u = CURRENT.orElse(GUEST);</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="sc">5 · With structured concurrency</h2>
+  <p>A value bound in a scope is visible to every subtask forked inside it — the intended way to
+  propagate request context to concurrent work (see <a href="#pg-topics-structured-concurrency-html">Structured
+  concurrency</a>).</p>
   <pre><code class="java">ScopedValue.where(CURRENT, user).run(() -> {
   try (var scope = StructuredTaskScope.open()) {
     scope.fork(() -> loadProfile());   // sees CURRENT.get() == user
@@ -3354,15 +3427,68 @@ ScopedValue.where(CURRENT, adminUser).run(() -> doPrivileged());</code></pre>
   }
 });</code></pre>
 
-  <h2>Gotchas</h2>
-  <ul>
-    <li><strong>Immutable by design:</strong> there is no <code>set()</code>. To "change" a value for
-      a sub-computation, <em>rebind</em> it in a nested <code>where(...).run(...)</code>.</li>
-    <li><strong><code>get()</code> outside a binding throws</strong> — guard with <code>isBound()</code>
-      or provide a default via <code>orElse</code>.</li>
-    <li><strong>Not a global variable.</strong> The value exists only during the dynamic extent of the
-      <code>run</code>/<code>call</code>. That's the point — it can't leak.</li>
-  </ul>
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">6 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>Wanting to <code>set()</code> mid-scope</td><td>There is none by design — <em>rebind</em> in a nested <code>where(...).run(...)</code>.</td></tr>
+    <tr><td><code>get()</code> with no binding</td><td>Throws — guard with <code>isBound()</code> or use <code>orElse</code>.</td></tr>
+    <tr><td>Treating it as a global variable</td><td>It only exists inside the scope; that's the safety feature, not a limitation.</td></tr>
+    <tr><td>Passing a mutable object as the value</td><td>The <em>binding</em> is immutable, but a mutable object it points to can still be mutated — prefer immutable payloads.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">7 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Bind…</th></tr>
+    <tr><td>Web request context</td><td>current user, tenant, locale, request/trace id</td></tr>
+    <tr><td>Security principal</td><td>authenticated subject for the request's duration</td></tr>
+    <tr><td>Logging correlation (MDC-style)</td><td>trace/span id read by log appenders</td></tr>
+    <tr><td>Transaction / unit-of-work</td><td>the active transaction or DB session</td></tr>
+    <tr><td>Feature-flag / config context</td><td>per-request overrides</td></tr>
+  </table>
+  <h3>Worked example — propagate user + trace id through a request</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — thread every value through params</div>
+      <pre><code class="java">void handle(Request r) {
+  var ctx = new Ctx(authenticate(r), r.traceId());
+  service(ctx);                       // must pass ctx...
+}
+void service(Ctx ctx) {
+  repo(ctx);                          // ...and again...
+}
+void repo(Ctx ctx) {
+  log.info("[{}] user={}", ctx.traceId(), ctx.user());  // ...everywhere
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">ScopedValue — ambient, no plumbing</div>
+      <pre><code class="java">static final ScopedValue&lt;Ctx&gt; CTX = ScopedValue.newInstance();
+
+void handle(Request r) {
+  var ctx = new Ctx(authenticate(r), r.traceId());
+  ScopedValue.where(CTX, ctx).run(this::service);
+}
+void service() { repo(); }            // no ctx parameter
+void repo() {
+  var c = CTX.get();
+  log.info("[{}] user={}", c.traceId(), c.user());
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">8 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>Scoped values in one glance</h3>
+    <ul>
+      <li>Declare: <code>static final ScopedValue&lt;T&gt; V = ScopedValue.newInstance();</code></li>
+      <li>Bind: <code>ScopedValue.where(V, value).run(() -> ...)</code> (or <code>.call</code>).</li>
+      <li>Read: <code>V.get()</code>; guard with <code>V.isBound()</code> or <code>V.orElse(default)</code>.</li>
+      <li>Immutable — <strong>rebind</strong> in a nested scope instead of mutating.</li>
+      <li>Auto-unbound on block exit; inherited by forked subtasks.</li>
+      <li>Prefer over <code>ThreadLocal</code> with virtual threads &amp; structured concurrency.</li>
+    </ul>
+  </div>
 
   <h2>Evolution</h2>
   <table class="data">
@@ -3371,17 +3497,6 @@ ScopedValue.where(CURRENT, adminUser).run(() -> doPrivileged());</code></pre>
     <tr><td>Java 21–24</td><td>Preview (JEPs 446, 464, 481, 487).</td></tr>
     <tr><td>Java 25</td><td><strong>Final</strong> (JEP 506).</td></tr>
   </table>
-
-  <div class="cheat">
-    <h3>Cheat card</h3>
-    <ul>
-      <li>Declare: <code>static final ScopedValue&lt;T&gt; V = ScopedValue.newInstance();</code></li>
-      <li>Bind: <code>ScopedValue.where(V, value).run(() -> ...)</code> (or <code>.call</code>).</li>
-      <li>Read: <code>V.get()</code>; check <code>V.isBound()</code> first.</li>
-      <li>Immutable — rebind in a nested scope instead of mutating.</li>
-      <li>Auto-unbound on block exit; ideal with virtual threads &amp; structured concurrency.</li>
-    </ul>
-  </div>
 </section>
 <section id="pg-topics-streams-gatherers-html" class="print-page">
   <p class="sec-tag">Deep dive · API</p>
