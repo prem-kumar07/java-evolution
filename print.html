@@ -44,7 +44,7 @@
 <a href="#pg-versions-java-26-html">Java 26 — new features</a>
 <a href="#pg-topics-var-html">var — local-variable type inference</a>
 <a href="#pg-topics-records-html">Records — complete guide</a>
-<a href="#pg-topics-sealed-classes-html">Sealed classes &amp; interfaces</a>
+<a href="#pg-topics-sealed-classes-html">Sealed classes — complete guide</a>
 <a href="#pg-topics-pattern-matching-switch-html">Pattern matching &amp; switch</a>
 <a href="#pg-topics-text-blocks-strings-html">Text blocks &amp; String APIs</a>
 <a href="#pg-topics-modules-jpms-html">Modules (JPMS)</a>
@@ -1683,44 +1683,104 @@ int lo = mm.min(), hi = mm.max();       // no casts, clear names</code></pre>
   </table>
 </section>
 <section id="pg-topics-sealed-classes-html" class="print-page">
-  <p class="sec-tag">Deep dive · language</p>
-  <h1>Sealed classes &amp; interfaces <span class="badge added">Java 17</span></h1>
+  <p class="sec-tag">Deep dive · language · complete guide</p>
+  <h1>Sealed classes &amp; interfaces <span class="badge added">Final in Java 17</span></h1>
   <p class="lead">
-    A <code>sealed</code> type explicitly lists which classes may extend or implement it. This gives
-    you a <strong>closed, known set of subtypes</strong> — the foundation for exhaustive pattern
-    matching and safe modelling of "one of a fixed set of shapes".
+    A <code>sealed</code> type declares exactly which classes may extend or implement it. That gives you
+    a <strong>closed, known set of subtypes</strong> — the foundation for exhaustive pattern matching
+    and for modelling "a value is one of a fixed set of shapes".
   </p>
 
-  <h2>Why it exists</h2>
-  <p>Before, a type was either <code>final</code> (no subtypes) or fully open (anyone, anywhere could
-  subclass). There was no way to say "these three and no others". Sealed types fill that gap and let
-  the compiler reason about the complete hierarchy.</p>
+  <div class="hero-stats">
+    <div class="stat"><span class="num">closed</span><span class="lbl">known subtype set</span></div>
+    <div class="stat"><span class="num">0</span><span class="lbl"><code>default</code> needed in switch</span></div>
+    <div class="stat"><span class="num">compile-time</span><span class="lbl">exhaustiveness check</span></div>
+    <div class="stat"><span class="num">3</span><span class="lbl">subtype modes: final / sealed / non-sealed</span></div>
+    <div class="stat"><span class="num">Java 17</span><span class="lbl">final (preview in 15)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Before, a type was either <code>final</code> (no subtypes) or completely open (anyone, anywhere
+    could subclass). There was no way to say "these three types and no others", so the compiler could
+    never know a hierarchy was complete — every <code>switch</code> needed a <code>default</code> and
+    could silently miss a newly added case at runtime. Sealed types close the hierarchy so the compiler
+    can reason about it.
+  </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#what">1. What &amp; why</a>
+    <a href="#modes">2. final / sealed / non-sealed</a>
+    <a href="#rules">3. Rules</a>
+    <a href="#exhaustive">4. The payoff: exhaustive switch</a>
+    <a href="#adt">5. Sealed + records = ADTs</a>
+    <a href="#vs">6. Sealed vs enum vs abstract</a>
+    <a href="#pitfalls">7. Pitfalls</a>
+    <a href="#realworld">8. Real-world use cases</a>
+    <a href="#cheat">9. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="what">1 · What &amp; why</h2>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before — open, or a hand-rolled enum-of-classes</div>
+    <div class="before"><div class="ba-label">Legacy — open hierarchy, compiler can't help</div>
       <pre><code class="java">public abstract class Shape { }
-// anyone can extend Shape anywhere — the compiler
-// can never know the full list, so switches always
-// need a default and can silently miss a new case.</code></pre>
+// Any code anywhere can do:  class Blob extends Shape {}
+// so every switch over Shape must have a default and
+// can silently miss new subtypes → runtime surprises.</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After — sealed</div>
+    <div class="after"><div class="ba-label">Sealed — the set is fixed and known</div>
       <pre><code class="java">public sealed interface Shape
     permits Circle, Square, Rectangle { }
 
-public record Circle(double r)             implements Shape { }
-public record Square(double side)          implements Shape { }
+public record Circle(double r)              implements Shape { }
+public record Square(double side)           implements Shape { }
 public record Rectangle(double w, double h) implements Shape { }</code></pre>
     </div>
   </div>
 
-  <h2>The three choices every permitted subtype must make</h2>
-  <p>A class that extends a sealed type must itself declare how <em>its</em> hierarchy continues:</p>
-  <pre><code class="java">public sealed interface Shape permits Circle, Quadrilateral { }
+  <!-- ============================================================ -->
+  <h2 id="modes">2 · The three choices each subtype must make</h2>
+  <p>Every permitted subtype must declare how <em>its own</em> hierarchy continues — this keeps the
+  whole tree closed and intentional.</p>
 
-public final     record Circle(double r) implements Shape { }   // final: no further subtypes
-public sealed    interface Quadrilateral extends Shape
-                 permits Square, Rectangle { }                  // sealed: continues the closed set
-public non-sealed class Rectangle implements Quadrilateral { }  // non-sealed: re-opens for anyone</code></pre>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 240" role="img" aria-label="Sealed hierarchy tree: Shape permits Circle (final), Square (final) and Quadrilateral (sealed), which permits Rectangle (non-sealed)">
+      <defs>
+        <marker id="slA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="300" y="16" width="160" height="42" rx="8" class="dg-accent"/>
+      <text x="380" y="34" text-anchor="middle" class="dg-text">sealed Shape</text>
+      <text x="380" y="50" text-anchor="middle" class="dg-soft">permits …</text>
+
+      <rect x="40"  y="110" width="150" height="42" rx="8" class="dg-good-box"/>
+      <text x="115" y="128" text-anchor="middle" class="dg-text">final Circle</text>
+      <text x="115" y="144" text-anchor="middle" class="dg-soft">no more subtypes</text>
+
+      <rect x="300" y="110" width="160" height="42" rx="8" class="dg-good-box"/>
+      <text x="380" y="128" text-anchor="middle" class="dg-text">final Square</text>
+      <text x="380" y="144" text-anchor="middle" class="dg-soft">no more subtypes</text>
+
+      <rect x="560" y="110" width="180" height="42" rx="8" class="dg-accent"/>
+      <text x="650" y="128" text-anchor="middle" class="dg-text">sealed Quadrilateral</text>
+      <text x="650" y="144" text-anchor="middle" class="dg-soft">permits Rectangle</text>
+
+      <rect x="560" y="186" width="180" height="42" rx="8" class="dg-warn-box"/>
+      <text x="650" y="204" text-anchor="middle" class="dg-text">non-sealed Rectangle</text>
+      <text x="650" y="220" text-anchor="middle" class="dg-soft">re-opened to anyone</text>
+
+      <line x1="340" y1="58" x2="150" y2="108" class="dg-line" marker-end="url(#slA)"/>
+      <line x1="380" y1="58" x2="380" y2="108" class="dg-line" marker-end="url(#slA)"/>
+      <line x1="420" y1="58" x2="640" y2="108" class="dg-line" marker-end="url(#slA)"/>
+      <line x1="650" y1="152" x2="650" y2="184" class="dg-line" marker-end="url(#slA)"/>
+    </svg>
+    <figcaption>Green leaves are <code>final</code> (closed). <code>Quadrilateral</code> stays
+    <code>sealed</code> (continues the closed set). <code>Rectangle</code> chooses
+    <code>non-sealed</code> to deliberately re-open extension.</figcaption>
+  </figure>
+
   <table class="data">
     <tr><th>Modifier</th><th>Meaning</th></tr>
     <tr><td><code>final</code></td><td>Leaf — cannot be extended further.</td></tr>
@@ -1728,47 +1788,149 @@ public non-sealed class Rectangle implements Quadrilateral { }  // non-sealed: r
     <tr><td><code>non-sealed</code></td><td>Deliberately re-opens the type to unrestricted extension.</td></tr>
   </table>
 
-  <h2>Rules</h2>
+  <!-- ============================================================ -->
+  <h2 id="rules">3 · Rules</h2>
   <ul>
     <li>Permitted subtypes must be <strong>accessible</strong> to the sealed type and, unless in the
-      same file, in the <strong>same module</strong> (or same package for the unnamed module).</li>
-    <li>You may <strong>omit <code>permits</code></strong> if all subtypes are in the <em>same source
-      file</em> — the compiler infers them:
-      <pre><code class="java">sealed interface Expr permits Num, Add { }   // permits optional if all are below in this file
+      same source file, in the <strong>same module</strong> (same package for the unnamed module).</li>
+    <li><strong><code>permits</code> is optional</strong> if all subtypes live in the same file — the
+      compiler infers the list:
+      <pre><code class="java">sealed interface Expr { }              // permits inferred below
 record Num(int v) implements Expr { }
 record Add(Expr l, Expr r) implements Expr { }</code></pre>
     </li>
-    <li>Every permitted subtype must <strong>directly extend/implement</strong> the sealed type.</li>
-    <li>Records are implicitly <code>final</code>, so they fit permitted lists perfectly.</li>
+    <li>Every permitted subtype must <strong>directly</strong> extend/implement the sealed type.</li>
+    <li>Records are implicitly <code>final</code>, so they slot into <code>permits</code> lists perfectly.</li>
   </ul>
 
-  <h2>The payoff: exhaustive switches</h2>
-  <p>Because the compiler knows every subtype, a <code>switch</code> over a sealed type needs
-  <strong>no <code>default</code></strong> — and if you later add a subtype, every switch that didn't
-  handle it fails to compile. Compile-time safety instead of a silent runtime bug.</p>
+  <!-- ============================================================ -->
+  <h2 id="exhaustive">4 · The payoff: exhaustive switch</h2>
+  <p>Because the compiler knows every subtype, a <code>switch</code> needs <strong>no
+  <code>default</code></strong>. Add a new subtype later and every non-exhaustive switch
+  <em>fails to compile</em> — a compile-time to-do list instead of a production incident.</p>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before — needs default, misses new cases silently</div>
+    <div class="before"><div class="ba-label">Legacy — default + runtime failure</div>
       <pre><code class="java">double area(Shape s) {
-  if (s instanceof Circle c) return Math.PI*c.r()*c.r();
+  if (s instanceof Circle c)  return Math.PI*c.r()*c.r();
   if (s instanceof Square sq) return sq.side()*sq.side();
-  throw new IllegalStateException("unknown shape"); // runtime!
+  // forgot Rectangle...
+  throw new IllegalStateException("unknown shape");  // 💥 at runtime
 }</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After — exhaustive, checked at compile time</div>
+    <div class="after"><div class="ba-label">Sealed — exhaustive, checked at compile time</div>
       <pre><code class="java">double area(Shape s) {
-  return switch (s) {              // no default needed
-    case Circle c      -> Math.PI * c.r() * c.r();
-    case Square sq     -> sq.side() * sq.side();
-    case Rectangle r   -> r.w() * r.h();
+  return switch (s) {                 // no default
+    case Circle c    -> Math.PI * c.r() * c.r();
+    case Square sq   -> sq.side() * sq.side();
+    case Rectangle r -> r.w() * r.h();
+  };
+  // add a new Shape → this won't compile until you handle it
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="adt">5 · Sealed + records = algebraic data types</h2>
+  <p>The killer combination: model a closed set of cases as sealed records, then <code>switch</code>
+  over them with destructuring. This is the modern, type-safe replacement for the Visitor pattern.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — Visitor pattern (lots of ceremony)</div>
+      <pre><code class="java">interface Node { &lt;R&gt; R accept(Visitor&lt;R&gt; v); }
+interface Visitor&lt;R&gt; { R visitNum(Num n); R visitAdd(Add a); }
+final class Num implements Node {
+  final int v; Num(int v){this.v=v;}
+  public &lt;R&gt; R accept(Visitor&lt;R&gt; v){ return v.visitNum(this); }
+}
+// ...Add, plus a Visitor impl per operation. Verbose.</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Sealed records + switch</div>
+      <pre><code class="java">sealed interface Node permits Num, Add {}
+record Num(int v)          implements Node {}
+record Add(Node l, Node r) implements Node {}
+
+int eval(Node n) {
+  return switch (n) {
+    case Num(int v)          -> v;
+    case Add(Node l, Node r) -> eval(l) + eval(r);
   };
 }</code></pre>
     </div>
   </div>
 
-  <div class="tip"><strong>Sealed + records + pattern matching = "algebraic data types".</strong>
-  Model a closed set of cases as sealed records, then <code>switch</code> over them exhaustively —
-  the modern, type-safe alternative to the visitor pattern. See
-  <a href="#pg-topics-pattern-matching-switch-html">Pattern matching</a>.</div>
+  <!-- ============================================================ -->
+  <h2 id="vs">6 · Sealed vs enum vs abstract class</h2>
+  <table class="data">
+    <tr><th></th><th><code>enum</code></th><th>Sealed hierarchy</th><th>Open <code>abstract</code></th></tr>
+    <tr><td>Fixed set of…</td><td>singleton constants</td><td>types (each with its own data)</td><td>nothing fixed</td></tr>
+    <tr><td>Per-case data</td><td>same shape for all</td><td>different fields per subtype</td><td>free</td></tr>
+    <tr><td>Exhaustive switch</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Use when</td><td>a small enumeration of values</td><td>a closed set of variant shapes</td><td>an extensible framework type</td></tr>
+  </table>
+  <div class="tip">Think of a sealed hierarchy as an "<strong>enum of types</strong>": like an enum it's
+  a closed set the compiler can exhaustively check, but each member can be a distinct record with its
+  own fields.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">7 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>Subtype in another module/package</td><td>Not allowed unless same module (same package for unnamed module).</td></tr>
+    <tr><td>Forgetting each subtype needs a modifier</td><td>Every permitted subtype must be <code>final</code>, <code>sealed</code>, or <code>non-sealed</code> — the compiler enforces it.</td></tr>
+    <tr><td>Adding <code>default</code> "just in case"</td><td>Kills the exhaustiveness safety net — omit it so new subtypes force a compile error.</td></tr>
+    <tr><td>Guards &amp; exhaustiveness</td><td>A <code>when</code>-guarded case doesn't count toward covering a subtype; keep an unguarded fallback for that type.</td></tr>
+    <tr><td>Public API sealing</td><td>Sealing a public type is an API contract — third parties can't extend it. Intended, but be deliberate.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">8 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Model as</th></tr>
+    <tr><td>Operation result (success/failure) without exceptions</td><td><code>sealed interface Result permits Ok, Err</code></td></tr>
+    <tr><td>UI / request state</td><td><code>Loading | Loaded(data) | Error(msg)</code></td></tr>
+    <tr><td>Payment / order state machine</td><td><code>Pending | Authorized | Captured | Refunded</code></td></tr>
+    <tr><td>Protocol / domain messages</td><td>closed set of event records</td></tr>
+    <tr><td>Expression / AST trees, JSON model</td><td>recursive sealed records</td></tr>
+  </table>
+  <h3>Worked example — a typed Result instead of exceptions</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — exceptions as control flow</div>
+      <pre><code class="java">User find(String id) {           // throws if missing
+  User u = repo.get(id);
+  if (u == null) throw new NotFoundException(id);
+  return u;
+}
+try { use(find(id)); }
+catch (NotFoundException e) { showError(e.getMessage()); }</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Sealed Result — errors are values</div>
+      <pre><code class="java">sealed interface Result&lt;T&gt; permits Ok, Err {}
+record Ok&lt;T&gt;(T value)     implements Result&lt;T&gt; {}
+record Err&lt;T&gt;(String msg) implements Result&lt;T&gt; {}
+
+Result&lt;User&gt; find(String id) {
+  User u = repo.get(id);
+  return u != null ? new Ok&lt;&gt;(u) : new Err&lt;&gt;("no user " + id);
+}
+switch (find(id)) {              // compiler enforces both cases
+  case Ok&lt;User&gt;(var user) -> use(user);
+  case Err&lt;User&gt;(var msg) -> showError(msg);
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">9 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>Sealed classes in one glance</h3>
+    <ul>
+      <li><code>sealed interface X permits A, B { }</code> — closed subtype set.</li>
+      <li>Each subtype is <code>final</code>, <code>sealed</code>, or <code>non-sealed</code>.</li>
+      <li><code>permits</code> optional when subtypes share the file; same module/package otherwise.</li>
+      <li>Enables <code>switch</code> with <strong>no <code>default</code></strong> + compile-time exhaustiveness.</li>
+      <li>Sealed + records + patterns = algebraic data types (replaces Visitor).</li>
+      <li>Great for Result types, state machines, ASTs, closed message sets.</li>
+    </ul>
+  </div>
 
   <h2>Evolution</h2>
   <table class="data">
@@ -1776,19 +1938,8 @@ record Add(Expr l, Expr r) implements Expr { }</code></pre>
     <tr><td>Java 15</td><td>1st preview (JEP 360).</td></tr>
     <tr><td>Java 16</td><td>2nd preview (JEP 397).</td></tr>
     <tr><td>Java 17</td><td><strong>Final</strong> (JEP 409).</td></tr>
-    <tr><td>Java 21</td><td>Exhaustive switch over sealed types finalised alongside switch patterns.</td></tr>
+    <tr><td>Java 21</td><td>Exhaustive switch over sealed types finalised with switch patterns.</td></tr>
   </table>
-
-  <div class="cheat">
-    <h3>Cheat card</h3>
-    <ul>
-      <li><code>sealed interface X permits A, B { }</code> — closed subtype set.</li>
-      <li>Each subtype is <code>final</code>, <code>sealed</code>, or <code>non-sealed</code>.</li>
-      <li><code>permits</code> optional when subtypes share the file.</li>
-      <li>Same module/package requirement for permitted types.</li>
-      <li>Enables <code>switch</code> with no <code>default</code> + compile-time exhaustiveness.</li>
-    </ul>
-  </div>
 </section>
 <section id="pg-topics-pattern-matching-switch-html" class="print-page">
   <p class="sec-tag">Deep dive · language</p>
