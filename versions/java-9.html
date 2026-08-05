@@ -16,6 +16,19 @@
     <strong>Flow</strong> API, and many smaller language tidy-ups.
   </p>
 
+  <div class="gotcha">
+    <strong>⚠ Migration watch-outs (8 → 9).</strong>
+    <ul>
+      <li><strong>Strong encapsulation of JDK internals</strong> — reflective access to
+        <code>sun.*</code>/internal APIs now warns (and later fails). Run
+        <code>jdeps --jdk-internals your.jar</code> first.</li>
+      <li><strong>Split packages are illegal</strong> on the module path — two JARs sharing a package break.</li>
+      <li><strong><code>_</code> is no longer a valid identifier.</strong></li>
+      <li><strong>New version string</strong> (<code>9</code>, not <code>1.9</code>) — regexes that parsed <code>1.x</code> break.</li>
+      <li>Applet API and several GC flag combinations deprecated.</li>
+    </ul>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 

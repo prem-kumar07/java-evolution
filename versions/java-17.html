@@ -20,6 +20,19 @@
   <span class="badge added">14</span> <span class="badge added">15</span>
   <span class="badge added">16</span> are included and tagged with the version that introduced them.</div>
 
+  <div class="gotcha">
+    <strong>⚠ Migration watch-outs (11 → 17).</strong>
+    <ul>
+      <li><strong>JDK internals are strongly encapsulated by default</strong> (JEP 403) — the old
+        <code>--illegal-access=permit</code> escape hatch is gone. Reflective access to internals now
+        fails; add explicit <code>--add-opens</code>/<code>--add-exports</code> only where needed.
+        Older bytecode-manipulation libs (ASM, cglib, Mockito) may need upgrading.</li>
+      <li><strong>Security Manager deprecated for removal</strong> — plan to migrate off it.</li>
+      <li><strong>RMI Activation removed</strong>; experimental AOT/JIT (Graal) compiler removed.</li>
+      <li><strong>Always-strict floating point</strong> restored — results may differ slightly from pre-17 <code>non-strictfp</code> math.</li>
+    </ul>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 

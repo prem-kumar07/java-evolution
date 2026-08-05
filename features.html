@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feature index — Java 9 → 26</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-root="./" data-page="features.html" data-title="Feature index">
+<main>
+  <p class="sec-tag">A–Z reference</p>
+  <h1>Feature index</h1>
+  <p class="lead">
+    Every notable change from Java 9 to 26 in one filterable table — what it is, when it landed,
+    whether it's final, and where to read more. Type in the box to filter.
+  </p>
+
+  <input id="feat-filter" class="nav-search" style="max-width:420px;margin:0 0 10px"
+         type="search" placeholder="Filter features… (e.g. 'record', 'switch', 'GC')">
+
+  <table class="data" id="feat-table">
+    <thead>
+      <tr><th>Feature</th><th>Introduced</th><th>Status</th><th>Category</th><th>Learn more</th></tr>
+    </thead>
+    <tbody>
+      <!-- Language -->
+      <tr><td>Modules (JPMS)</td><td>9</td><td>Final</td><td>Language / platform</td><td><a href="topics/modules-jpms.html">Modules deep-dive</a></td></tr>
+      <tr><td>Private interface methods</td><td>9</td><td>Final</td><td>Language</td><td><a href="versions/java-9.html">Java 9</a></td></tr>
+      <tr><td>Try-with-resources on effectively-final vars</td><td>9</td><td>Final</td><td>Language</td><td><a href="versions/java-9.html">Java 9</a></td></tr>
+      <tr><td><code>var</code> — local-variable type inference</td><td>10</td><td>Final</td><td>Language</td><td><a href="topics/var.html">var deep-dive</a></td></tr>
+      <tr><td><code>var</code> in lambda parameters</td><td>11</td><td>Final</td><td>Language</td><td><a href="topics/var.html">var deep-dive</a></td></tr>
+      <tr><td>Switch expressions</td><td>14</td><td>Final</td><td>Language</td><td><a href="topics/pattern-matching-switch.html">Pattern matching</a></td></tr>
+      <tr><td>Text blocks</td><td>15</td><td>Final</td><td>Language</td><td><a href="topics/text-blocks-strings.html">Text blocks</a></td></tr>
+      <tr><td>Records</td><td>16</td><td>Final</td><td>Language</td><td><a href="topics/records.html">Records deep-dive</a></td></tr>
+      <tr><td>Pattern matching for <code>instanceof</code></td><td>16</td><td>Final</td><td>Language</td><td><a href="topics/pattern-matching-switch.html">Pattern matching</a></td></tr>
+      <tr><td>Sealed classes &amp; interfaces</td><td>17</td><td>Final</td><td>Language</td><td><a href="topics/sealed-classes.html">Sealed classes</a></td></tr>
+      <tr><td>Pattern matching for <code>switch</code></td><td>21</td><td>Final</td><td>Language</td><td><a href="topics/pattern-matching-switch.html">Pattern matching</a></td></tr>
+      <tr><td>Record patterns (destructuring)</td><td>21</td><td>Final</td><td>Language</td><td><a href="topics/pattern-matching-switch.html">Pattern matching</a></td></tr>
+      <tr><td>Unnamed variables &amp; patterns <code>_</code></td><td>22</td><td>Final</td><td>Language</td><td><a href="topics/pattern-matching-switch.html">Pattern matching</a></td></tr>
+      <tr><td>Flexible constructor bodies</td><td>25</td><td>Final</td><td>Language</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+      <tr><td>Module import declarations</td><td>25</td><td>Final</td><td>Language</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+      <tr><td>Compact source files &amp; instance <code>main</code></td><td>25</td><td>Final</td><td>Language</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+      <tr><td>Primitive types in patterns</td><td>23</td><td>Preview</td><td>Language</td><td><a href="topics/pattern-matching-switch.html">Pattern matching</a></td></tr>
+
+      <!-- APIs -->
+      <tr><td>Collection factory methods (<code>List.of</code>…)</td><td>9</td><td>Final</td><td>API</td><td><a href="versions/java-9.html">Java 9</a></td></tr>
+      <tr><td>Stream <code>takeWhile</code>/<code>dropWhile</code>/<code>ofNullable</code></td><td>9</td><td>Final</td><td>API</td><td><a href="topics/streams-gatherers.html">Streams</a></td></tr>
+      <tr><td>Reactive Streams (<code>Flow</code>)</td><td>9</td><td>Final</td><td>API</td><td><a href="versions/java-9.html">Java 9</a></td></tr>
+      <tr><td><code>Optional</code> <code>ifPresentOrElse</code>/<code>or</code>/<code>stream</code></td><td>9</td><td>Final</td><td>API</td><td><a href="versions/java-9.html">Java 9</a></td></tr>
+      <tr><td>Standard HTTP Client</td><td>11</td><td>Final</td><td>API</td><td><a href="versions/java-11.html">Java 11</a></td></tr>
+      <tr><td>String <code>isBlank</code>/<code>strip</code>/<code>repeat</code>/<code>lines</code></td><td>11</td><td>Final</td><td>API</td><td><a href="topics/text-blocks-strings.html">Strings</a></td></tr>
+      <tr><td><code>Files.readString</code>/<code>writeString</code></td><td>11</td><td>Final</td><td>API</td><td><a href="versions/java-11.html">Java 11</a></td></tr>
+      <tr><td><code>Collectors.teeing</code></td><td>12</td><td>Final</td><td>API</td><td><a href="versions/java-17.html">Java 17</a></td></tr>
+      <tr><td><code>Stream.toList()</code> / <code>mapMulti</code></td><td>16</td><td>Final</td><td>API</td><td><a href="topics/streams-gatherers.html">Streams</a></td></tr>
+      <tr><td><code>HexFormat</code></td><td>17</td><td>Final</td><td>API</td><td><a href="versions/java-17.html">Java 17</a></td></tr>
+      <tr><td>Enhanced pseudorandom generators</td><td>17</td><td>Final</td><td>API</td><td><a href="versions/java-17.html">Java 17</a></td></tr>
+      <tr><td>Sequenced collections</td><td>21</td><td>Final</td><td>API</td><td><a href="versions/java-21.html">Java 21</a></td></tr>
+      <tr><td>Foreign Function &amp; Memory API</td><td>22</td><td>Final</td><td>API</td><td><a href="topics/ffm-api.html">FFM deep-dive</a></td></tr>
+      <tr><td>Stream Gatherers</td><td>24</td><td>Final</td><td>API</td><td><a href="topics/streams-gatherers.html">Gatherers</a></td></tr>
+      <tr><td>Class-File API</td><td>24</td><td>Final</td><td>API</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+      <tr><td>Key Derivation Function (KDF) API</td><td>25</td><td>Final</td><td>API / crypto</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+      <tr><td>Post-quantum crypto (ML-KEM, ML-DSA)</td><td>24</td><td>Final</td><td>API / crypto</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+      <tr><td>HTTP/3 for HTTP Client</td><td>26</td><td>Final</td><td>API</td><td><a href="versions/java-26.html">Java 26</a></td></tr>
+      <tr><td>Scoped values</td><td>25</td><td>Final</td><td>Concurrency</td><td><a href="topics/scoped-values.html">Scoped values</a></td></tr>
+      <tr><td>Virtual threads</td><td>21</td><td>Final</td><td>Concurrency</td><td><a href="topics/virtual-threads.html">Virtual threads</a></td></tr>
+      <tr><td>Structured concurrency</td><td>21</td><td>Preview</td><td>Concurrency</td><td><a href="topics/structured-concurrency.html">Structured concurrency</a></td></tr>
+      <tr><td>Stable values / Lazy constants</td><td>25</td><td>Preview</td><td>API</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+      <tr><td>Vector API (SIMD)</td><td>16</td><td>Incubator</td><td>API</td><td><a href="quickstart.html">Incubator how-to</a></td></tr>
+
+      <!-- Tooling -->
+      <tr><td>JShell (REPL)</td><td>9</td><td>Final</td><td>Tooling</td><td><a href="quickstart.html">Quick start</a></td></tr>
+      <tr><td><code>jlink</code> custom runtimes</td><td>9</td><td>Final</td><td>Tooling</td><td><a href="topics/modules-jpms.html">Modules</a></td></tr>
+      <tr><td>Multi-release JARs</td><td>9</td><td>Final</td><td>Tooling</td><td><a href="versions/java-9.html">Java 9</a></td></tr>
+      <tr><td>Flight Recorder (JFR) built-in</td><td>11</td><td>Final</td><td>Tooling</td><td><a href="versions/java-11.html">Java 11</a></td></tr>
+      <tr><td>Run single-file source (<code>java File.java</code>)</td><td>11</td><td>Final</td><td>Tooling</td><td><a href="quickstart.html">Quick start</a></td></tr>
+      <tr><td>Helpful NullPointerExceptions</td><td>14</td><td>Final</td><td>Tooling</td><td><a href="versions/java-17.html">Java 17</a></td></tr>
+      <tr><td><code>jpackage</code> native installers</td><td>16</td><td>Final</td><td>Tooling</td><td><a href="versions/java-17.html">Java 17</a></td></tr>
+      <tr><td>Simple Web Server (<code>jwebserver</code>)</td><td>18</td><td>Final</td><td>Tooling</td><td><a href="versions/java-21.html">Java 21</a></td></tr>
+      <tr><td>Code snippets in Javadoc (<code>@snippet</code>)</td><td>18</td><td>Final</td><td>Tooling</td><td><a href="versions/java-21.html">Java 21</a></td></tr>
+      <tr><td>Launch multi-file source programs</td><td>22</td><td>Final</td><td>Tooling</td><td><a href="quickstart.html">Quick start</a></td></tr>
+      <tr><td>Markdown in Javadoc</td><td>23</td><td>Final</td><td>Tooling</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+      <tr><td>AOT class loading / caching (Project Leyden)</td><td>24</td><td>Final</td><td>Tooling / startup</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+
+      <!-- JVM / GC / platform -->
+      <tr><td>G1 as default GC</td><td>9</td><td>Final</td><td>JVM / GC</td><td><a href="versions/java-9.html">Java 9</a></td></tr>
+      <tr><td>Compact Strings</td><td>9</td><td>Final</td><td>JVM</td><td><a href="versions/java-9.html">Java 9</a></td></tr>
+      <tr><td>ZGC (low-latency GC)</td><td>11</td><td>Final</td><td>JVM / GC</td><td><a href="versions/java-11.html">Java 11</a></td></tr>
+      <tr><td>ZGC / Shenandoah production-ready</td><td>15</td><td>Final</td><td>JVM / GC</td><td><a href="versions/java-17.html">Java 17</a></td></tr>
+      <tr><td>UTF-8 as default charset</td><td>18</td><td>Final</td><td>JVM / platform</td><td><a href="versions/java-21.html">Java 21</a></td></tr>
+      <tr><td>Generational ZGC</td><td>21</td><td>Final</td><td>JVM / GC</td><td><a href="versions/java-21.html">Java 21</a></td></tr>
+      <tr><td>Virtual threads no longer pin on <code>synchronized</code></td><td>24</td><td>Final</td><td>JVM</td><td><a href="topics/virtual-threads.html">Virtual threads</a></td></tr>
+      <tr><td>Compact object headers</td><td>25</td><td>Final</td><td>JVM / memory</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+      <tr><td>Generational Shenandoah</td><td>25</td><td>Final</td><td>JVM / GC</td><td><a href="versions/java-25.html">Java 25</a></td></tr>
+      <tr><td>"final means final" integrity</td><td>26</td><td>Ongoing</td><td>JVM / integrity</td><td><a href="versions/java-26.html">Java 26</a></td></tr>
+    </tbody>
+  </table>
+  <p id="feat-count" class="lead" style="font-size:.9rem"></p>
+
+</main>
+<script src="assets/nav.js"></script>
+<script src="assets/highlight.js"></script>
+<script>
+(function () {
+  var input = document.getElementById('feat-filter');
+  var rows = Array.prototype.slice.call(
+    document.querySelectorAll('#feat-table tbody tr'));
+  var count = document.getElementById('feat-count');
+  function update() {
+    var q = input.value.toLowerCase();
+    var shown = 0;
+    rows.forEach(function (r) {
+      var hit = r.textContent.toLowerCase().indexOf(q) >= 0;
+      r.style.display = hit ? '' : 'none';
+      if (hit) shown++;
+    });
+    count.textContent = shown + ' of ' + rows.length + ' features';
+  }
+  input.addEventListener('input', update);
+  update();
+})();
+</script>
+</body>
+</html>

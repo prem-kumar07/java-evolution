@@ -19,6 +19,17 @@
   <div class="note"><strong>Non-LTS.</strong> Java 26 is a 6-month feature release. Production teams on
   LTS should track these as <em>previews of what's coming</em>; the next LTS will consolidate them.</div>
 
+  <div class="gotcha">
+    <strong>⚠ Migration watch-outs (25 → 26).</strong>
+    <ul>
+      <li><strong>"final means final"</strong> (JEP 500) — libraries that mutate <code>final</code>
+        fields via <code>setAccessible</code> now warn and will later fail. Watch older serialization,
+        mocking and dependency-injection frameworks.</li>
+      <li><strong>Applet API removed</strong> <span class="badge removed">Removed</span> — any lingering applet code will not compile/run.</li>
+      <li><strong>Preparing to restrict JNI</strong> — native access continues to tighten; expect to pass <code>--enable-native-access</code>.</li>
+    </ul>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 

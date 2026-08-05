@@ -15,7 +15,9 @@
   var SITEMAP = [
     { title: "Start here", items: [
       { href: "index.html", label: "Home / Overview" },
-      { href: "quickstart.html", label: "Quick start & tooling" }
+      { href: "quickstart.html", label: "Quick start & tooling" },
+      { href: "features.html", label: "Feature index (A–Z)" },
+      { href: "print.html", label: "Print / all-in-one" }
     ]},
     { title: "By version", items: [
       { href: "versions/java-9.html",  label: "Java 9" },
@@ -130,6 +132,21 @@
   left.appendChild(crumbs);
   topbar.appendChild(left);
 
+  /* ---------- global content search (topbar) ---------- */
+  var searchWrap = document.createElement("div");
+  searchWrap.className = "gsearch-wrap";
+  var gsearch = document.createElement("input");
+  gsearch.className = "gsearch";
+  gsearch.type = "search";
+  gsearch.placeholder = "Search all pages…  ( / )";
+  gsearch.setAttribute("aria-label", "Search all pages");
+  var results = document.createElement("div");
+  results.className = "gsearch-results";
+  results.style.display = "none";
+  searchWrap.appendChild(gsearch);
+  searchWrap.appendChild(results);
+  topbar.appendChild(searchWrap);
+
   var themeBtn = document.createElement("button");
   themeBtn.className = "theme-toggle";
   function themeLabel() {
@@ -159,6 +176,140 @@
   nav.addEventListener("click", function (e) {
     if (e.target.tagName === "A") sidebar.classList.remove("open");
   });
+
+  /* ---------- load the search index (offline-safe, no fetch) ---------- */
+  var idxScript = document.createElement("script");
+  idxScript.src = root + "assets/search-index.js";
+  document.head.appendChild(idxScript);
+
+  /* ---------- content search behaviour ---------- */
+  var activeIdx = -1;
+
+  function scoreEntry(e, terms) {
+    var hay = (e.title + " " + e.headings.join(" ") + " " + e.text).toLowerCase();
+    var score = 0;
+    for (var i = 0; i < terms.length; i++) {
+      var t = terms[i];
+      if (!t) continue;
+      if (e.title.toLowerCase().indexOf(t) >= 0) score += 10;
+      if (e.headings.join(" ").toLowerCase().indexOf(t) >= 0) score += 4;
+      var pos = hay.indexOf(t);
+      if (pos < 0) return -1;         // every term must appear somewhere
+      score += 1;
+    }
+    return score;
+  }
+
+  function snippet(e, term) {
+    var text = e.text, low = text.toLowerCase(), pos = term ? low.indexOf(term) : -1;
+    if (pos < 0) return text.slice(0, 90) + "…";
+    var start = Math.max(0, pos - 35);
+    var frag = (start > 0 ? "…" : "") + text.slice(start, pos + 55) + "…";
+    return frag;
+  }
+
+  function renderResults(q) {
+    var idx = window.SEARCH_INDEX || [];
+    var terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+    results.innerHTML = "";
+    activeIdx = -1;
+    if (!terms.length) { results.style.display = "none"; return; }
+    var scored = [];
+    idx.forEach(function (e) {
+      var s = scoreEntry(e, terms);
+      if (s >= 0) scored.push({ e: e, s: s });
+    });
+    scored.sort(function (a, b) { return b.s - a.s; });
+    scored = scored.slice(0, 12);
+    if (!scored.length) {
+      results.innerHTML = '<div class="gsearch-empty">No matches</div>';
+      results.style.display = "block";
+      return;
+    }
+    scored.forEach(function (item, i) {
+      var a = document.createElement("a");
+      a.href = root + item.e.url;
+      a.className = "gsearch-item";
+      a.setAttribute("data-i", i);
+      a.innerHTML = '<span class="gsearch-title">' + escapeHtml(item.e.title) + "</span>" +
+                    '<span class="gsearch-snip">' + escapeHtml(snippet(item.e, terms[0])) + "</span>";
+      results.appendChild(a);
+    });
+    results.style.display = "block";
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function moveActive(delta) {
+    var items = results.querySelectorAll(".gsearch-item");
+    if (!items.length) return;
+    if (activeIdx >= 0) items[activeIdx].classList.remove("active");
+    activeIdx = (activeIdx + delta + items.length) % items.length;
+    items[activeIdx].classList.add("active");
+    items[activeIdx].scrollIntoView({ block: "nearest" });
+  }
+
+  gsearch.addEventListener("input", function () { renderResults(gsearch.value); });
+  gsearch.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowDown") { e.preventDefault(); moveActive(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); moveActive(-1); }
+    else if (e.key === "Enter") {
+      var items = results.querySelectorAll(".gsearch-item");
+      var pick = items[activeIdx >= 0 ? activeIdx : 0];
+      if (pick) location.href = pick.href;
+    } else if (e.key === "Escape") { gsearch.value = ""; renderResults(""); gsearch.blur(); }
+  });
+  document.addEventListener("click", function (e) {
+    if (!searchWrap.contains(e.target)) results.style.display = "none";
+  });
+
+  /* '/' focuses search (unless already typing in a field) */
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) {
+      e.preventDefault();
+      gsearch.focus();
+    }
+  });
+
+  /* ---------- copy-to-clipboard buttons on code blocks ---------- */
+  (main ? main.querySelectorAll("pre") : []).forEach(function (pre) {
+    pre.classList.add("has-copy");
+    var btn = document.createElement("button");
+    btn.className = "copy-btn";
+    btn.type = "button";
+    btn.textContent = "Copy";
+    btn.addEventListener("click", function () {
+      var code = pre.querySelector("code");
+      var text = code ? code.textContent : pre.textContent;
+      var done = function () { btn.textContent = "Copied!"; setTimeout(function () { btn.textContent = "Copy"; }, 1200); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+      } else { fallbackCopy(text); done(); }
+    });
+    pre.appendChild(btn);
+  });
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  /* ---------- back-to-top button ---------- */
+  var toTop = document.createElement("button");
+  toTop.className = "to-top";
+  toTop.setAttribute("aria-label", "Back to top");
+  toTop.innerHTML = "↑";
+  toTop.style.display = "none";
+  toTop.onclick = function () { window.scrollTo({ top: 0, behavior: "smooth" }); };
+  document.body.appendChild(toTop);
+  window.addEventListener("scroll", function () {
+    var y = window.scrollY || document.documentElement.scrollTop;
+    toTop.style.display = y > 400 ? "block" : "none";
+  }, { passive: true });
 
   /* prev / next footer navigation */
   var flat = [];

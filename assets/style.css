@@ -316,7 +316,81 @@ kbd {
   border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px;
 }
 
+/* ---------- Global search (topbar) ---------- */
+.gsearch-wrap { position: relative; flex: 1 1 auto; max-width: 440px; margin: 0 16px; }
+.gsearch {
+  width: 100%;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-alt);
+  color: var(--text);
+  font-size: .9rem;
+}
+.gsearch:focus { outline: none; border-color: var(--accent); background: var(--bg); }
+.gsearch-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  max-height: 60vh;
+  overflow-y: auto;
+  z-index: 60;
+  padding: 6px;
+}
+.gsearch-item {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text);
+}
+.gsearch-item:hover, .gsearch-item.active { background: var(--accent-soft); }
+.gsearch-title { display: block; font-weight: 600; color: var(--accent); font-size: .9rem; }
+.gsearch-snip { display: block; font-size: .8rem; color: var(--text-soft); margin-top: 2px; }
+.gsearch-empty { padding: 12px; color: var(--text-soft); font-size: .9rem; }
+
+/* ---------- Copy buttons on code ---------- */
+pre.has-copy { position: relative; }
+.copy-btn {
+  position: absolute;
+  top: 8px; right: 8px;
+  padding: 3px 9px;
+  font-size: .72rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-soft);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+pre.has-copy:hover .copy-btn, .copy-btn:focus { opacity: 1; }
+.copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- Back to top ---------- */
+.to-top {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  z-index: 40;
+}
+.to-top:hover { filter: brightness(1.1); }
+
 /* ---------- Mobile ---------- */
+@media (max-width: 680px) {
+  .gsearch-wrap { display: none; }   /* keep the topbar clean on small screens */
+}
 @media (max-width: 900px) {
   #sidebar {
     position: fixed; left: 0; top: 0; z-index: 50;

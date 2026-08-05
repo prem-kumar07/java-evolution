@@ -19,6 +19,21 @@
   <span class="badge added">18</span> <span class="badge added">19</span>
   <span class="badge added">20</span> are included and tagged.</div>
 
+  <div class="gotcha">
+    <strong>⚠ Migration watch-outs (17 → 21).</strong>
+    <ul>
+      <li><strong>UTF-8 is the default charset</strong> <span class="badge added">since 18</span> —
+        code that relied on the platform default (file reads/writes, <code>new String(bytes)</code>)
+        can change behaviour. Set charsets explicitly.</li>
+      <li><strong>Virtual-thread pinning:</strong> on 21–23, blocking inside a <code>synchronized</code>
+        block pins the carrier thread and can starve the pool. Prefer <code>ReentrantLock</code> around
+        blocking I/O (fixed in 24).</li>
+      <li><strong>Dynamic loading of agents warns</strong> — attaching agents at runtime is on the way to being disallowed.</li>
+      <li><strong>Finalization deprecated for removal</strong> <span class="badge added">18</span> — migrate to <code>Cleaner</code>.</li>
+      <li><strong>String templates</strong> that you may have tried in 21 previews were later withdrawn — don't depend on them.</li>
+    </ul>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 

@@ -20,6 +20,19 @@
   <span class="badge added">22</span> <span class="badge added">23</span>
   <span class="badge added">24</span> are included and tagged.</div>
 
+  <div class="gotcha">
+    <strong>⚠ Migration watch-outs (21 → 25).</strong>
+    <ul>
+      <li><strong>Security Manager permanently disabled</strong> <span class="badge added">24</span> —
+        <code>System.setSecurityManager</code> now throws. Any code still using it must be reworked.</li>
+      <li><strong><code>sun.misc.Unsafe</code> memory-access methods warn</strong> and are being removed —
+        migrate to the <a href="../topics/ffm-api.html">FFM API</a> / <code>VarHandle</code>.</li>
+      <li><strong>32-bit x86 port removed</strong> — no more 32-bit Linux/Windows JDK builds.</li>
+      <li><strong>Compact object headers</strong> change object sizes — tools that assume the old header layout may need updating (opt-in on 24, default-capable on 25).</li>
+      <li>Upside: <strong>virtual threads no longer pin on <code>synchronized</code></strong> — safe to drop the 21-era <code>ReentrantLock</code> workarounds.</li>
+    </ul>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 

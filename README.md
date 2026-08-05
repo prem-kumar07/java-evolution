@@ -18,6 +18,8 @@ start index.html         # Windows
 ```
 index.html            Overview + release timeline + links to everything
 quickstart.html       Install JDKs, switch versions, JShell, preview/incubator, single-file launch
+features.html         A–Z filterable feature index (feature → version → status → link)
+print.html            All-in-one, print/PDF-friendly build (generated)
 
 versions/             One page per stepping-stone release (5 sections + before/after each)
   java-9.html         Modules, JShell, collection factories, Flow
@@ -33,9 +35,29 @@ topics/               Deep-dive pages
 
 assets/
   style.css           Light/dark theme, responsive layout
-  nav.js              Sidebar/topbar, theme toggle, search filter (built from one sitemap)
+  nav.js              Sidebar/topbar, theme toggle, global content search, copy buttons,
+                      back-to-top, '/' shortcut (all built from one sitemap)
   highlight.js        Tiny self-contained Java syntax highlighter (no CDN)
+  search-index.js     Generated content index for offline search
+
+build.py              Regenerates search-index.js + print.html from the pages
 ```
+
+## Rebuilding the generated files
+
+After editing any page, regenerate the search index and the print bundle:
+
+```bash
+python3 build.py     # stdlib only, no dependencies
+```
+
+## Extra features
+
+- **Global search** — the top-bar box searches all page content (titles, headings, code).
+  Press <kbd>/</kbd> to focus it; use ↑/↓ and Enter to navigate results.
+- **Copy buttons** appear on every code block (hover to reveal).
+- **Migration watch-outs** — each version page flags real upgrade breakage.
+- **Back-to-top** button appears once you scroll.
 
 ## Conventions
 

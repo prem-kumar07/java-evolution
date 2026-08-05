@@ -18,6 +18,19 @@
   <div class="note"><strong>Folded in:</strong> features from <span class="badge added">Java 10</span>
   are included here and tagged, since 10 was a non-LTS stepping-stone.</div>
 
+  <div class="gotcha">
+    <strong>⚠ Migration watch-outs (8 → 11).</strong>
+    <ul>
+      <li><strong>Java EE &amp; CORBA modules removed</strong> — <code>java.xml.bind</code> (JAXB),
+        <code>java.xml.ws</code> (JAX-WS), <code>java.activation</code>, <code>java.corba</code> are
+        gone. Add them as explicit Maven/Gradle dependencies. This is the #1 upgrade break from 8.</li>
+      <li><strong>JavaFX is no longer bundled</strong> — use OpenJFX as a separate dependency.</li>
+      <li><strong>Nashorn JavaScript engine deprecated</strong> (removed in 15).</li>
+      <li><strong>No more JRE / Server JRE</strong> downloads — ship a runtime with <code>jlink</code>.</li>
+      <li>Single JDK: Oracle JDK and OpenJDK are functionally identical (licensing differs).</li>
+    </ul>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 
