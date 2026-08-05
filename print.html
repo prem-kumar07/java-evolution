@@ -52,7 +52,7 @@
 <a href="#pg-topics-structured-concurrency-html">Structured concurrency — complete guide</a>
 <a href="#pg-topics-scoped-values-html">Scoped values — complete guide</a>
 <a href="#pg-topics-streams-gatherers-html">Streams &amp; Gatherers — complete guide</a>
-<a href="#pg-topics-ffm-api-html">Foreign Function &amp; Memory API</a>
+<a href="#pg-topics-ffm-api-html">Foreign Function &amp; Memory API — complete guide</a>
 </div>
 <section id="pg-quickstart-html" class="print-page">
   <p class="sec-tag">Set up your machine</p>
@@ -3973,34 +3973,95 @@ if (!batch.isEmpty()) repo.insertAll(batch);   // don't forget the tail!</code><
   </table>
 </section>
 <section id="pg-topics-ffm-api-html" class="print-page">
-  <p class="sec-tag">Deep dive · API</p>
-  <h1>Foreign Function &amp; Memory API <span class="badge added">Java 22</span></h1>
+  <p class="sec-tag">Deep dive · API · complete guide</p>
+  <h1>Foreign Function &amp; Memory API <span class="badge added">Final in Java 22</span></h1>
   <p class="lead">
-    The FFM API lets pure Java <strong>call native (C) functions</strong> and <strong>access off-heap
-    memory</strong> safely and without writing any C glue. It's the modern, supported replacement for
-    JNI and the old <code>sun.misc.Unsafe</code> tricks.
+    The FFM API lets pure Java <strong>call native (C) functions</strong> and <strong>manage off-heap
+    memory</strong> safely, with no hand-written C glue. It's the modern, supported replacement for JNI
+    and the <code>sun.misc.Unsafe</code> memory tricks.
   </p>
 
-  <h2>Why it replaces JNI</h2>
+  <div class="hero-stats">
+    <div class="stat"><span class="num">0</span><span class="lbl">lines of JNI / C glue</span></div>
+    <div class="stat"><span class="num">safe</span><span class="lbl">bounded, typed off-heap memory</span></div>
+    <div class="stat"><span class="num">deterministic</span><span class="lbl">memory free via <code>Arena</code></span></div>
+    <div class="stat"><span class="num">jextract</span><span class="lbl">auto-generate bindings from headers</span></div>
+    <div class="stat"><span class="num">Java 22</span><span class="lbl">final (incubating since 14/17)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Talking to native code meant JNI — hand-written C, compiled per platform, easy to crash the JVM —
+    and off-heap memory meant the unsafe, leak-prone <code>sun.misc.Unsafe</code>. FFM replaces both
+    with a typed, bounds-checked, pure-Java API where memory has an explicit, deterministic lifetime.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#why">1. Why it replaces JNI</a>
+    <a href="#overview">2. The two halves &amp; call flow</a>
+    <a href="#memory">3. Off-heap memory (Arena)</a>
+    <a href="#downcall">4. Calling native functions</a>
+    <a href="#upcall">5. Upcalls (callbacks)</a>
+    <a href="#jextract">6. jextract — auto bindings</a>
+    <a href="#access">7. Native-access restrictions</a>
+    <a href="#pitfalls">8. Pitfalls</a>
+    <a href="#realworld">9. Real-world use cases</a>
+    <a href="#cheat">10. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="why">1 · Why it replaces JNI</h2>
   <table class="data">
     <tr><th></th><th>JNI (old)</th><th>FFM (Java 22+)</th></tr>
     <tr><td>Native glue</td><td>Hand-written C, compiled per platform</td><td>None — pure Java</td></tr>
-    <tr><td>Safety</td><td>Easy to crash the JVM</td><td>Bounded, typed, lifetime-checked memory</td></tr>
+    <tr><td>Safety</td><td>Easy to crash the JVM</td><td>Bounds- &amp; lifetime-checked</td></tr>
     <tr><td>Memory</td><td><code>Unsafe</code>, manual, leak-prone</td><td><code>Arena</code> with deterministic release</td></tr>
-    <tr><td>Ergonomics</td><td>Boilerplate-heavy</td><td>Fluent method handles + layouts</td></tr>
+    <tr><td>Ergonomics</td><td>Boilerplate-heavy</td><td>Method handles + layouts</td></tr>
+    <tr><td>Bindings</td><td>Write by hand</td><td>Generate with <code>jextract</code></td></tr>
   </table>
 
-  <h2>Two halves of the API</h2>
-  <h3>1 · Off-heap memory: <code>Arena</code> &amp; <code>MemorySegment</code></h3>
+  <!-- ============================================================ -->
+  <h2 id="overview">2 · The two halves &amp; call flow</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 210" role="img" aria-label="Java calls native functions via a downcall handle and receives callbacks via an upcall stub; Arena manages off-heap memory shared with native code">
+      <defs>
+        <marker id="ffA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="40" y="60" width="220" height="90" rx="10" class="dg-accent"/>
+      <text x="150" y="90"  text-anchor="middle" class="dg-text">Java code</text>
+      <text x="150" y="112" text-anchor="middle" class="dg-soft">MethodHandle</text>
+      <text x="150" y="130" text-anchor="middle" class="dg-soft">MemorySegment</text>
+
+      <rect x="500" y="60" width="220" height="90" rx="10" class="dg-box"/>
+      <text x="610" y="90"  text-anchor="middle" class="dg-text">Native library (C)</text>
+      <text x="610" y="112" text-anchor="middle" class="dg-soft">.so / .dylib / .dll</text>
+
+      <line x1="262" y1="88" x2="498" y2="88" class="dg-line" marker-end="url(#ffA)"/>
+      <text x="380" y="78" text-anchor="middle" class="dg-soft">downcall (Linker) → call C fn</text>
+      <line x1="498" y1="128" x2="262" y2="128" class="dg-line" marker-end="url(#ffA)"/>
+      <text x="380" y="148" text-anchor="middle" class="dg-soft">upcall (stub) ← C calls back into Java</text>
+
+      <rect x="300" y="170" width="160" height="30" rx="8" class="dg-good-box"/>
+      <text x="380" y="190" text-anchor="middle" class="dg-text-sm">Arena → off-heap memory</text>
+    </svg>
+    <figcaption>Two halves: <strong>Linker + downcall handles</strong> call native functions;
+    <strong>upcall stubs</strong> let native code call back into Java. Shared off-heap memory is
+    allocated and freed through an <strong>Arena</strong>.</figcaption>
+  </figure>
+
+  <!-- ============================================================ -->
+  <h2 id="memory">3 · Off-heap memory: <code>Arena</code> &amp; <code>MemorySegment</code></h2>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before — ByteBuffer / Unsafe</div>
+    <div class="before"><div class="ba-label">Legacy — ByteBuffer / Unsafe</div>
       <pre><code class="java">ByteBuffer buf = ByteBuffer.allocateDirect(16)
     .order(ByteOrder.nativeOrder());
 buf.putInt(0, 42);
 int v = buf.getInt(0);
-// no explicit lifetime; freeing is up to the GC/cleaner</code></pre>
+// no explicit lifetime; freed whenever the GC/cleaner gets to it</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After — Arena + MemorySegment</div>
+    <div class="after"><div class="ba-label">Arena + MemorySegment</div>
       <pre><code class="java">try (Arena arena = Arena.ofConfined()) {
   MemorySegment seg = arena.allocate(ValueLayout.JAVA_INT, 4);
   seg.setAtIndex(ValueLayout.JAVA_INT, 0, 42);
@@ -4008,48 +4069,100 @@ int v = buf.getInt(0);
 }   // memory released deterministically here</code></pre>
     </div>
   </div>
-  <p><strong>Arena controls lifetime &amp; access:</strong> <code>ofConfined()</code> (one thread,
+  <p><strong>Arena controls lifetime &amp; sharing:</strong> <code>ofConfined()</code> (one thread,
   cheapest), <code>ofShared()</code> (many threads), <code>ofAuto()</code> (GC-managed),
   <code>global()</code> (never freed). Access after an arena closes throws instead of corrupting memory.</p>
 
-  <h3>2 · Calling native functions: <code>Linker</code> &amp; method handles</h3>
+  <!-- ============================================================ -->
+  <h2 id="downcall">4 · Calling native functions</h2>
   <pre><code class="java">// call C's  size_t strlen(const char *s);
 Linker linker = Linker.nativeLinker();
 SymbolLookup std = linker.defaultLookup();
 
 MethodHandle strlen = linker.downcallHandle(
     std.find("strlen").orElseThrow(),
-    FunctionDescriptor.of(ValueLayout.JAVA_LONG,      // return: size_t
-                          ValueLayout.ADDRESS));      // arg: char*
+    FunctionDescriptor.of(ValueLayout.JAVA_LONG,     // return: size_t
+                          ValueLayout.ADDRESS));     // arg: char*
 
 try (Arena arena = Arena.ofConfined()) {
   MemorySegment cString = arena.allocateUtf8String("hello");
-  long len = (long) strlen.invoke(cString);           // -> 5
+  long len = (long) strlen.invoke(cString);          // → 5
 }</code></pre>
 
-  <h3>Upcalls — pass a Java method as a C callback</h3>
-  <pre><code class="java">// turn a Java method into a native function pointer (e.g. for qsort's comparator)
+  <!-- ============================================================ -->
+  <h2 id="upcall">5 · Upcalls — pass a Java method as a C callback</h2>
+  <pre><code class="java">// turn a Java method into a native function pointer (e.g. qsort's comparator)
 MethodHandle cmp = MethodHandles.lookup().findStatic(
     MyCmp.class, "compare",
     MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class));
 MemorySegment cmpPtr = linker.upcallStub(cmp,
     FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS), arena);</code></pre>
 
-  <h2>jextract — generate bindings automatically</h2>
+  <!-- ============================================================ -->
+  <h2 id="jextract">6 · jextract — generate bindings automatically</h2>
   <p>For real libraries you rarely hand-write handles. The <code>jextract</code> tool reads a C header
   and generates ready-to-use Java bindings:</p>
-  <pre><code class="java">jextract --output src -t org.example.zlib \
-    -l z /usr/include/zlib.h
-// then call generated methods like zlib.compress(...)</code></pre>
+  <pre><code class="java">jextract --output src -t org.example.zlib -l z /usr/include/zlib.h
+// then call generated methods like  zlib.compress(...)</code></pre>
 
-  <h2>Gotchas</h2>
-  <ul>
-    <li><strong>Native access is restricted.</strong> Since integrity work, calling native code may
-      require <code>--enable-native-access=&lt;module&gt;</code> (or <code>ALL-UNNAMED</code>) or you'll get warnings/errors.</li>
-    <li><strong>Confined arenas are single-thread.</strong> Sharing a confined segment across threads throws — use <code>ofShared()</code>.</li>
-    <li><strong>Layouts must match the C ABI</strong> exactly (sizes, alignment, endianness). Mismatches corrupt data — prefer <code>jextract</code>.</li>
-    <li><strong>Off-heap memory isn't GC'd on the heap</strong> — the <code>Arena</code> is your allocation lifetime. Use try-with-resources.</li>
-  </ul>
+  <!-- ============================================================ -->
+  <h2 id="access">7 · Native-access restrictions</h2>
+  <p>Because native calls can crash the VM, they're a restricted operation. Enable them explicitly:</p>
+  <pre><code class="java">java --enable-native-access=com.myapp   -jar app.jar   # a module
+java --enable-native-access=ALL-UNNAMED -jar app.jar   # classpath apps
+// without it you get warnings now, errors later</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">8 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>Missing <code>--enable-native-access</code></td><td>Native calls warn/fail — grant it to the calling module.</td></tr>
+    <tr><td>Sharing a confined segment across threads</td><td>Throws — use <code>Arena.ofShared()</code>.</td></tr>
+    <tr><td>Wrong <code>ValueLayout</code> / alignment</td><td>Must match the C ABI exactly (size, alignment, endianness) — mismatches corrupt data. Prefer <code>jextract</code>.</td></tr>
+    <tr><td>Use-after-close</td><td>Touching a segment after its arena closes throws (by design) — scope with try-with-resources.</td></tr>
+    <tr><td>Off-heap memory &amp; the GC</td><td>Off-heap memory isn't heap — the <code>Arena</code> is its lifetime, not the GC.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">9 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Why FFM fits</th></tr>
+    <tr><td>Call OS/system libraries (libc, OpenSSL, sqlite)</td><td>No JNI shim; <code>jextract</code> the header.</td></tr>
+    <tr><td>High-performance native libs (BLAS, image/video codecs, ML runtimes)</td><td>Direct calls + shared off-heap buffers, no copying.</td></tr>
+    <tr><td>Memory-mapped / off-heap data structures</td><td>Typed access to large off-heap regions with safe lifetimes.</td></tr>
+    <tr><td>Replacing existing JNI bindings</td><td>Pure Java, cross-platform, safer.</td></tr>
+    <tr><td>Off-heap caches / zero-copy I/O</td><td>Big buffers outside the GC heap.</td></tr>
+  </table>
+  <h3>Worked example — read a large file off-heap without copying to the heap</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — ByteBuffer, awkward lifetime</div>
+      <pre><code class="java">try (var ch = FileChannel.open(path)) {
+  MappedByteBuffer buf = ch.map(READ_ONLY, 0, ch.size());
+  byte b = buf.get(1_000_000);
+  // buffer stays mapped until GC frees it — no explicit close
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">FFM — mapped segment with a scoped Arena</div>
+      <pre><code class="java">try (Arena arena = Arena.ofConfined();
+     var ch = FileChannel.open(path)) {
+  MemorySegment seg = ch.map(READ_ONLY, 0, ch.size(), arena);
+  byte b = seg.get(ValueLayout.JAVA_BYTE, 1_000_000);
+}   // unmapped deterministically here</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">10 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>FFM in one glance</h3>
+    <ul>
+      <li>Memory: <code>try (Arena a = Arena.ofConfined()) { a.allocate(...); }</code> — deterministic free.</li>
+      <li>Call C: <code>Linker.nativeLinker().downcallHandle(symbol, FunctionDescriptor)</code>.</li>
+      <li>Callbacks: <code>linker.upcallStub(...)</code>.</li>
+      <li>Generate bindings with <code>jextract</code>; match the C ABI via <code>ValueLayout</code>.</li>
+      <li>Grant <code>--enable-native-access</code>. Replaces JNI + <code>Unsafe</code>.</li>
+    </ul>
+  </div>
 
   <h2>Evolution</h2>
   <table class="data">
@@ -4059,17 +4172,6 @@ MemorySegment cmpPtr = linker.upcallStub(cmp,
     <tr><td>Java 19–21</td><td>Preview (JEPs 424, 434, 442).</td></tr>
     <tr><td>Java 22</td><td><strong>Final</strong> (JEP 454).</td></tr>
   </table>
-
-  <div class="cheat">
-    <h3>Cheat card</h3>
-    <ul>
-      <li>Memory: <code>try (Arena a = Arena.ofConfined()) { a.allocate(...); }</code> — deterministic free.</li>
-      <li>Call C: <code>Linker.nativeLinker().downcallHandle(symbol, FunctionDescriptor)</code>.</li>
-      <li>Callbacks: <code>linker.upcallStub(...)</code>.</li>
-      <li>Generate bindings with <code>jextract</code>; match the C ABI via <code>ValueLayout</code>.</li>
-      <li>May need <code>--enable-native-access</code>. Replaces JNI + <code>Unsafe</code>.</li>
-    </ul>
-  </div>
 </section>
 
 </div>
