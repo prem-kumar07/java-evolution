@@ -3,93 +3,191 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>var — local-variable type inference</title>
+  <title>var — complete guide</title>
   <link rel="stylesheet" href="../assets/style.css">
 </head>
 <body data-root="../" data-page="topics/var.html" data-title="var">
 <main>
-  <p class="sec-tag">Deep dive · language</p>
+  <p class="sec-tag">Deep dive · language · complete guide</p>
   <h1><code>var</code> — local-variable type inference <span class="badge added">Java 10</span></h1>
   <p class="lead">
     <code>var</code> lets the compiler infer a local variable's type from its initializer. It is
     <strong>syntactic sugar, not dynamic typing</strong> — the variable still has one fixed, static
-    type; you just don't write it out.
+    type; you simply don't write it out.
   </p>
 
-  <h2>Why it exists</h2>
-  <p>To cut noise where the type is already obvious from the right-hand side, especially with long
-  generic types. It never changes runtime behaviour or performance.</p>
+  <div class="hero-stats">
+    <div class="stat"><span class="num">static</span><span class="lbl">still fully typed (not dynamic)</span></div>
+    <div class="stat"><span class="num">0</span><span class="lbl">runtime cost — pure compile-time</span></div>
+    <div class="stat"><span class="num">locals</span><span class="lbl">only (+ lambda params in 11)</span></div>
+    <div class="stat"><span class="num">less</span><span class="lbl">boilerplate for long generics</span></div>
+    <div class="stat"><span class="num">Java 10</span><span class="lbl">(lambda params: 11)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Long generic type names had to be written twice — once on the left, once on the right —
+    (<code>Map&lt;String, List&lt;Customer&gt;&gt; m = new HashMap&lt;…&gt;()</code>), adding noise without
+    adding information. <code>var</code> removes the redundant left-hand type when it's obvious from the
+    initializer, without any change to runtime behaviour or performance.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#notdynamic">1. It's still static typing</a>
+    <a href="#where">2. Where it works</a>
+    <a href="#wherenot">3. Where it doesn't</a>
+    <a href="#gotchas">4. Rules &amp; gotchas</a>
+    <a href="#vsobject">5. var vs Object</a>
+    <a href="#style">6. Style: when to use it</a>
+    <a href="#realworld">7. Real-world examples</a>
+    <a href="#cheat">8. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="notdynamic">1 · It's still static typing</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 150" role="img" aria-label="var s = hi is inferred to String at compile time; the bytecode has String, so there is no runtime cost and no dynamic typing">
+      <defs>
+        <marker id="vrA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="30"  y="55" width="200" height="44" rx="8" class="dg-accent"/>
+      <text x="130" y="82" text-anchor="middle" class="dg-text-sm">var s = "hi";</text>
+      <rect x="300" y="55" width="200" height="44" rx="8" class="dg-box"/>
+      <text x="400" y="76" text-anchor="middle" class="dg-text-sm">compiler infers</text>
+      <text x="400" y="92" text-anchor="middle" class="dg-soft">type = String</text>
+      <rect x="570" y="55" width="170" height="44" rx="8" class="dg-good-box"/>
+      <text x="655" y="76" text-anchor="middle" class="dg-text-sm">bytecode: String</text>
+      <text x="655" y="92" text-anchor="middle" class="dg-soft">no "var", no cost</text>
+      <line x1="230" y1="77" x2="298" y2="77" class="dg-line" marker-end="url(#vrA)"/>
+      <line x1="500" y1="77" x2="568" y2="77" class="dg-line" marker-end="url(#vrA)"/>
+      <text x="380" y="130" text-anchor="middle" class="dg-soft">s = 42;  ✗ won't compile — s is a String forever</text>
+    </svg>
+    <figcaption><code>var</code> is resolved entirely at compile time. The variable's type is fixed to
+    the initializer's type; the class file looks identical to writing the type by hand.</figcaption>
+  </figure>
+
+  <!-- ============================================================ -->
+  <h2 id="where">2 · Where you can use it</h2>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
-      <pre><code class="java">ByteArrayOutputStream out = new ByteArrayOutputStream();
-Map&lt;String, List&lt;Customer&gt;&gt; byCity = new HashMap&lt;String, List&lt;Customer&gt;&gt;();
-for (Map.Entry&lt;String, List&lt;Customer&gt;&gt; e : byCity.entrySet()) { }</code></pre>
+      <pre><code class="java">Map&lt;String, List&lt;Customer&gt;&gt; byCity =
+    new HashMap&lt;String, List&lt;Customer&gt;&gt;();
+for (Map.Entry&lt;String, List&lt;Customer&gt;&gt; e : byCity.entrySet()) { }
+try (BufferedReader r = Files.newBufferedReader(path)) { }</code></pre>
     </div>
     <div class="after"><div class="ba-label">After</div>
-      <pre><code class="java">var out = new ByteArrayOutputStream();
-var byCity = new HashMap&lt;String, List&lt;Customer&gt;&gt;();
-for (var e : byCity.entrySet()) { }</code></pre>
+      <pre><code class="java">var byCity = new HashMap&lt;String, List&lt;Customer&gt;&gt;();
+for (var e : byCity.entrySet()) { }
+try (var r = Files.newBufferedReader(path)) { }
+for (var i = 0; i &lt; 10; i++) { }
+list.forEach((var s) -> print(s));   // lambda param (Java 11+)</code></pre>
     </div>
   </div>
+  <p><code>var</code> works for: local variables with an initializer, <code>for</code>/enhanced-for
+  loop variables, try-with-resources, and lambda parameters (11+).</p>
 
-  <h2>Where you can use it</h2>
-  <pre><code class="java">var x = 10;                         // local variable with initializer
-var list = List.of("a", "b");       // inferred List&lt;String&gt;
-for (var s : list) { }              // enhanced-for loop variable
-for (var i = 0; i &lt; 10; i++) { }    // classic for-loop index
-try (var in = Files.newInputStream(p)) { }   // try-with-resources
-list.forEach((var s) -> print(s));  // lambda parameter (Java 11+)</code></pre>
-
-  <h2>Where you <em>cannot</em> use it</h2>
+  <!-- ============================================================ -->
+  <h2 id="wherenot">3 · Where you cannot use it</h2>
   <div class="warn">
-    <pre><code class="java">var x;                      // ✗ no initializer — nothing to infer
-var y = null;               // ✗ null has no type
-var f = () -> 42;           // ✗ lambda needs a target type
-var arr = { 1, 2, 3 };      // ✗ array initializer needs a type
-public var field = 1;       // ✗ fields cannot use var
-var method() { }            // ✗ method return types cannot use var
-void m(var p) { }           // ✗ method parameters cannot use var</code></pre>
+    <pre><code class="java">var x;                 // ✗ no initializer — nothing to infer
+var y = null;          // ✗ null has no type
+var f = () -> 42;      // ✗ lambda needs a target type
+var arr = { 1, 2, 3 }; // ✗ array initializer needs a type
+public var field = 1;  // ✗ fields cannot use var
+var method() { }       // ✗ return types cannot use var
+void m(var p) { }      // ✗ method parameters cannot use var</code></pre>
   </div>
-  <p><code>var</code> is <strong>local variables only</strong>: locals, loop variables, try-with-resources, and lambda params.</p>
+  <p><code>var</code> is <strong>local variables only</strong> — never fields, method parameters, or return types.</p>
 
-  <h2>Rules &amp; gotchas</h2>
+  <!-- ============================================================ -->
+  <h2 id="gotchas">4 · Rules &amp; gotchas</h2>
   <ul>
-    <li><strong>It's still static typing.</strong> <code>var s = "hi";</code> makes <code>s</code> a
-      <code>String</code> forever — <code>s = 42;</code> won't compile.</li>
     <li><strong>Inferred type = the initializer's type</strong>, which may be more specific than you want:
       <pre><code class="java">var list = new ArrayList&lt;String&gt;();   // type is ArrayList&lt;String&gt;, not List&lt;String&gt;</code></pre>
-      If you need the interface type, declare it explicitly.</li>
+      Declare the interface type explicitly if that matters.</li>
     <li><strong>Diamond + var:</strong> <code>var m = new HashMap&lt;&gt;();</code> infers
-      <code>HashMap&lt;Object,Object&gt;</code> — usually not what you want. Give type args on the right.</li>
+      <code>HashMap&lt;Object,Object&gt;</code> — usually not intended. Put the type args on the right:
+      <code>var m = new HashMap&lt;String,Integer&gt;();</code></li>
     <li><strong><code>var</code> is not a keyword</strong> — it's a reserved type name, so existing
-      variables/methods named <code>var</code> still compile. You cannot name a <em>class</em> <code>var</code>.</li>
-    <li><strong>Readability:</strong> prefer it when the type is obvious from the RHS
-      (<code>new</code>, factory methods). Avoid it when the RHS hides the type
-      (e.g. <code>var result = process();</code>).</li>
+      variables/methods named <code>var</code> still compile. You just can't name a <em>class</em> <code>var</code>.</li>
+    <li><strong>No effect on generics inference elsewhere</strong> — it only names the local.</li>
   </ul>
 
-  <div class="tip">
-    <strong>var vs. <code>Object</code>:</strong> <code>var</code> keeps the precise static type (all
-    methods available); <code>Object o = ...</code> erases it (only <code>Object</code> methods).
-    They are completely different.
+  <!-- ============================================================ -->
+  <h2 id="vsobject">5 · var vs <code>Object</code></h2>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Object — erases the type</div>
+      <pre><code class="java">Object o = "hello";
+o.length();      // ✗ compile error — only Object methods available</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">var — keeps the precise type</div>
+      <pre><code class="java">var s = "hello";
+s.length();      // ✓ s is a String, all String methods available</code></pre>
+    </div>
+  </div>
+  <p>They're completely different: <code>var</code> preserves the exact static type; <code>Object</code>
+  throws it away.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="style">6 · Style: when to use it</h2>
+  <table class="data">
+    <tr><th>Use <code>var</code></th><th>Avoid <code>var</code></th></tr>
+    <tr><td>Type is obvious from the RHS (<code>new</code>, factory)</td><td>RHS hides the type (<code>var r = process();</code>)</td></tr>
+    <tr><td>Long/nested generic types</td><td>When the explicit type documents intent</td></tr>
+    <tr><td>Loop indices &amp; iteration variables</td><td>When you need an interface/supertype, not the concrete class</td></tr>
+    <tr><td>Local scratch variables with clear names</td><td>Numeric literals where the exact type matters (<code>var x = 0;</code> is <code>int</code>)</td></tr>
+  </table>
+  <div class="tip">A good variable name carries the meaning; <code>var</code> just drops the redundant
+  type. <code>var users = userRepo.findActive();</code> reads fine; <code>var x = f();</code> does not.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">7 · Real-world examples</h2>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — noisy locals in a real method</div>
+      <pre><code class="java">Map&lt;String, List&lt;Order&gt;&gt; byCustomer = orders.stream()
+    .collect(Collectors.groupingBy(Order::customerId));
+for (Map.Entry&lt;String, List&lt;Order&gt;&gt; entry : byCustomer.entrySet()) {
+  BigDecimal total = entry.getValue().stream()
+      .map(Order::amount)
+      .reduce(BigDecimal.ZERO, BigDecimal::add);
+  System.out.println(entry.getKey() + ": " + total);
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — same code, less noise</div>
+      <pre><code class="java">var byCustomer = orders.stream()
+    .collect(Collectors.groupingBy(Order::customerId));
+for (var entry : byCustomer.entrySet()) {
+  var total = entry.getValue().stream()
+      .map(Order::amount)
+      .reduce(BigDecimal.ZERO, BigDecimal::add);
+  System.out.println(entry.getKey() + ": " + total);
+}</code></pre>
+    </div>
+  </div>
+  <p>Common good fits: results of stream <code>collect</code>, JDBC/HTTP builders, try-with-resources
+  streams, and test setup with verbose generic types.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">8 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3><code>var</code> in one glance</h3>
+    <ul>
+      <li>✅ locals, for / for-each vars, try-with-resources, lambda params (11+).</li>
+      <li>❌ fields, method params/returns, no-initializer, <code>null</code>, bare lambdas/arrays.</li>
+      <li>Static type = type of the initializer. Not dynamic. No runtime cost.</li>
+      <li>Watch diamond (<code>new HashMap&lt;&gt;()</code> → <code>&lt;Object,Object&gt;</code>) and over-specific concrete types.</li>
+      <li>Use when the type is obvious from the RHS; keep an explicit type when it documents intent.</li>
+    </ul>
   </div>
 
   <h2>Evolution</h2>
   <table class="data">
-    <tr><th>Version</th><th>What changed</th></tr>
+    <tr><th>Version</th><th>Change</th></tr>
     <tr><td>Java 10</td><td><code>var</code> for local variables (JEP 286).</td></tr>
-    <tr><td>Java 11</td><td><code>var</code> allowed in lambda parameters (JEP 323) — enables annotations on them.</td></tr>
+    <tr><td>Java 11</td><td><code>var</code> in lambda parameters (JEP 323) — enables annotations on them.</td></tr>
   </table>
-
-  <div class="cheat">
-    <h3>Cheat card</h3>
-    <ul>
-      <li>✅ locals, for/for-each vars, try-with-resources, lambda params (11+)</li>
-      <li>❌ fields, method params/returns, no-initializer, <code>null</code>, bare lambdas/arrays</li>
-      <li>Static type = type of the initializer. Not dynamic. No runtime cost.</li>
-      <li>Reach for the interface type explicitly when you need it.</li>
-    </ul>
-  </div>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>
