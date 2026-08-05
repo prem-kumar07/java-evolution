@@ -349,6 +349,46 @@ kbd {
 .dg-soft      { fill: var(--text-soft); font: 12px -apple-system, sans-serif; }
 .dg-on-accent { fill: #fff; font: 12px -apple-system, sans-serif; }
 
+/* ---------- Hero stat banner (top of deep-dive pages) ---------- */
+.hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 1.4em 0 1em;
+}
+.hero-stats .stat {
+  flex: 1 1 140px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 14px 12px;
+  text-align: center;
+}
+.hero-stats .stat .num {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1.1;
+}
+.hero-stats .stat .lbl {
+  display: block;
+  font-size: .78rem;
+  color: var(--text-soft);
+  margin-top: 4px;
+}
+.solves {
+  border-left: 4px solid var(--accent);
+  background: var(--bg-alt);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 1em 0 1.6em;
+}
+.solves .solves-label {
+  font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 2px;
+}
+
 /* ---------- Numbered steps ---------- */
 ol.steps { counter-reset: step; list-style: none; padding-left: 0; }
 ol.steps > li {

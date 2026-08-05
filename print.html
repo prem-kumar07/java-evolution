@@ -43,7 +43,7 @@
 <a href="#pg-versions-java-25-html">Java 25 (LTS) — new features</a>
 <a href="#pg-versions-java-26-html">Java 26 — new features</a>
 <a href="#pg-topics-var-html">var — local-variable type inference</a>
-<a href="#pg-topics-records-html">Records — transparent data carriers</a>
+<a href="#pg-topics-records-html">Records — complete guide</a>
 <a href="#pg-topics-sealed-classes-html">Sealed classes &amp; interfaces</a>
 <a href="#pg-topics-pattern-matching-switch-html">Pattern matching &amp; switch</a>
 <a href="#pg-topics-text-blocks-strings-html">Text blocks &amp; String APIs</a>
@@ -1387,20 +1387,50 @@ void m(var p) { }           // ✗ method parameters cannot use var</code></pre>
   </div>
 </section>
 <section id="pg-topics-records-html" class="print-page">
-  <p class="sec-tag">Deep dive · language</p>
-  <h1>Records <span class="badge added">Java 16</span></h1>
+  <p class="sec-tag">Deep dive · language · complete guide</p>
+  <h1>Records <span class="badge added">Final in Java 16</span></h1>
   <p class="lead">
     A <code>record</code> is a concise, immutable, transparent carrier for a fixed set of values. You
     declare the <em>components</em>; the compiler generates the constructor, accessors,
-    <code>equals</code>, <code>hashCode</code> and <code>toString</code>.
+    <code>equals</code>, <code>hashCode</code> and <code>toString</code> — correctly, every time.
   </p>
 
-  <h2>Why it exists</h2>
-  <p>Most "data classes" are pure boilerplate that's easy to get subtly wrong (a forgotten field in
-  <code>equals</code>). Records make the boilerplate correct and automatic, and signal intent: "this
-  is just data".</p>
+  <div class="hero-stats">
+    <div class="stat"><span class="num">1 line</span><span class="lbl">replaces ~40 of boilerplate</span></div>
+    <div class="stat"><span class="num">5</span><span class="lbl">members auto-generated</span></div>
+    <div class="stat"><span class="num">100%</span><span class="lbl">immutable by default</span></div>
+    <div class="stat"><span class="num">✓</span><span class="lbl">destructurable with patterns</span></div>
+    <div class="stat"><span class="num">Java 16</span><span class="lbl">final (preview in 14)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    "Data classes" (DTOs, value objects, tuples) were almost all boilerplate — and hand-written
+    <code>equals</code>/<code>hashCode</code> are easy to get subtly wrong (forget a field and you get
+    silent bugs). Records make that boilerplate <strong>automatic and correct</strong>, and clearly
+    signal intent: <em>this type is just its data</em>.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#what">1. What is a record?</a>
+    <a href="#generated">2. What the compiler generates</a>
+    <a href="#customise">3. Customising records</a>
+    <a href="#immutable">4. Immutability &amp; defensive copies</a>
+    <a href="#patterns">5. Records + pattern matching</a>
+    <a href="#vs">6. Records vs class / enum / Lombok</a>
+    <a href="#serialization">7. Serialization</a>
+    <a href="#pitfalls">8. Pitfalls</a>
+    <a href="#realworld">9. Real-world use cases</a>
+    <a href="#cheat">10. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="what">1 · What is a record?</h2>
+  <p>You write the shape of the data in the header — the <em>record components</em> — and that's it.
+  The record is implicitly <code>final</code>, its fields are <code>final</code>, and it carries no
+  hidden state beyond those components.</p>
   <div class="ba">
-    <div class="before"><div class="ba-label">Before</div>
+    <div class="before"><div class="ba-label">Legacy — a hand-written value class</div>
       <pre><code class="java">public final class Point {
   private final int x, y;
   public Point(int x, int y) { this.x = x; this.y = y; }
@@ -1416,90 +1446,241 @@ void m(var p) { }           // ✗ method parameters cannot use var</code></pre>
   }
 }</code></pre>
     </div>
-    <div class="after"><div class="ba-label">After</div>
+    <div class="after"><div class="ba-label">Record — same thing</div>
       <pre><code class="java">public record Point(int x, int y) { }</code></pre>
     </div>
   </div>
+  <div class="tip"><strong>Easy way to think about it:</strong> a record is to a data class what
+  <code>enum</code> is to a set of constants — a special, purpose-built shorthand the compiler fills in
+  for you.</div>
 
-  <h2>What the compiler generates</h2>
+  <!-- ============================================================ -->
+  <h2 id="generated">2 · What the compiler generates</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 220" role="img" aria-label="A record header expands into a canonical constructor, accessors, equals, hashCode and toString">
+      <defs>
+        <marker id="rcA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="250" y="90" width="260" height="44" rx="8" class="dg-accent"/>
+      <text x="380" y="117" text-anchor="middle" class="dg-text-sm">record Point(int x, int y)</text>
+      <!-- generated boxes -->
+      <rect x="20"  y="16"  width="180" height="34" rx="7" class="dg-box"/>
+      <text x="110" y="38" text-anchor="middle" class="dg-text-sm">Point(int x, int y)  ctor</text>
+      <rect x="20"  y="66"  width="180" height="34" rx="7" class="dg-box"/>
+      <text x="110" y="88" text-anchor="middle" class="dg-text-sm">x() , y()  accessors</text>
+      <rect x="20"  y="170" width="180" height="34" rx="7" class="dg-box"/>
+      <text x="110" y="192" text-anchor="middle" class="dg-text-sm">equals(Object)</text>
+      <rect x="560" y="40"  width="180" height="34" rx="7" class="dg-box"/>
+      <text x="650" y="62" text-anchor="middle" class="dg-text-sm">hashCode()</text>
+      <rect x="560" y="150" width="180" height="34" rx="7" class="dg-box"/>
+      <text x="650" y="172" text-anchor="middle" class="dg-text-sm">toString()</text>
+      <line x1="250" y1="104" x2="202" y2="34"  class="dg-line" marker-end="url(#rcA)"/>
+      <line x1="250" y1="110" x2="202" y2="83"  class="dg-line" marker-end="url(#rcA)"/>
+      <line x1="250" y1="122" x2="202" y2="184" class="dg-line" marker-end="url(#rcA)"/>
+      <line x1="510" y1="106" x2="558" y2="60"  class="dg-line" marker-end="url(#rcA)"/>
+      <line x1="510" y1="120" x2="558" y2="164" class="dg-line" marker-end="url(#rcA)"/>
+    </svg>
+    <figcaption>From one header the compiler derives a canonical constructor, one accessor per
+    component (no <code>get</code> prefix), and value-based <code>equals</code>/<code>hashCode</code>/<code>toString</code>.</figcaption>
+  </figure>
   <ul>
-    <li>A <strong>canonical constructor</strong> with all components.</li>
-    <li>A <strong>public accessor</strong> per component: <code>x()</code>, <code>y()</code> (no <code>get</code> prefix).</li>
-    <li><code>equals</code> / <code>hashCode</code> based on all components.</li>
-    <li><code>toString</code> like <code>Point[x=1, y=2]</code>.</li>
-    <li>A <strong>private final field</strong> per component; the class is <code>final</code>.</li>
+    <li><strong>Canonical constructor</strong> taking all components in order.</li>
+    <li><strong>Accessors</strong> named exactly like the component: <code>x()</code>, <code>y()</code>.</li>
+    <li><strong><code>equals</code>/<code>hashCode</code></strong> comparing all components by value.</li>
+    <li><strong><code>toString</code></strong> like <code>Point[x=1, y=2]</code>.</li>
+    <li>A <code>private final</code> field per component; the class extends <code>java.lang.Record</code> and is <code>final</code>.</li>
   </ul>
 
-  <h2>Customising records</h2>
+  <!-- ============================================================ -->
+  <h2 id="customise">3 · Customising records</h2>
   <h3>Compact canonical constructor — validate / normalise</h3>
-  <pre><code class="java">public record Range(int lo, int hi) {
-  public Range {                     // no parameter list, no field assignments
-    if (lo &gt; hi) throw new IllegalArgumentException("lo &gt; hi");
-    // you may reassign params to normalise; fields are set for you afterwards
+  <p>Omit the parameter list and the field assignments; write only the checks. The fields are assigned
+  for you afterwards.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — validation in a full constructor</div>
+      <pre><code class="java">public Range(int lo, int hi) {
+  if (lo &gt; hi) throw new IllegalArgumentException();
+  this.lo = lo;
+  this.hi = hi;
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Record — compact constructor</div>
+      <pre><code class="java">public record Range(int lo, int hi) {
+  public Range {                       // no params, no assignments
+    if (lo &gt; hi) throw new IllegalArgumentException();
   }
 }</code></pre>
+    </div>
+  </div>
 
   <h3>Extra members that are allowed</h3>
   <pre><code class="java">public record Point(int x, int y) {
-  static final Point ORIGIN = new Point(0, 0);   // static fields OK
-  public double distanceTo(Point o) {            // instance methods OK
+  static final Point ORIGIN = new Point(0, 0);     // static fields: OK
+  public Point(int v) { this(v, v); }              // extra constructors: OK (must delegate)
+  public double distanceTo(Point o) {              // instance methods: OK
     return Math.hypot(x - o.x, y - o.y);
   }
-  public Point {                                 // additional constructors OK (must delegate)
+  public static Point of(int x, int y) {           // static factory: OK
+    return new Point(x, y);
   }
-  public Point(int v) { this(v, v); }            // extra constructor
 }</code></pre>
+  <div class="warn"><strong>Not allowed:</strong> extra <em>instance</em> fields (all state must be a
+  component), and you cannot <code>extend</code> another class (records already extend <code>Record</code>).
+  You <em>can</em> <code>implements</code> interfaces.</div>
 
-  <h2>Rules &amp; gotchas</h2>
-  <ul>
-    <li><strong>Immutable &amp; final:</strong> components are <code>final</code>; a record can't
-      <code>extend</code> anything (it implicitly extends <code>java.lang.Record</code>), but it
-      <em>can</em> <code>implements</code> interfaces.</li>
-    <li><strong>No instance fields beyond components.</strong> You can't add extra non-static state.</li>
-    <li><strong>"Shallowly" immutable:</strong> a component of type <code>List</code> can still be
-      mutated through its reference. Defensively copy in the compact constructor if you need deep immutability:
+  <!-- ============================================================ -->
+  <h2 id="immutable">4 · Immutability &amp; defensive copies</h2>
+  <p>Records are <strong>shallowly</strong> immutable: the component references can't change, but if a
+  component is itself mutable (a <code>List</code>, array, <code>Date</code>), callers can still mutate
+  what it points to. Copy in the compact constructor for real immutability.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Leaky — shares the caller's list</div>
+      <pre><code class="java">public record Team(String name, List&lt;String&gt; members) { }
+
+var list = new ArrayList&lt;&gt;(List.of("Ada"));
+var team = new Team("A", list);
+list.add("Bob");             // 😱 mutates the record's list too</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Safe — defensive copy</div>
       <pre><code class="java">public record Team(String name, List&lt;String&gt; members) {
-  public Team { members = List.copyOf(members); }   // defensive copy
-}</code></pre>
-    </li>
-    <li><strong>Great with pattern matching</strong> — records can be <em>destructured</em>
-      (record patterns, Java 21). See <a href="#pg-topics-pattern-matching-switch-html">Pattern matching</a>.</li>
-    <li><strong>Serialization</strong> is driven by the components and the canonical constructor
-      (so validation runs on deserialize — safer than normal classes).</li>
-  </ul>
+  public Team {
+    members = List.copyOf(members);   // immutable snapshot
+  }
+}
+// now external mutation of the original list has no effect</code></pre>
+    </div>
+  </div>
 
-  <h3>Local records &amp; nested records</h3>
-  <pre><code class="java">List&lt;Order&gt; top = orders.stream().map(o -> {
-  record Scored(Order order, double score) { }     // local record inside a method
-  return new Scored(o, rank(o));
-}).sorted(comparingDouble(Scored::score)).map(Scored::order).toList();</code></pre>
-
-  <h2>Related: record patterns</h2>
-  <pre><code class="java">// destructure directly (Java 21)
-if (obj instanceof Point(int x, int y)) use(x, y);
-switch (shape) {
-  case Circle(Point(var cx, var cy), var r) -> ...;   // nested
+  <!-- ============================================================ -->
+  <h2 id="patterns">5 · Records + pattern matching</h2>
+  <p>Records were co-designed with pattern matching: because their shape is transparent, they can be
+  <strong>destructured</strong> directly (record patterns, Java 21).</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — accessor soup</div>
+      <pre><code class="java">if (obj instanceof Line l) {
+  Point a = l.start(), b = l.end();
+  int x1 = a.x(), y1 = a.y();
+  int x2 = b.x(), y2 = b.y();
 }</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Record patterns</div>
+      <pre><code class="java">if (obj instanceof Line(Point(var x1, var y1),
+                        Point(var x2, var y2))) {
+  // all four bound at once
+}</code></pre>
+    </div>
+  </div>
+  <pre><code class="java">// Sealed + records + switch = type-safe "algebraic data types"
+sealed interface Expr permits Num, Add {}
+record Num(int v)            implements Expr {}
+record Add(Expr l, Expr r)   implements Expr {}
+
+int eval(Expr e) {
+  return switch (e) {
+    case Num(int v)          -> v;
+    case Add(Expr l, Expr r) -> eval(l) + eval(r);
+  };   // exhaustive — no default needed
+}</code></pre>
+  <p>See <a href="#pg-topics-pattern-matching-switch-html">Pattern matching</a> and <a href="#pg-topics-sealed-classes-html">Sealed classes</a>.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="vs">6 · Records vs class / enum / Lombok</h2>
+  <table class="data">
+    <tr><th></th><th>Record</th><th>Regular class</th><th>Lombok <code>@Value</code></th></tr>
+    <tr><td>Boilerplate</td><td>None (compiler)</td><td>All manual</td><td>None (annotation processor)</td></tr>
+    <tr><td>Immutable</td><td>Always</td><td>Your choice</td><td>Yes</td></tr>
+    <tr><td>Extra tooling</td><td>None — standard Java</td><td>None</td><td>External dependency + IDE plugin</td></tr>
+    <tr><td>Inheritance</td><td>Can't extend a class</td><td>Free</td><td>Limited</td></tr>
+    <tr><td>Pattern destructuring</td><td>Yes</td><td>No</td><td>No</td></tr>
+    <tr><td>Best for</td><td>Immutable data carriers</td><td>Behaviour-rich / mutable types</td><td>Pre-16 codebases</td></tr>
+  </table>
+  <div class="tip">If a type is <em>mostly data</em> and immutable, reach for a record. If it needs
+  mutability, inheritance, or lots of behaviour, use a class. Records largely remove the need for
+  Lombok's <code>@Value</code>/<code>@Data</code> on Java 16+.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="serialization">7 · Serialization</h2>
+  <p>Records serialize based on their <strong>components</strong>, and deserialization goes through the
+  <strong>canonical constructor</strong> — so your validation runs on the way in. That's a real safety
+  improvement over normal serialization, which bypasses constructors.</p>
+  <pre><code class="java">public record Money(String currency, long cents) implements Serializable {
+  public Money {                       // runs on deserialize too
+    if (cents &lt; 0) throw new IllegalArgumentException("negative");
+  }
+}</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">8 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>"Records are fully immutable"</td><td>Only shallowly — defensively copy mutable components.</td></tr>
+    <tr><td>Expecting <code>getX()</code></td><td>Accessors have no <code>get</code> prefix: it's <code>x()</code>. Watch frameworks that assume JavaBeans naming.</td></tr>
+    <tr><td>Adding instance fields</td><td>Not allowed — all state is components.</td></tr>
+    <tr><td>Big records as JPA <code>@Entity</code></td><td>Entities need mutability &amp; a no-arg ctor; records suit <em>projections/DTOs</em>, not entities.</td></tr>
+    <tr><td>Reordering components later</td><td>Changes the canonical constructor signature &amp; serialized form — it's part of the API.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">9 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Why records fit</th></tr>
+    <tr><td>REST request/response DTOs</td><td>Immutable, concise, map cleanly to JSON (Jackson supports records).</td></tr>
+    <tr><td>Query/projection results (JPA, JDBC)</td><td>Constructor-expression projections into a record.</td></tr>
+    <tr><td>Value objects in DDD</td><td>Money, Coordinates, DateRange — equality by value is exactly right.</td></tr>
+    <tr><td>Multiple return values</td><td>Return a small record instead of an array/<code>Object[]</code>/out-params.</td></tr>
+    <tr><td>Domain events / messages</td><td>Immutable event payloads; great with sealed hierarchies.</td></tr>
+    <tr><td>Compound map keys</td><td>Correct <code>equals</code>/<code>hashCode</code> for free.</td></tr>
+  </table>
+  <h3>Worked example — DTO + multiple return values</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — a class for a JSON response, array for two values</div>
+      <pre><code class="java">// response DTO: 30+ lines of a manual class (omitted)
+public final class UserResponse { /* fields, ctor, getters, equals... */ }
+
+// "return two things" via an Object[] — untyped and fragile
+Object[] minMax(int[] xs) {
+  return new Object[]{ min(xs), max(xs) };
+}
+Object[] r = minMax(data);
+int lo = (int) r[0], hi = (int) r[1];   // casts everywhere</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Records</div>
+      <pre><code class="java">public record UserResponse(String id, String name, boolean active) { }
+
+// typed, self-documenting multiple return
+record MinMax(int min, int max) { }
+MinMax minMax(int[] xs) {
+  return new MinMax(min(xs), max(xs));
+}
+var mm = minMax(data);
+int lo = mm.min(), hi = mm.max();       // no casts, clear names</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">10 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>Records in one glance</h3>
+    <ul>
+      <li><code>record Point(int x, int y) {}</code> → ctor + <code>x()/y()</code> + equals/hashCode/toString.</li>
+      <li>Immutable &amp; <code>final</code>; extends <code>Record</code>; can implement interfaces, not extend classes.</li>
+      <li>Validate/normalise in the <strong>compact constructor</strong>; <strong>defensively copy</strong> mutable components.</li>
+      <li>Accessors have <strong>no <code>get</code></strong> prefix.</li>
+      <li>Destructure with <strong>record patterns</strong>; pair with <strong>sealed</strong> types for ADTs.</li>
+      <li>Use for DTOs / value objects / multiple returns — not JPA entities.</li>
+    </ul>
+  </div>
 
   <h2>Evolution</h2>
   <table class="data">
     <tr><th>Version</th><th>Change</th></tr>
-    <tr><td>Java 14</td><td>Records — 1st preview (JEP 359).</td></tr>
+    <tr><td>Java 14</td><td>1st preview (JEP 359).</td></tr>
     <tr><td>Java 15</td><td>2nd preview (JEP 384).</td></tr>
     <tr><td>Java 16</td><td><strong>Final</strong> (JEP 395).</td></tr>
     <tr><td>Java 21</td><td>Record <em>patterns</em> final (JEP 440) — destructuring.</td></tr>
   </table>
-
-  <div class="cheat">
-    <h3>Cheat card</h3>
-    <ul>
-      <li><code>record Point(int x, int y) {}</code> → ctor + <code>x()/y()</code> + equals/hashCode/toString.</li>
-      <li>Immutable, final, implicitly extends <code>Record</code>; may implement interfaces.</li>
-      <li>Validate in the <strong>compact constructor</strong>; defensively copy mutable components.</li>
-      <li>Accessors have no <code>get</code> prefix.</li>
-      <li>Pairs beautifully with sealed types + pattern matching.</li>
-    </ul>
-  </div>
 </section>
 <section id="pg-topics-sealed-classes-html" class="print-page">
   <p class="sec-tag">Deep dive · language</p>
@@ -1986,6 +2167,22 @@ java --list-modules                            # what's available</code></pre>
     plain threads.
   </p>
 
+  <div class="hero-stats">
+    <div class="stat"><span class="num">1M+</span><span class="lbl">concurrent virtual threads</span></div>
+    <div class="stat"><span class="num">&lt; 1 KB</span><span class="lbl">memory per thread<br>(vs ~1 MB)</span></div>
+    <div class="stat"><span class="num">&lt; 1 µs</span><span class="lbl">to create<br>(sub-microsecond)</span></div>
+    <div class="stat"><span class="num">0</span><span class="lbl">OS threads wasted<br>while blocked</span></div>
+    <div class="stat"><span class="num">100%</span><span class="lbl">plain blocking code<br>(no rewrite)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Servers used to face a lose-lose choice: <strong>thread-per-request</strong> code was simple but
+    capped at a few thousand OS threads, while <strong>reactive/async</strong> code scaled but was hard
+    to write and debug. Virtual threads end the trade-off — you write ordinary blocking,
+    thread-per-request code and it still scales to hundreds of thousands of concurrent requests,
+    because blocking a virtual thread no longer wastes an OS thread.
+  </div>
+
   <div class="page-toc">
     <strong>On this page</strong>
     <a href="#what">1. What is a virtual thread?</a>
@@ -2002,7 +2199,8 @@ java --list-modules                            # what's available</code></pre>
     <a href="#pitfalls">12. Pitfalls</a>
     <a href="#monitoring">13. Monitoring &amp; debugging</a>
     <a href="#migration">14. Migration guide</a>
-    <a href="#cheat">15. Cheat sheet</a>
+    <a href="#realworld">15. Real-world use cases</a>
+    <a href="#cheat">16. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -2498,7 +2696,59 @@ java -Djdk.virtualThreadScheduler.parallelism=16 -jar app.jar</code></pre>
   </ol>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">15 · Cheat sheet</h2>
+  <h2 id="realworld">15 · Real-world use cases</h2>
+  <p>Virtual threads shine wherever a task spends most of its time <strong>waiting on I/O</strong> and
+  you have <strong>many such tasks at once</strong>:</p>
+  <table class="data">
+    <tr><th>Scenario</th><th>Why VTs fit</th></tr>
+    <tr><td>REST/microservice endpoints that call several downstream services per request</td><td>Each request blocks on a few network calls; thousands can run concurrently on a few cores.</td></tr>
+    <tr><td>API gateways / BFF aggregation</td><td>Fan out to many backends and join — simple blocking code instead of reactive operators.</td></tr>
+    <tr><td>Web crawlers / bulk HTTP clients</td><td>Tens of thousands of concurrent, mostly-waiting HTTP calls.</td></tr>
+    <tr><td>Chat, notifications, long-poll / SSE servers</td><td>Huge numbers of mostly-idle connections, each holding a cheap thread.</td></tr>
+    <tr><td>Batch/ETL jobs doing per-record I/O</td><td>One virtual thread per record; the DB/API becomes the only limit.</td></tr>
+    <tr><td>Test suites &amp; load generators</td><td>Simulate thousands of concurrent clients without a thread-pool ceiling.</td></tr>
+  </table>
+
+  <h3>Worked example — check 10,000 URLs concurrently</h3>
+  <p>A health-checker that would need a carefully tuned pool (and still bottleneck) with platform
+  threads is trivial and fast with virtual threads:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — pool-bound, tune-and-pray</div>
+      <pre><code class="java">var pool = Executors.newFixedThreadPool(100);   // magic number
+var http = HttpClient.newHttpClient();
+List&lt;Future&lt;Integer&gt;&gt; fs = new ArrayList&lt;&gt;();
+for (String url : urls) {                        // 10,000 urls
+  fs.add(pool.submit(() -> status(http, url))); // 9,900 queue behind 100
+}
+Map&lt;String,Integer&gt; out = new HashMap&lt;&gt;();
+for (int i = 0; i &lt; urls.size(); i++)
+  out.put(urls.get(i), fs.get(i).get());
+pool.shutdown();</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Virtual threads — one per URL</div>
+      <pre><code class="java">var http = HttpClient.newHttpClient();
+try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
+  Map&lt;String, Future&lt;Integer&gt;&gt; results = urls.stream()
+      .collect(toMap(u -> u, u -> exec.submit(() -> status(http, u))));
+
+  results.forEach((url, f) -> {
+    try { System.out.println(url + " → " + f.get()); }
+    catch (Exception e) { System.out.println(url + " → ERROR"); }
+  });
+}   // all 10,000 checks run concurrently; limited only by the network
+
+static int status(HttpClient http, String url) throws Exception {
+  var req = HttpRequest.newBuilder(URI.create(url)).build();
+  return http.send(req, BodyHandlers.discarding()).statusCode();
+}</code></pre>
+    </div>
+  </div>
+  <div class="tip"><strong>Real payoff:</strong> the platform-thread version's wall-clock time is
+  dominated by the 100-wide queue; the virtual-thread version finishes in roughly the time of the
+  <em>slowest single request</em> — with simpler code and no pool to size.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">16 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Virtual threads in one glance</h3>
     <ul>

@@ -17,6 +17,22 @@
     plain threads.
   </p>
 
+  <div class="hero-stats">
+    <div class="stat"><span class="num">1M+</span><span class="lbl">concurrent virtual threads</span></div>
+    <div class="stat"><span class="num">&lt; 1 KB</span><span class="lbl">memory per thread<br>(vs ~1 MB)</span></div>
+    <div class="stat"><span class="num">&lt; 1 µs</span><span class="lbl">to create<br>(sub-microsecond)</span></div>
+    <div class="stat"><span class="num">0</span><span class="lbl">OS threads wasted<br>while blocked</span></div>
+    <div class="stat"><span class="num">100%</span><span class="lbl">plain blocking code<br>(no rewrite)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Servers used to face a lose-lose choice: <strong>thread-per-request</strong> code was simple but
+    capped at a few thousand OS threads, while <strong>reactive/async</strong> code scaled but was hard
+    to write and debug. Virtual threads end the trade-off — you write ordinary blocking,
+    thread-per-request code and it still scales to hundreds of thousands of concurrent requests,
+    because blocking a virtual thread no longer wastes an OS thread.
+  </div>
+
   <div class="page-toc">
     <strong>On this page</strong>
     <a href="#what">1. What is a virtual thread?</a>
@@ -33,7 +49,8 @@
     <a href="#pitfalls">12. Pitfalls</a>
     <a href="#monitoring">13. Monitoring &amp; debugging</a>
     <a href="#migration">14. Migration guide</a>
-    <a href="#cheat">15. Cheat sheet</a>
+    <a href="#realworld">15. Real-world use cases</a>
+    <a href="#cheat">16. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -529,7 +546,59 @@ java -Djdk.virtualThreadScheduler.parallelism=16 -jar app.jar</code></pre>
   </ol>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">15 · Cheat sheet</h2>
+  <h2 id="realworld">15 · Real-world use cases</h2>
+  <p>Virtual threads shine wherever a task spends most of its time <strong>waiting on I/O</strong> and
+  you have <strong>many such tasks at once</strong>:</p>
+  <table class="data">
+    <tr><th>Scenario</th><th>Why VTs fit</th></tr>
+    <tr><td>REST/microservice endpoints that call several downstream services per request</td><td>Each request blocks on a few network calls; thousands can run concurrently on a few cores.</td></tr>
+    <tr><td>API gateways / BFF aggregation</td><td>Fan out to many backends and join — simple blocking code instead of reactive operators.</td></tr>
+    <tr><td>Web crawlers / bulk HTTP clients</td><td>Tens of thousands of concurrent, mostly-waiting HTTP calls.</td></tr>
+    <tr><td>Chat, notifications, long-poll / SSE servers</td><td>Huge numbers of mostly-idle connections, each holding a cheap thread.</td></tr>
+    <tr><td>Batch/ETL jobs doing per-record I/O</td><td>One virtual thread per record; the DB/API becomes the only limit.</td></tr>
+    <tr><td>Test suites &amp; load generators</td><td>Simulate thousands of concurrent clients without a thread-pool ceiling.</td></tr>
+  </table>
+
+  <h3>Worked example — check 10,000 URLs concurrently</h3>
+  <p>A health-checker that would need a carefully tuned pool (and still bottleneck) with platform
+  threads is trivial and fast with virtual threads:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — pool-bound, tune-and-pray</div>
+      <pre><code class="java">var pool = Executors.newFixedThreadPool(100);   // magic number
+var http = HttpClient.newHttpClient();
+List&lt;Future&lt;Integer&gt;&gt; fs = new ArrayList&lt;&gt;();
+for (String url : urls) {                        // 10,000 urls
+  fs.add(pool.submit(() -> status(http, url))); // 9,900 queue behind 100
+}
+Map&lt;String,Integer&gt; out = new HashMap&lt;&gt;();
+for (int i = 0; i &lt; urls.size(); i++)
+  out.put(urls.get(i), fs.get(i).get());
+pool.shutdown();</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Virtual threads — one per URL</div>
+      <pre><code class="java">var http = HttpClient.newHttpClient();
+try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
+  Map&lt;String, Future&lt;Integer&gt;&gt; results = urls.stream()
+      .collect(toMap(u -> u, u -> exec.submit(() -> status(http, u))));
+
+  results.forEach((url, f) -> {
+    try { System.out.println(url + " → " + f.get()); }
+    catch (Exception e) { System.out.println(url + " → ERROR"); }
+  });
+}   // all 10,000 checks run concurrently; limited only by the network
+
+static int status(HttpClient http, String url) throws Exception {
+  var req = HttpRequest.newBuilder(URI.create(url)).build();
+  return http.send(req, BodyHandlers.discarding()).statusCode();
+}</code></pre>
+    </div>
+  </div>
+  <div class="tip"><strong>Real payoff:</strong> the platform-thread version's wall-clock time is
+  dominated by the 100-wide queue; the virtual-thread version finishes in roughly the time of the
+  <em>slowest single request</em> — with simpler code and no pool to size.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">16 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Virtual threads in one glance</h3>
     <ul>
