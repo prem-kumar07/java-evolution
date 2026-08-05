@@ -19,7 +19,8 @@
       "Bash(open topics/pattern-matching-switch.html)",
       "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand structured concurrency to full guide \\(scope diagram, SLA example\\) *)",
       "Bash(open topics/structured-concurrency.html)",
-      "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand scoped values to full guide \\(binding diagram, context example\\) *)"
+      "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand scoped values to full guide \\(binding diagram, context example\\) *)",
+      "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand text blocks & strings to full guide \\(indentation diagram, SQL example\\) *)"
     ]
   }
 }
