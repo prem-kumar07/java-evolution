@@ -16,6 +16,15 @@
     the "<strong>final means final</strong>" integrity work — while structured concurrency and
     primitive patterns edge closer to final.
   </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">HTTP/3</span><span class="lbl">QUIC in the standard client</span></div>
+    <div class="stat"><span class="num">final</span><span class="lbl">means final (integrity)</span></div>
+    <div class="stat"><span class="num">AOT</span><span class="lbl">object caching, any GC</span></div>
+    <div class="stat"><span class="num">6th</span><span class="lbl">preview: structured concurrency</span></div>
+    <div class="stat"><span class="num">Non-LTS</span><span class="lbl">6-month feature release</span></div>
+  </div>
+
   <div class="note"><strong>Non-LTS.</strong> Java 26 is a 6-month feature release. Production teams on
   LTS should track these as <em>previews of what's coming</em>; the next LTS will consolidate them.</div>
 
@@ -34,10 +43,10 @@
   <h2>1 · Language features</h2>
 
   <h3>Prepare to Make <code>final</code> Mean Final <span class="badge jep">JEP 500</span></h3>
-  <p>Part of the "integrity by default" effort. Historically, libraries could mutate
-  <code>final</code> fields via deep reflection (<code>setAccessible</code>). Java 26 begins warning
-  on this so a future release can enforce that <code>final</code> truly is final — enabling
-  constant-folding optimisations and safer code.</p>
+  <p><em>Why it matters:</em> part of the "integrity by default" effort. Historically, libraries could
+  mutate <code>final</code> fields via deep reflection (<code>setAccessible</code>), which silently
+  broke the one guarantee <code>final</code> was supposed to give — and blocked the JIT from treating
+  final fields as true constants. Java 26 begins warning so a future release can enforce it.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — silently allowed</div>
       <pre><code class="java">Field f = obj.getClass().getDeclaredField("id");
@@ -52,69 +61,113 @@ f.setInt(obj, 999);      // mutates a final field — worked</code></pre>
   </div>
 
   <h3>Primitive types in patterns, <code>instanceof</code> &amp; <code>switch</code> <span class="badge preview">Preview (4th)</span></h3>
-  <p>Extends pattern matching to primitives, with exactness checks that replace error-prone casts.</p>
-  <pre><code class="java">Object o = 42;
-switch (o) {
-  case int i    -> System.out.println("int " + i);
-  case double d -> System.out.println("double " + d);
+  <p><em>Why it matters:</em> extends pattern matching to primitives, so numeric type-narrowing no
+  longer needs error-prone manual casts and range checks.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — manual cast &amp; range check</div>
+      <pre><code class="java">Object o = 42;
+if (o instanceof Integer) {
+  int i = (Integer) o;
+  if (i == (int) i) use(i);           // "fits" check by hand
+} else if (o instanceof Double) {
+  double d = (Double) o;
+  use(d);
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (preview, Java 26)</div>
+      <pre><code class="java">switch (o) {
+  case int i    -> use(i);
+  case double d -> use(d);
   default       -> {}
 }
-// and safe range checks:
-if (bigValue instanceof int i) { ... }   // only matches if it fits in int</code></pre>
+// safe range check, no manual arithmetic:
+if (bigValue instanceof int i) { use(i); }  // only matches if it fits exactly</code></pre>
+    </div>
+  </div>
 
   <h3>Structured concurrency <span class="badge preview">Preview (6th)</span></h3>
-  <p>Approaching final. Run a group of subtasks as one unit with automatic cancellation/joining →
-  <a href="../topics/structured-concurrency.html">deep-dive</a>.</p>
+  <p><em>Why it matters:</em> approaching final after six previews — treats a group of concurrent
+  subtasks as one unit, so a failure in one cancels the rest instead of leaking threads. See the
+  <a href="../topics/structured-concurrency.html">structured concurrency deep-dive</a> for the full
+  <code>StructuredTaskScope</code> API and worked examples.</p>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
   <h3>HTTP/3 for the HTTP Client <span class="badge jep">JEP 517</span></h3>
-  <p>The <code>java.net.http.HttpClient</code> (from Java 11) now speaks HTTP/3 (QUIC over UDP) —
-  lower latency and better behaviour on lossy networks.</p>
+  <p><em>Why it matters:</em> the <code>java.net.http.HttpClient</code> (standardised in Java 11) now
+  speaks HTTP/3 (QUIC over UDP) — faster connection setup and better behaviour on lossy/mobile
+  networks, with the exact same request/response API you already use.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — HTTP/1.1 or /2</div>
       <pre><code class="java">HttpClient client = HttpClient.newBuilder()
     .version(HttpClient.Version.HTTP_2)
-    .build();</code></pre>
+    .build();
+HttpResponse&lt;String&gt; res = client.send(req, BodyHandlers.ofString());</code></pre>
     </div>
     <div class="after"><div class="ba-label">After (Java 26)</div>
       <pre><code class="java">HttpClient client = HttpClient.newBuilder()
     .version(HttpClient.Version.HTTP_3)
     .build();
-// same request/response API — only the transport changes</code></pre>
+HttpResponse&lt;String&gt; res = client.send(req, BodyHandlers.ofString());
+// same call site — only the transport changes</code></pre>
     </div>
   </div>
 
   <h3>Lazy Constants <span class="badge preview">Preview (2nd)</span></h3>
-  <p>The feature previewed as "Stable Values" in Java 25, now renamed. A safe primitive for
-  compute-once, thread-safe lazy initialisation that the JIT can treat like a constant.</p>
-  <pre><code class="java">// preview API shape
-LazyConstant&lt;Config&gt; config = LazyConstant.of(() -> loadConfig());
-Config c = config.get();   // loadConfig() runs at most once, then folded as a constant</code></pre>
+  <p><em>Why it matters:</em> the feature previewed as "Stable Values" in Java 25, now renamed. A safe
+  primitive for compute-once, thread-safe lazy initialisation that the JIT can fold like a real
+  constant — replacing the classic (and easy to get subtly wrong) double-checked-locking idiom.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — double-checked locking</div>
+      <pre><code class="java">private volatile Config config;
+Config get() {
+  Config c = config;
+  if (c == null) {
+    synchronized (this) {
+      c = config;
+      if (c == null) config = c = loadConfig();
+    }
+  }
+  return c;
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (preview, Java 26)</div>
+      <pre><code class="java">private final LazyConstant&lt;Config&gt; config = LazyConstant.of(this::loadConfig);
+Config get() {
+  return config.get();   // computed at most once, then treated as constant
+}</code></pre>
+    </div>
+  </div>
 
   <h3>Also previewing / incubating</h3>
   <ul>
     <li><strong>PEM encodings of cryptographic objects</strong> <span class="badge preview">Preview (2nd)</span> —
-      read/write keys &amp; certificates in PEM text directly.</li>
+      read/write keys &amp; certificates in PEM text directly, without hand-rolled Base64/DER parsing.</li>
     <li><strong>Vector API</strong> <span class="badge">11th incubator</span> — SIMD math; still
-      incubating pending Project Valhalla.</li>
+      incubating pending Project Valhalla (value types), which will let it reach full speed.</li>
   </ul>
 
   <!-- ============ TOOLING / JVM ============ -->
   <h2>3 · Tooling</h2>
-  <ul>
-    <li><strong>Ahead-of-Time Object Caching with Any GC</strong> <span class="badge jep">JEP 516</span> —
-      Project Leyden's AOT cache (warmed classes/objects) now works regardless of the selected
-      garbage collector, widening who can benefit from faster startup.</li>
-  </ul>
+  <h3>Ahead-of-Time Object Caching with Any GC <span class="badge jep">JEP 516</span></h3>
+  <p><em>Why it matters:</em> Project Leyden's AOT cache (pre-warmed classes and heap objects) was
+  previously tied to specific collectors; now it works regardless of the garbage collector you choose,
+  so more applications get the faster-startup benefit without giving up their GC of choice.</p>
+  <pre><code class="java">// training run — records what the app touches at startup
+java -XX:AOTCacheOutput=app.aot -XX:+UseZGC -jar app.jar --record-run
+
+// production run — reuses the cache, works with the GC you actually want
+java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
 
   <h2>4 · JVM / performance / other</h2>
   <ul>
     <li><strong>G1: improved throughput by reducing synchronization</strong> <span class="badge jep">JEP 522</span> —
-      less overhead in the default collector.</li>
+      less internal locking overhead in the default collector, meaning better throughput with no
+      config changes for most apps.</li>
     <li><strong>Applet API removed</strong> <span class="badge removed">Removed</span> — the last of the
-      applet era is gone (deprecated back in 17).</li>
+      applet era is gone (deprecated back in Java 17). Any lingering <code>java.applet.*</code> usage
+      now fails to compile.</li>
   </ul>
 
   <!-- ============ SUMMARY ============ -->
@@ -122,11 +175,11 @@ Config c = config.get();   // loadConfig() runs at most once, then folded as a c
   <div class="cheat">
     <h3>Java 26 in one glance</h3>
     <ul>
-      <li><strong>HTTP/3:</strong> <code>.version(HttpClient.Version.HTTP_3)</code></li>
-      <li><strong>Integrity:</strong> "final means final" — deep reflection on final fields warns</li>
-      <li><strong>Startup:</strong> AOT object caching with any GC</li>
-      <li><strong>Perf:</strong> faster G1; Applet API removed</li>
-      <li><strong>Preview:</strong> primitive patterns (4th), structured concurrency (6th), lazy constants (2nd)</li>
+      <li><strong>HTTP/3:</strong> <code>.version(HttpClient.Version.HTTP_3)</code> — same API, faster transport</li>
+      <li><strong>Integrity:</strong> "final means final" — deep reflection on final fields now warns</li>
+      <li><strong>Startup:</strong> AOT object caching works with any GC (Project Leyden)</li>
+      <li><strong>Perf:</strong> faster G1 (less synchronization); Applet API removed</li>
+      <li><strong>Preview:</strong> primitive patterns (4th), structured concurrency (6th), lazy constants (2nd), PEM encodings (2nd)</li>
     </ul>
   </div>
 </main>
