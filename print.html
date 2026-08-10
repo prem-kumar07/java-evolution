@@ -51,7 +51,7 @@
 <a href="#pg-topics-virtual-threads-html">Virtual threads — complete guide</a>
 <a href="#pg-topics-structured-concurrency-html">Structured concurrency — complete guide</a>
 <a href="#pg-topics-scoped-values-html">Scoped values — complete guide</a>
-<a href="#pg-topics-streams-gatherers-html">Streams &amp; Gatherers — complete guide</a>
+<a href="#pg-topics-streams-gatherers-html">Stream Gatherers — complete guide</a>
 <a href="#pg-topics-ffm-api-html">Foreign Function &amp; Memory API — complete guide</a>
 </div>
 <section id="pg-quickstart-html" class="print-page">
@@ -4218,38 +4218,112 @@ void repo() {
 
   <div class="page-toc">
     <strong>On this page</strong>
-    <a href="#builtin">1. Built-in gatherers</a>
-    <a href="#window">2. Before &amp; after: windowing</a>
+    <a href="#vscollector">1. Gatherer vs Collector</a>
+    <a href="#builtin">2. The 5 built-in gatherers, in detail</a>
     <a href="#anatomy">3. Anatomy of a gatherer</a>
     <a href="#custom">4. Writing your own</a>
-    <a href="#concurrent">5. mapConcurrent</a>
-    <a href="#other">6. Other recent Stream additions</a>
-    <a href="#pitfalls">7. Pitfalls</a>
-    <a href="#realworld">8. Real-world use cases</a>
-    <a href="#cheat">9. Cheat sheet</a>
+    <a href="#compose">5. Composing gatherers</a>
+    <a href="#concurrent">6. mapConcurrent deep dive</a>
+    <a href="#other">7. Other recent Stream additions</a>
+    <a href="#pitfalls">8. Pitfalls</a>
+    <a href="#realworld">9. Real-world use cases</a>
+    <a href="#cheat">10. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="builtin">1 · Built-in gatherers</h2>
-  <pre><code class="java">import java.util.stream.Gatherers;
+  <h2 id="vscollector">1 · Gatherer vs Collector — where each one sits</h2>
+  <p>A stream pipeline is <code>source → zero or more intermediate ops → one terminal op</code>.
+  <code>map</code>/<code>filter</code>/<code>gather</code> are all intermediate — the stream stays lazy
+  and un-consumed. <code>collect</code>/<code>toList</code>/<code>forEach</code> are terminal — that's
+  what actually pulls elements through and produces a result.</p>
 
-Stream.of(1,2,3,4,5).gather(Gatherers.windowFixed(2)).toList();
-// [[1,2],[3,4],[5]]
+  <figure class="diagram">
+    <svg viewBox="0 0 760 170" role="img" aria-label="A stream pipeline: source, then map and filter, then a custom gather step, then more intermediate ops, ending in a terminal collect">
+      <defs>
+        <marker id="gcA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="20"  y="60" width="90"  height="46" rx="8" class="dg-box"/>
+      <text x="65"  y="87" text-anchor="middle" class="dg-text-sm">source</text>
+      <rect x="140" y="60" width="90"  height="46" rx="8" class="dg-box"/>
+      <text x="185" y="87" text-anchor="middle" class="dg-text-sm">map/filter</text>
+      <rect x="260" y="40" width="150" height="86" rx="10" class="dg-accent"/>
+      <text x="335" y="72" text-anchor="middle" class="dg-text">.gather(...)</text>
+      <text x="335" y="92" text-anchor="middle" class="dg-soft">stateful, custom</text>
+      <text x="335" y="108" text-anchor="middle" class="dg-soft">still intermediate</text>
+      <rect x="440" y="60" width="90"  height="46" rx="8" class="dg-box"/>
+      <text x="485" y="87" text-anchor="middle" class="dg-text-sm">map/filter</text>
+      <rect x="560" y="40" width="180" height="86" rx="10" class="dg-good-box"/>
+      <text x="650" y="72" text-anchor="middle" class="dg-text">.collect(...)</text>
+      <text x="650" y="92" text-anchor="middle" class="dg-soft">terminal</text>
+      <text x="650" y="108" text-anchor="middle" class="dg-soft">Collector customises HERE</text>
+      <line x1="110" y1="83" x2="138" y2="83" class="dg-line" marker-end="url(#gcA)"/>
+      <line x1="230" y1="83" x2="258" y2="83" class="dg-line" marker-end="url(#gcA)"/>
+      <line x1="410" y1="83" x2="438" y2="83" class="dg-line" marker-end="url(#gcA)"/>
+      <line x1="530" y1="83" x2="558" y2="83" class="dg-line" marker-end="url(#gcA)"/>
+      <text x="335" y="20" text-anchor="middle" class="dg-soft" style="font-weight:700">Gatherer customises HERE — mid-pipeline</text>
+    </svg>
+    <figcaption>A <code>Collector</code> only ever runs once, at the very end. A
+    <code>Gatherer</code> runs <em>anywhere in the middle</em> — and you can chain several, or mix them
+    with ordinary <code>map</code>/<code>filter</code>, before the pipeline is finally collected.</figcaption>
+  </figure>
 
-Stream.of(1,2,3,4).gather(Gatherers.windowSliding(2)).toList();
-// [[1,2],[2,3],[3,4]]
-
-Stream.of(1,2,3,4).gather(Gatherers.scan(() -> 0, Integer::sum)).toList();
-// [1,3,6,10]   (running fold, emits each step)
-
-Stream.of("a","b","c").gather(Gatherers.fold(() -> "", String::concat)).toList();
-// ["abc"]      (fold to one value, emitted at the end)
-
-urls.stream().gather(Gatherers.mapConcurrent(10, this::fetch)).toList();
-// bounded-parallel map, order preserved (see §5)</code></pre>
+  <table class="data">
+    <tr><th></th><th><code>Collector</code></th><th><code>Gatherer</code></th></tr>
+    <tr><td>Position in pipeline</td><td>Terminal (ends the stream)</td><td>Intermediate (stream stays open)</td></tr>
+    <tr><td>Cardinality</td><td>Many elements → 1 result</td><td>Many elements → many elements (0..N per input)</td></tr>
+    <tr><td>Composable further</td><td>No — the stream is consumed</td><td>Yes — <code>map</code>, <code>filter</code>, another <code>gather</code>, then <code>collect</code></td></tr>
+    <tr><td>Built-in factory</td><td><code>Collectors.*</code></td><td><code>Gatherers.*</code></td></tr>
+    <tr><td>Custom factory</td><td><code>Collector.of(...)</code></td><td><code>Gatherer.ofSequential(...)</code> / <code>Gatherer.of(...)</code></td></tr>
+  </table>
 
   <!-- ============================================================ -->
-  <h2 id="window">2 · Before &amp; after: windowing</h2>
+  <h2 id="builtin">2 · The 5 built-in gatherers, in detail</h2>
+  <p><code>java.util.stream.Gatherers</code> ships five ready-made gatherers. Each is a small, precise
+  tool — know their edge cases and you rarely need a custom one.</p>
+
+  <h3>2.1 · <code>windowFixed(n)</code> — non-overlapping batches</h3>
+  <p><em>Behaviour:</em> groups elements into consecutive, non-overlapping chunks of size <code>n</code>.
+  <strong>The last window may be shorter</strong> if the stream doesn't divide evenly — nothing is dropped.</p>
+  <pre><code class="java">Stream.of(1,2,3,4,5,6,7,8).gather(Gatherers.windowFixed(3)).toList();
+// [[1, 2, 3], [4, 5, 6], [7, 8]]     ← last window has only 2 elements</code></pre>
+  <div class="warn"><strong>Memory note:</strong> for efficiency, windows may be allocated eagerly, so
+  very large window sizes on huge streams can use significant memory — size windows for your data, not "big for safety".</div>
+
+  <h3>2.2 · <code>windowSliding(n)</code> — overlapping windows</h3>
+  <p><em>Behaviour:</em> a moving window of size <code>n</code> that advances one element at a time —
+  every window after the first shares <code>n-1</code> elements with its predecessor.</p>
+  <pre><code class="java">Stream.of(1,2,3,4).gather(Gatherers.windowSliding(2)).toList();
+// [[1, 2], [2, 3], [3, 4]]     ← 3 windows from 4 elements (n - windowSize + 1)</code></pre>
+
+  <h3>2.3 · <code>scan(seed, accumulator)</code> — running (prefix) accumulation</h3>
+  <p><em>Behaviour:</em> starts from a seed value, then for each input element applies the accumulator
+  to (current value, element) and emits the <em>new</em> running value — one output per input, the seed
+  itself is never emitted separately.</p>
+  <pre><code class="java">Stream.of(1,2,3,4).gather(Gatherers.scan(() -> 0, Integer::sum)).toList();
+// [1, 3, 6, 10]      ← running sum after consuming each element
+Stream.of(1,2,3).gather(Gatherers.scan(() -> "", (acc, n) -> acc + n)).toList();
+// ["1", "12", "123"]  ← running string concatenation</code></pre>
+
+  <h3>2.4 · <code>fold(seed, folder)</code> — reduce to exactly one element</h3>
+  <p><em>Behaviour:</em> like <code>scan</code>, but only the <strong>final</strong> accumulated value is
+  emitted — always exactly one output element, unlike a plain <code>reduce</code> this works even when
+  the operation is inherently order-dependent (no combiner needed).</p>
+  <pre><code class="java">Optional&lt;String&gt; result = Stream.of(1,2,3,4,5,6,7,8,9)
+    .gather(Gatherers.fold(() -> "", (acc, n) -> acc + n))
+    .findFirst();
+// Optional["123456789"]</code></pre>
+
+  <h3>2.5 · <code>mapConcurrent(n, mapper)</code> — bounded concurrent mapping</h3>
+  <p><em>Behaviour:</em> maps up to <code>n</code> elements <em>concurrently</em> (backed by
+  <a href="#pg-topics-virtual-threads-html">virtual threads</a>), while still emitting results in original
+  encounter order. Full breakdown → <a href="#concurrent">§6</a>.</p>
+  <pre><code class="java">var bodies = urls.stream()
+    .gather(Gatherers.mapConcurrent(10, this::fetch))
+    .toList();   // ≤10 in flight, order preserved</code></pre>
+
+  <h3>Before &amp; after — replacing a manual windowing loop</h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Legacy — manual index loop, breaks the pipeline</div>
       <pre><code class="java">List&lt;List&lt;Integer&gt;&gt; windows = new ArrayList&lt;&gt;();
@@ -4299,7 +4373,9 @@ for (int i = 0; i + 3 &lt;= xs.size(); i++) {
   </figure>
 
   <!-- ============================================================ -->
-  <h2 id="custom">4 · Writing your own — "distinct by key"</h2>
+  <h2 id="custom">4 · Writing your own</h2>
+
+  <h3>4.1 · "Distinct by key"</h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Legacy — stateful lambda hack (fragile)</div>
       <pre><code class="java">Set&lt;String&gt; seen = ConcurrentHashMap.newKeySet();
@@ -4323,10 +4399,67 @@ var out = people.stream().gather(distinctBy(Person::city)).toList();</code></pre
   <p>Returning <code>false</code> from the integrator short-circuits the upstream — that's how a
   gatherer can implement <code>limit</code>-like behaviour.</p>
 
+  <h3>4.2 · "Group consecutive equal elements" (run-length grouping)</h3>
+  <p>A gatherer that tracks the <em>previous</em> element to decide whether to start a new group —
+  something <code>Collectors.groupingBy</code> can't express, because it groups by key across the whole
+  stream, not by adjacency.</p>
+  <pre><code class="java">static &lt;T&gt; Gatherer&lt;T,?,List&lt;T&gt;&gt; groupRuns() {
+  return Gatherer.&lt;T, List&lt;T&gt;, List&lt;T&gt;&gt;ofSequential(
+    ArrayList::new,                                    // initializer: current run
+    (run, item, downstream) -> {                       // integrator
+      if (!run.isEmpty() &amp;&amp; !run.get(run.size() - 1).equals(item)) {
+        if (!downstream.push(List.copyOf(run))) return false;
+        run.clear();
+      }
+      run.add(item);
+      return true;
+    },
+    (run, downstream) -> {                              // finisher: flush the last run
+      if (!run.isEmpty()) downstream.push(List.copyOf(run));
+    });
+}
+
+Stream.of("A","A","B","B","B","A","C")
+    .gather(groupRuns())
+    .toList();
+// [[A, A], [B, B, B], [A], [C]]</code></pre>
+  <div class="tip"><strong>Why this needed a finisher:</strong> the very last run is still sitting in
+  <code>state</code> when the stream runs out of elements — only the finisher gets a chance to flush it.</div>
+
   <!-- ============================================================ -->
-  <h2 id="concurrent">5 · <code>mapConcurrent</code> — bounded parallel I/O in a stream</h2>
+  <h2 id="compose">5 · Composing gatherers with <code>andThen</code></h2>
+  <p>Gatherers chain like any intermediate operation — either by calling <code>.gather()</code> twice,
+  or by fusing two gatherers into one reusable unit with <code>andThen</code>.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Two separate .gather()/.map() steps, repeated everywhere</div>
+      <pre><code class="java">var result = readings.stream()
+    .gather(Gatherers.windowFixed(3))     // batch into 3s
+    .map(GathererCompose::average)        // average each batch
+    .toList();
+// every pipeline that needs this has to repeat both lines</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Fused into one named, reusable Gatherer</div>
+      <pre><code class="java">// turn a plain mapping function into a (stateless) Gatherer
+static &lt;T, R&gt; Gatherer&lt;T, ?, R&gt; mapping(Function&lt;T, R&gt; f) {
+  return Gatherer.of((state, element, downstream) -> downstream.push(f.apply(element)));
+}
+
+// fuse "batch into 3s" + "average each batch" into one Gatherer
+Gatherer&lt;Reading, ?, Double&gt; batchAverage =
+    Gatherers.&lt;Reading&gt;windowFixed(3).andThen(mapping(GathererCompose::average));
+
+var result = readings.stream().gather(batchAverage).toList();
+// readings 1..7  →  [2.0, 5.0, 7.0]</code></pre>
+    </div>
+  </div>
+  <p><code>andThen</code> is most valuable when you want to <strong>name and reuse</strong> a
+  multi-step transformation (e.g. "batch, then average, then rate-limit") across several pipelines,
+  instead of repeating the same chain of <code>.gather().map()</code> calls everywhere.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="concurrent">6 · <code>mapConcurrent</code> deep dive</h2>
   <p>Backed by <a href="#pg-topics-virtual-threads-html">virtual threads</a>, it runs up to N mappings at once and
-  preserves encounter order — ideal for concurrent I/O without a thread pool.</p>
+  preserves encounter order — ideal for concurrent I/O without managing a thread pool.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Legacy — executor + futures + ordering</div>
       <pre><code class="java">var pool = Executors.newFixedThreadPool(10);
@@ -4342,9 +4475,12 @@ pool.shutdown();</code></pre>
     .toList();   // ≤10 in flight, order preserved</code></pre>
     </div>
   </div>
+  <div class="warn"><strong>It's for I/O, not CPU.</strong> Because each mapping runs on a virtual
+  thread, <code>mapConcurrent</code> only helps when <code>fetch</code> spends most of its time
+  <em>blocked</em> (network, disk, DB). CPU-bound mappers gain nothing and just add overhead.</div>
 
   <!-- ============================================================ -->
-  <h2 id="other">6 · Other recent Stream additions worth knowing</h2>
+  <h2 id="other">7 · Other recent Stream additions worth knowing</h2>
   <table class="data">
     <tr><th>API</th><th>Since</th><th>Use</th></tr>
     <tr><td><code>Stream.toList()</code></td><td>16</td><td>Unmodifiable list, shorter than <code>collect(toList())</code>.</td></tr>
@@ -4356,24 +4492,28 @@ pool.shutdown();</code></pre>
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="pitfalls">7 · Pitfalls</h2>
+  <h2 id="pitfalls">8 · Pitfalls</h2>
   <table class="data">
     <tr><th>Pitfall</th><th>Reality</th></tr>
     <tr><td>Adding a combiner that doesn't merge correctly</td><td>Breaks parallel streams — use <code>Gatherer.ofSequential(...)</code> if state isn't mergeable.</td></tr>
     <tr><td>Expecting eager execution</td><td>Gatherers are intermediate &amp; lazy — nothing runs until a terminal op.</td></tr>
-    <tr><td>Huge windows on huge streams</td><td>Windowed elements are buffered — mind memory on large windows.</td></tr>
+    <tr><td>Huge windows on huge streams</td><td>Windows may be allocated eagerly — mind memory on large window sizes.</td></tr>
     <tr><td>Overusing <code>mapConcurrent</code> for CPU work</td><td>It's for I/O; CPU-bound work won't speed up.</td></tr>
     <tr><td>Side-effecting <code>filter</code> for dedup</td><td>Works but is fragile/unclear — a gatherer states intent.</td></tr>
+    <tr><td>Forgetting a finisher for "flush what's left"</td><td>State still held when the stream ends is lost unless the finisher pushes it (see run-length example).</td></tr>
+    <tr><td>Confusing <code>scan</code> and <code>fold</code></td><td><code>scan</code> emits one output <em>per input</em> (running values); <code>fold</code> emits exactly <em>one</em> output total.</td></tr>
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="realworld">8 · Real-world use cases</h2>
+  <h2 id="realworld">9 · Real-world use cases</h2>
   <table class="data">
     <tr><th>Scenario</th><th>Gatherer</th></tr>
     <tr><td>Moving average / rolling metrics</td><td><code>windowSliding(n)</code> + map</td></tr>
     <tr><td>Batch rows for bulk insert / API calls</td><td><code>windowFixed(batchSize)</code></td></tr>
     <tr><td>Running totals / cumulative sums</td><td><code>scan(...)</code></td></tr>
+    <tr><td>Single-pass reduction without a combiner</td><td><code>fold(...)</code></td></tr>
     <tr><td>Deduplicate by a key</td><td>custom <code>distinctBy</code></td></tr>
+    <tr><td>Collapse repeated/duplicate events</td><td>custom run-length <code>groupRuns</code></td></tr>
     <tr><td>Concurrent enrichment (call API per item)</td><td><code>mapConcurrent(n, ...)</code></td></tr>
   </table>
   <h3>Worked example — batch records for a bulk insert</h3>
@@ -4394,15 +4534,17 @@ if (!batch.isEmpty()) repo.insertAll(batch);   // don't forget the tail!</code><
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">9 · Cheat sheet</h2>
+  <h2 id="cheat">10 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Gatherers in one glance</h3>
     <ul>
-      <li><code>stream.gather(Gatherers.windowSliding(n))</code> — built-ins: <code>windowFixed, windowSliding, scan, fold, mapConcurrent</code>.</li>
+      <li>Built-ins: <code>windowFixed(n)</code>, <code>windowSliding(n)</code>, <code>scan(seed, fn)</code>, <code>fold(seed, fn)</code>, <code>mapConcurrent(n, fn)</code>.</li>
+      <li><code>windowFixed</code>: last window may be short. <code>scan</code>: one output per input. <code>fold</code>: exactly one output, total.</li>
       <li>Custom: <code>Gatherer.ofSequential(init, integrator[, finisher])</code>.</li>
-      <li>Integrator <code>return false</code> to short-circuit.</li>
+      <li>Integrator <code>return false</code> to short-circuit; use a <strong>finisher</strong> to flush leftover state.</li>
+      <li>Chain with <code>.andThen(...)</code> to name &amp; reuse a multi-step transform.</li>
       <li>Intermediate &amp; lazy; add a combiner only for safe parallel merges.</li>
-      <li><code>mapConcurrent(n, fn)</code> = bounded concurrent I/O, order preserved.</li>
+      <li><code>mapConcurrent(n, fn)</code> = bounded concurrent I/O, order preserved — not for CPU work.</li>
     </ul>
   </div>
 
@@ -4446,9 +4588,10 @@ if (!batch.isEmpty()) repo.insertAll(batch);   // don't forget the tail!</code><
     <a href="#upcall">5. Upcalls (callbacks)</a>
     <a href="#jextract">6. jextract — auto bindings</a>
     <a href="#access">7. Native-access restrictions</a>
-    <a href="#pitfalls">8. Pitfalls</a>
-    <a href="#realworld">9. Real-world use cases</a>
-    <a href="#cheat">10. Cheat sheet</a>
+    <a href="#fullexample">8. Full runnable example — native qsort</a>
+    <a href="#pitfalls">9. Pitfalls</a>
+    <a href="#realworld">10. Real-world use cases</a>
+    <a href="#cheat">11. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -4527,8 +4670,8 @@ MethodHandle strlen = linker.downcallHandle(
                           ValueLayout.ADDRESS));     // arg: char*
 
 try (Arena arena = Arena.ofConfined()) {
-  MemorySegment cString = arena.allocateUtf8String("hello");
-  long len = (long) strlen.invoke(cString);          // → 5
+  MemorySegment cString = arena.allocateFrom("hello");  // null-terminated C string
+  long len = (long) strlen.invoke(cString);             // → 5
 }</code></pre>
 
   <!-- ============================================================ -->
@@ -4555,7 +4698,100 @@ java --enable-native-access=ALL-UNNAMED -jar app.jar   # classpath apps
 // without it you get warnings now, errors later</code></pre>
 
   <!-- ============================================================ -->
-  <h2 id="pitfalls">8 · Pitfalls</h2>
+  <h2 id="fullexample">8 · Full runnable example — sort a native array with libc's <code>qsort</code></h2>
+  <p>Everything above in one program you can actually run: off-heap memory, a <strong>downcall</strong>
+  into C, and an <strong>upcall</strong> callback from C back into Java — no <code>jextract</code>, no
+  build tool, no dependencies. It calls the C standard library's <code>qsort</code> to sort an array,
+  using a comparator <em>written in Java</em> as the callback.</p>
+
+  <div class="note"><strong>Requirements:</strong> JDK 22 or later (FFM is final, no
+  <code>--enable-preview</code> needed). Works on <strong>macOS and Linux</strong> out of the box
+  (libc's <code>qsort</code> is always loaded). On Windows, run it under WSL.</div>
+
+  <pre><code class="java">// NativeQsortDemo.java
+// A complete, runnable Foreign Function &amp; Memory API example.
+// It sorts an int[] by calling C's qsort() — with a Java method as the comparator.
+import java.lang.foreign.*;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.util.Arrays;
+
+import static java.lang.foreign.ValueLayout.*;
+
+public class NativeQsortDemo {
+
+    // qsort() calls this for every comparison. Each MemorySegment points at
+    // one int inside the native array (ADDRESS.withTargetLayout(JAVA_INT)
+    // below tells the runtime the pointer targets a 4-byte int, so .get() works).
+    static int compare(MemorySegment a, MemorySegment b) {
+        int x = a.get(JAVA_INT, 0);
+        int y = b.get(JAVA_INT, 0);
+        return Integer.compare(x, y);
+    }
+
+    public static void main(String[] args) throws Throwable {
+        Linker linker = Linker.nativeLinker();
+
+        // 1. Describe C's qsort and get a downcall handle for it:
+        //    void qsort(void *base, size_t nmemb, size_t size,
+        //               int (*compar)(const void *, const void *));
+        MethodHandle qsort = linker.downcallHandle(
+            linker.defaultLookup().find("qsort").orElseThrow(),
+            FunctionDescriptor.ofVoid(ADDRESS, JAVA_LONG, JAVA_LONG, ADDRESS));
+
+        // 2. Turn our Java `compare` method into a native function pointer.
+        FunctionDescriptor comparDesc = FunctionDescriptor.of(JAVA_INT,
+            ADDRESS.withTargetLayout(JAVA_INT),
+            ADDRESS.withTargetLayout(JAVA_INT));
+        MethodHandle comparHandle = MethodHandles.lookup().findStatic(
+            NativeQsortDemo.class, "compare", comparDesc.toMethodType());
+
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment comparFunc = linker.upcallStub(comparHandle, comparDesc, arena);
+
+            // 3. Copy a Java array into off-heap memory that C can operate on.
+            int[] data = { 9, 3, 7, 1, 8, 2, 6, 4, 5, 0 };
+            MemorySegment nativeArray = arena.allocateFrom(JAVA_INT, data);
+
+            // 4. Call native qsort. It sorts nativeArray IN PLACE, calling our
+            //    Java `compare` method every time it needs to compare two elements.
+            qsort.invokeExact(nativeArray, (long) data.length, JAVA_INT.byteSize(), comparFunc);
+
+            // 5. Copy the sorted off-heap array back into a plain Java array.
+            int[] sorted = nativeArray.toArray(JAVA_INT);
+
+            System.out.println("Before: " + Arrays.toString(data));
+            System.out.println("After:  " + Arrays.toString(sorted));
+        }   // arena closes here — native memory is freed deterministically
+    }
+}</code></pre>
+
+  <h3>How to run it</h3>
+  <pre><code class="java">// single-file launch (JEP 330) — no javac step needed
+java NativeQsortDemo.java
+
+// recommended: silence the native-access warning explicitly
+java --enable-native-access=ALL-UNNAMED NativeQsortDemo.java</code></pre>
+  <p><strong>Expected output:</strong></p>
+  <pre><code class="java">Before: [9, 3, 7, 1, 8, 2, 6, 4, 5, 0]
+After:  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]</code></pre>
+  <p>Without <code>--enable-native-access</code> the program still runs — JDK 22's default is to
+  <em>warn</em> about restricted operations, not block them (that policy has tightened in later
+  releases, so pass the flag deliberately rather than relying on the warning-only default).</p>
+
+  <h3>What each part is doing</h3>
+  <table class="data">
+    <tr><th>Step</th><th>FFM concept</th></tr>
+    <tr><td><code>linker.downcallHandle(...)</code></td><td>A typed handle to call <em>into</em> C's <code>qsort</code>.</td></tr>
+    <tr><td><code>linker.upcallStub(...)</code></td><td>A native function pointer that calls <em>back into</em> Java's <code>compare</code>.</td></tr>
+    <tr><td><code>Arena.ofConfined()</code></td><td>Owns the off-heap array and the upcall stub; both die when the block exits.</td></tr>
+    <tr><td><code>arena.allocateFrom(JAVA_INT, data)</code></td><td>Copies a Java <code>int[]</code> into a native <code>MemorySegment</code>.</td></tr>
+    <tr><td><code>ADDRESS.withTargetLayout(JAVA_INT)</code></td><td>Tells the runtime a raw pointer parameter targets a 4-byte int, so <code>.get(JAVA_INT, 0)</code> is safe.</td></tr>
+    <tr><td><code>nativeArray.toArray(JAVA_INT)</code></td><td>Copies the (now sorted) off-heap data back onto the Java heap.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">9 · Pitfalls</h2>
   <table class="data">
     <tr><th>Pitfall</th><th>Reality</th></tr>
     <tr><td>Missing <code>--enable-native-access</code></td><td>Native calls warn/fail — grant it to the calling module.</td></tr>
@@ -4566,7 +4802,7 @@ java --enable-native-access=ALL-UNNAMED -jar app.jar   # classpath apps
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="realworld">9 · Real-world use cases</h2>
+  <h2 id="realworld">10 · Real-world use cases</h2>
   <table class="data">
     <tr><th>Scenario</th><th>Why FFM fits</th></tr>
     <tr><td>Call OS/system libraries (libc, OpenSSL, sqlite)</td><td>No JNI shim; <code>jextract</code> the header.</td></tr>
@@ -4594,13 +4830,14 @@ java --enable-native-access=ALL-UNNAMED -jar app.jar   # classpath apps
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">10 · Cheat sheet</h2>
+  <h2 id="cheat">11 · Cheat sheet</h2>
   <div class="cheat">
     <h3>FFM in one glance</h3>
     <ul>
       <li>Memory: <code>try (Arena a = Arena.ofConfined()) { a.allocate(...); }</code> — deterministic free.</li>
+      <li>Strings/arrays in: <code>arena.allocateFrom("hi")</code>, <code>arena.allocateFrom(JAVA_INT, data)</code>.</li>
       <li>Call C: <code>Linker.nativeLinker().downcallHandle(symbol, FunctionDescriptor)</code>.</li>
-      <li>Callbacks: <code>linker.upcallStub(...)</code>.</li>
+      <li>Callbacks: <code>linker.upcallStub(handle, descriptor, arena)</code> — see the full <a href="#fullexample">qsort example</a>.</li>
       <li>Generate bindings with <code>jextract</code>; match the C ABI via <code>ValueLayout</code>.</li>
       <li>Grant <code>--enable-native-access</code>. Replaces JNI + <code>Unsafe</code>.</li>
     </ul>

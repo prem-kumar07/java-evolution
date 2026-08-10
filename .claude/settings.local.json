@@ -30,7 +30,24 @@
       "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand Java 11 version page: stat banner + more features with before/after *)",
       "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand Java 17 version page: stat banner + more features \\(compact numbers, unix sockets, mapMulti\\) *)",
       "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand Java 21 version page: stat banner + @snippet, sequenced collections, more before/after *)",
-      "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand Java 25 version page: stat banner + Markdown javadoc, more before/after *)"
+      "Bash(git -c 'user.name=Java Feature Docs' -c user.email=you@example.com commit -q -m 'Expand Java 25 version page: stat banner + Markdown javadoc, more before/after *)",
+      "Bash(python3 *)",
+      "Bash(curl -sL -m 20 -A \"Mozilla/5.0\" \"https://openjdk.org/jeps/454\")",
+      "Bash(curl -sL -m 20 -A \"Mozilla/5.0\" -o /tmp/addrlayout.html \"https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/lang/foreign/AddressLayout.html\")",
+      "Bash(java -version)",
+      "Bash(/usr/libexec/java_home -V)",
+      "Bash(/opt/homebrew/Cellar/openjdk@25/25.0.3/libexec/openjdk.jdk/Contents/Home/bin/java --enable-native-access=ALL-UNNAMED NativeQsortDemo.java)",
+      "Bash(/opt/homebrew/Cellar/openjdk/26.0.1/libexec/openjdk.jdk/Contents/Home/bin/java NativeQsortDemo.java)",
+      "Bash(echo \"exit code: $?\")",
+      "Bash(curl -sL -m 20 -A \"Mozilla/5.0\" -o /tmp/gatherers.html \"https://docs.oracle.com/en/java/javase/24/docs/api/java.base/java/util/stream/Gatherers.html\")",
+      "Bash(curl -sL -m 20 -A \"Mozilla/5.0\" -o /tmp/gatherer.html \"https://docs.oracle.com/en/java/javase/24/docs/api/java.base/java/util/stream/Gatherer.html\")",
+      "Bash(curl -sL -m 20 -A \"Mozilla/5.0\" \"https://docs.oracle.com/en/java/javase/24/docs/api/java.base/java/util/stream/Gatherer.Downstream.html\")",
+      "Bash(curl -sL -m 20 -A \"Mozilla/5.0\" \"https://docs.oracle.com/en/java/javase/24/docs/api/java.base/java/util/stream/Gatherer.Integrator.html\" -o /tmp/integrator.html)",
+      "Bash(curl -sL -m 20 -A \"Mozilla/5.0\" \"https://docs.oracle.com/en/java/javase/24/docs/api/java.base/java/util/stream/Gatherer.Integrator.Greedy.html\" -o /tmp/greedy.html)",
+      "Bash(mkdir -p /tmp/gath-test)",
+      "Bash(cat)",
+      "Bash(/opt/homebrew/Cellar/openjdk/26.0.1/libexec/openjdk.jdk/Contents/Home/bin/java GathererCompose.java)",
+      "Bash(open topics/ffm-api.html topics/streams-gatherers.html)"
     ]
   }
 }

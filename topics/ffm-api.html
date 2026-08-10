@@ -39,9 +39,10 @@
     <a href="#upcall">5. Upcalls (callbacks)</a>
     <a href="#jextract">6. jextract — auto bindings</a>
     <a href="#access">7. Native-access restrictions</a>
-    <a href="#pitfalls">8. Pitfalls</a>
-    <a href="#realworld">9. Real-world use cases</a>
-    <a href="#cheat">10. Cheat sheet</a>
+    <a href="#fullexample">8. Full runnable example — native qsort</a>
+    <a href="#pitfalls">9. Pitfalls</a>
+    <a href="#realworld">10. Real-world use cases</a>
+    <a href="#cheat">11. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -120,8 +121,8 @@ MethodHandle strlen = linker.downcallHandle(
                           ValueLayout.ADDRESS));     // arg: char*
 
 try (Arena arena = Arena.ofConfined()) {
-  MemorySegment cString = arena.allocateUtf8String("hello");
-  long len = (long) strlen.invoke(cString);          // → 5
+  MemorySegment cString = arena.allocateFrom("hello");  // null-terminated C string
+  long len = (long) strlen.invoke(cString);             // → 5
 }</code></pre>
 
   <!-- ============================================================ -->
@@ -148,7 +149,100 @@ java --enable-native-access=ALL-UNNAMED -jar app.jar   # classpath apps
 // without it you get warnings now, errors later</code></pre>
 
   <!-- ============================================================ -->
-  <h2 id="pitfalls">8 · Pitfalls</h2>
+  <h2 id="fullexample">8 · Full runnable example — sort a native array with libc's <code>qsort</code></h2>
+  <p>Everything above in one program you can actually run: off-heap memory, a <strong>downcall</strong>
+  into C, and an <strong>upcall</strong> callback from C back into Java — no <code>jextract</code>, no
+  build tool, no dependencies. It calls the C standard library's <code>qsort</code> to sort an array,
+  using a comparator <em>written in Java</em> as the callback.</p>
+
+  <div class="note"><strong>Requirements:</strong> JDK 22 or later (FFM is final, no
+  <code>--enable-preview</code> needed). Works on <strong>macOS and Linux</strong> out of the box
+  (libc's <code>qsort</code> is always loaded). On Windows, run it under WSL.</div>
+
+  <pre><code class="java">// NativeQsortDemo.java
+// A complete, runnable Foreign Function &amp; Memory API example.
+// It sorts an int[] by calling C's qsort() — with a Java method as the comparator.
+import java.lang.foreign.*;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.util.Arrays;
+
+import static java.lang.foreign.ValueLayout.*;
+
+public class NativeQsortDemo {
+
+    // qsort() calls this for every comparison. Each MemorySegment points at
+    // one int inside the native array (ADDRESS.withTargetLayout(JAVA_INT)
+    // below tells the runtime the pointer targets a 4-byte int, so .get() works).
+    static int compare(MemorySegment a, MemorySegment b) {
+        int x = a.get(JAVA_INT, 0);
+        int y = b.get(JAVA_INT, 0);
+        return Integer.compare(x, y);
+    }
+
+    public static void main(String[] args) throws Throwable {
+        Linker linker = Linker.nativeLinker();
+
+        // 1. Describe C's qsort and get a downcall handle for it:
+        //    void qsort(void *base, size_t nmemb, size_t size,
+        //               int (*compar)(const void *, const void *));
+        MethodHandle qsort = linker.downcallHandle(
+            linker.defaultLookup().find("qsort").orElseThrow(),
+            FunctionDescriptor.ofVoid(ADDRESS, JAVA_LONG, JAVA_LONG, ADDRESS));
+
+        // 2. Turn our Java `compare` method into a native function pointer.
+        FunctionDescriptor comparDesc = FunctionDescriptor.of(JAVA_INT,
+            ADDRESS.withTargetLayout(JAVA_INT),
+            ADDRESS.withTargetLayout(JAVA_INT));
+        MethodHandle comparHandle = MethodHandles.lookup().findStatic(
+            NativeQsortDemo.class, "compare", comparDesc.toMethodType());
+
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment comparFunc = linker.upcallStub(comparHandle, comparDesc, arena);
+
+            // 3. Copy a Java array into off-heap memory that C can operate on.
+            int[] data = { 9, 3, 7, 1, 8, 2, 6, 4, 5, 0 };
+            MemorySegment nativeArray = arena.allocateFrom(JAVA_INT, data);
+
+            // 4. Call native qsort. It sorts nativeArray IN PLACE, calling our
+            //    Java `compare` method every time it needs to compare two elements.
+            qsort.invokeExact(nativeArray, (long) data.length, JAVA_INT.byteSize(), comparFunc);
+
+            // 5. Copy the sorted off-heap array back into a plain Java array.
+            int[] sorted = nativeArray.toArray(JAVA_INT);
+
+            System.out.println("Before: " + Arrays.toString(data));
+            System.out.println("After:  " + Arrays.toString(sorted));
+        }   // arena closes here — native memory is freed deterministically
+    }
+}</code></pre>
+
+  <h3>How to run it</h3>
+  <pre><code class="java">// single-file launch (JEP 330) — no javac step needed
+java NativeQsortDemo.java
+
+// recommended: silence the native-access warning explicitly
+java --enable-native-access=ALL-UNNAMED NativeQsortDemo.java</code></pre>
+  <p><strong>Expected output:</strong></p>
+  <pre><code class="java">Before: [9, 3, 7, 1, 8, 2, 6, 4, 5, 0]
+After:  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]</code></pre>
+  <p>Without <code>--enable-native-access</code> the program still runs — JDK 22's default is to
+  <em>warn</em> about restricted operations, not block them (that policy has tightened in later
+  releases, so pass the flag deliberately rather than relying on the warning-only default).</p>
+
+  <h3>What each part is doing</h3>
+  <table class="data">
+    <tr><th>Step</th><th>FFM concept</th></tr>
+    <tr><td><code>linker.downcallHandle(...)</code></td><td>A typed handle to call <em>into</em> C's <code>qsort</code>.</td></tr>
+    <tr><td><code>linker.upcallStub(...)</code></td><td>A native function pointer that calls <em>back into</em> Java's <code>compare</code>.</td></tr>
+    <tr><td><code>Arena.ofConfined()</code></td><td>Owns the off-heap array and the upcall stub; both die when the block exits.</td></tr>
+    <tr><td><code>arena.allocateFrom(JAVA_INT, data)</code></td><td>Copies a Java <code>int[]</code> into a native <code>MemorySegment</code>.</td></tr>
+    <tr><td><code>ADDRESS.withTargetLayout(JAVA_INT)</code></td><td>Tells the runtime a raw pointer parameter targets a 4-byte int, so <code>.get(JAVA_INT, 0)</code> is safe.</td></tr>
+    <tr><td><code>nativeArray.toArray(JAVA_INT)</code></td><td>Copies the (now sorted) off-heap data back onto the Java heap.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">9 · Pitfalls</h2>
   <table class="data">
     <tr><th>Pitfall</th><th>Reality</th></tr>
     <tr><td>Missing <code>--enable-native-access</code></td><td>Native calls warn/fail — grant it to the calling module.</td></tr>
@@ -159,7 +253,7 @@ java --enable-native-access=ALL-UNNAMED -jar app.jar   # classpath apps
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="realworld">9 · Real-world use cases</h2>
+  <h2 id="realworld">10 · Real-world use cases</h2>
   <table class="data">
     <tr><th>Scenario</th><th>Why FFM fits</th></tr>
     <tr><td>Call OS/system libraries (libc, OpenSSL, sqlite)</td><td>No JNI shim; <code>jextract</code> the header.</td></tr>
@@ -187,13 +281,14 @@ java --enable-native-access=ALL-UNNAMED -jar app.jar   # classpath apps
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">10 · Cheat sheet</h2>
+  <h2 id="cheat">11 · Cheat sheet</h2>
   <div class="cheat">
     <h3>FFM in one glance</h3>
     <ul>
       <li>Memory: <code>try (Arena a = Arena.ofConfined()) { a.allocate(...); }</code> — deterministic free.</li>
+      <li>Strings/arrays in: <code>arena.allocateFrom("hi")</code>, <code>arena.allocateFrom(JAVA_INT, data)</code>.</li>
       <li>Call C: <code>Linker.nativeLinker().downcallHandle(symbol, FunctionDescriptor)</code>.</li>
-      <li>Callbacks: <code>linker.upcallStub(...)</code>.</li>
+      <li>Callbacks: <code>linker.upcallStub(handle, descriptor, arena)</code> — see the full <a href="#fullexample">qsort example</a>.</li>
       <li>Generate bindings with <code>jextract</code>; match the C ABI via <code>ValueLayout</code>.</li>
       <li>Grant <code>--enable-native-access</code>. Replaces JNI + <code>Unsafe</code>.</li>
     </ul>
