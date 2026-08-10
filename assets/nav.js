@@ -36,6 +36,7 @@
       { href: "topics/modules-jpms.html",           label: "Modules (JPMS)" }
     ]},
     { title: "Deep dives — concurrency & APIs", items: [
+      { href: "topics/stream-api.html",             label: "Stream API (Java 8+)" },
       { href: "topics/virtual-threads.html",        label: "Virtual threads" },
       { href: "topics/structured-concurrency.html", label: "Structured concurrency" },
       { href: "topics/scoped-values.html",          label: "Scoped values" },

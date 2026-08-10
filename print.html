@@ -48,6 +48,7 @@
 <a href="#pg-topics-pattern-matching-switch-html">Pattern matching &amp; switch — complete guide</a>
 <a href="#pg-topics-text-blocks-strings-html">Text blocks &amp; String APIs — complete guide</a>
 <a href="#pg-topics-modules-jpms-html">Modules (JPMS) — complete guide</a>
+<a href="#pg-topics-stream-api-html">Stream API — complete guide</a>
 <a href="#pg-topics-virtual-threads-html">Virtual threads — complete guide</a>
 <a href="#pg-topics-structured-concurrency-html">Structured concurrency — complete guide</a>
 <a href="#pg-topics-scoped-values-html">Scoped values — complete guide</a>
@@ -3122,6 +3123,533 @@ jdeps --jdk-internals app.jar   # find internal-API usage first</code></pre>
     <tr><td>Java 16/17</td><td>JDK internals strongly encapsulated by default (JEP 396/403).</td></tr>
     <tr><td>Java 25</td><td>Module import declarations — <code>import module M;</code> (JEP 511).</td></tr>
   </table>
+</section>
+<section id="pg-topics-stream-api-html" class="print-page">
+  <p class="sec-tag">Deep dive · API · complete guide</p>
+  <h1>The Stream API <span class="badge added">Java 8</span></h1>
+  <p class="lead">
+    A <code>Stream</code> is a <strong>pipeline of operations over a sequence of data</strong> — you
+    declare <em>what</em> to do (filter, transform, aggregate) instead of writing the loop yourself.
+    Every example on this page is written to be pasted into a file and run as-is.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">lazy</span><span class="lbl">nothing runs until a terminal op</span></div>
+    <div class="stat"><span class="num">1x</span><span class="lbl">use — a stream can't be replayed</span></div>
+    <div class="stat"><span class="num">.parallel()</span><span class="lbl">one word for multi-core</span></div>
+    <div class="stat"><span class="num">20+</span><span class="lbl">built-in Collectors</span></div>
+    <div class="stat"><span class="num">Java 8</span><span class="lbl">(2014) — the biggest API since generics</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Filtering, transforming and aggregating collections used to mean a mutable accumulator and a
+    hand-written <code>for</code> loop every single time — correct but repetitive, and impossible to
+    parallelise without rewriting it with threads. Streams let you describe the transformation
+    declaratively; the same pipeline runs sequentially or across every CPU core by adding
+    <code>.parallel()</code>.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#model">1. Mental model &amp; creating streams</a>
+    <a href="#intermediate">2. Intermediate operations</a>
+    <a href="#terminal">3. Terminal operations</a>
+    <a href="#reduce">4. reduce() — identity, accumulator, combiner</a>
+    <a href="#collectors">5. Collectors, in depth</a>
+    <a href="#customcollector">6. Writing a custom Collector</a>
+    <a href="#primitive">7. Primitive streams</a>
+    <a href="#parallel">8. Parallel streams</a>
+    <a href="#advanced">9. Putting it all together</a>
+    <a href="#pitfalls">10. Pitfalls</a>
+    <a href="#realworld">11. Real-world use cases</a>
+    <a href="#cheat">12. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="model">1 · Mental model &amp; creating streams</h2>
+  <p>A pipeline is always <code>source → zero or more intermediate ops → one terminal op</code>.
+  Intermediate ops (<code>map</code>, <code>filter</code>...) are <strong>lazy</strong> — they just
+  describe the pipeline. Nothing executes until a <strong>terminal</strong> op
+  (<code>collect</code>, <code>forEach</code>, <code>reduce</code>...) pulls elements through it.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 760 150" role="img" aria-label="A stream pipeline: source, then lazy intermediate operations like filter and map, ending in a terminal operation that triggers execution">
+      <defs>
+        <marker id="smA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="20"  y="55" width="110" height="46" rx="8" class="dg-box"/>
+      <text x="75"  y="82" text-anchor="middle" class="dg-text-sm">source</text>
+      <rect x="160" y="55" width="110" height="46" rx="8" class="dg-accent"/>
+      <text x="215" y="82" text-anchor="middle" class="dg-text-sm">.filter(...)</text>
+      <rect x="300" y="55" width="110" height="46" rx="8" class="dg-accent"/>
+      <text x="355" y="82" text-anchor="middle" class="dg-text-sm">.map(...)</text>
+      <rect x="440" y="55" width="110" height="46" rx="8" class="dg-accent"/>
+      <text x="495" y="82" text-anchor="middle" class="dg-text-sm">.sorted()</text>
+      <rect x="590" y="40" width="150" height="76" rx="10" class="dg-good-box"/>
+      <text x="665" y="70" text-anchor="middle" class="dg-text">.collect(...)</text>
+      <text x="665" y="90" text-anchor="middle" class="dg-soft">terminal — runs it all</text>
+      <line x1="130" y1="78" x2="158" y2="78" class="dg-line" marker-end="url(#smA)"/>
+      <line x1="270" y1="78" x2="298" y2="78" class="dg-line" marker-end="url(#smA)"/>
+      <line x1="410" y1="78" x2="438" y2="78" class="dg-line" marker-end="url(#smA)"/>
+      <line x1="550" y1="78" x2="588" y2="78" class="dg-line" marker-end="url(#smA)"/>
+      <text x="380" y="24" text-anchor="middle" class="dg-soft" style="font-weight:700">Lazy — describes the pipeline, does nothing yet</text>
+    </svg>
+    <figcaption>Nothing in the orange boxes runs until <code>.collect(...)</code> is called. This is
+    why you can build and reuse pipeline <em>descriptions</em>, but not the stream object itself once consumed.</figcaption>
+  </figure>
+
+  <h3>Creating a stream — every common source</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — manual loops per source</div>
+      <pre><code class="java">List&lt;String&gt; out = new ArrayList&lt;&gt;();
+for (String s : list) out.add(s.toUpperCase());
+
+int[] arr = {1, 2, 3};
+int sum = 0;
+for (int x : arr) sum += x;
+
+List&lt;String&gt; lines = new ArrayList&lt;&gt;();
+try (var r = Files.newBufferedReader(path)) {
+  String line;
+  while ((line = r.readLine()) != null) lines.add(line);
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Streams — one shape for every source</div>
+      <pre><code class="java">list.stream();                       // from a Collection
+Stream.of("a", "b", "c");             // from varargs
+Arrays.stream(new int[]{1, 2, 3});    // from an array -> IntStream
+Stream.generate(Math::random);        // infinite; must limit()
+Stream.iterate(1, n -> n * 2);         // infinite; must limit() or use bounded form
+IntStream.range(0, 10);                // 0..9
+IntStream.rangeClosed(1, 10);          // 1..10
+Files.lines(path);                     // lazy, one line per element (try-with-resources!)
+map.entrySet().stream();               // from a Map</code></pre>
+    </div>
+  </div>
+  <div class="warn"><strong>A stream can only be consumed once.</strong> Calling a terminal operation
+  twice on the same stream throws <code>IllegalStateException</code>. Re-create it from the source (or
+  wrap creation in a <code>Supplier&lt;Stream&lt;T&gt;&gt;</code>) if you need to run the pipeline again.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="intermediate">2 · Intermediate operations</h2>
+  <p>Each returns a new stream, so they chain. All are lazy.</p>
+  <table class="data">
+    <tr><th>Operation</th><th>Does</th></tr>
+    <tr><td><code>map(Function)</code></td><td>Transform each element 1-to-1.</td></tr>
+    <tr><td><code>filter(Predicate)</code></td><td>Keep elements matching a condition.</td></tr>
+    <tr><td><code>flatMap(Function)</code></td><td>Transform each element into a stream, then flatten (1-to-many).</td></tr>
+    <tr><td><code>distinct()</code></td><td>Remove duplicates (via <code>equals</code>).</td></tr>
+    <tr><td><code>sorted()</code> / <code>sorted(Comparator)</code></td><td>Sort (natural order, or custom).</td></tr>
+    <tr><td><code>peek(Consumer)</code></td><td>Look at elements without changing the stream — debugging only.</td></tr>
+    <tr><td><code>limit(n)</code> / <code>skip(n)</code></td><td>Truncate, or drop the first n.</td></tr>
+    <tr><td><code>takeWhile</code> / <code>dropWhile</code> <span class="badge added">9</span></td><td>Leading-run slicing by predicate.</td></tr>
+  </table>
+
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — nested loop for flatten + filter + sort</div>
+      <pre><code class="java">List&lt;String&gt; result = new ArrayList&lt;&gt;();
+for (List&lt;String&gt; group : groups) {
+  for (String s : group) {
+    if (s.length() &gt; 3) result.add(s.toUpperCase());
+  }
+}
+Collections.sort(result);
+result = new ArrayList&lt;&gt;(new LinkedHashSet&lt;&gt;(result));  // dedupe, keep order</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Streams — one readable chain</div>
+      <pre><code class="java">List&lt;String&gt; result = groups.stream()
+    .flatMap(List::stream)
+    .filter(s -> s.length() &gt; 3)
+    .map(String::toUpperCase)
+    .distinct()
+    .sorted()
+    .toList();</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="terminal">3 · Terminal operations</h2>
+  <p>Exactly one per pipeline — it triggers execution and produces a result (or a side effect).</p>
+  <table class="data">
+    <tr><th>Operation</th><th>Returns</th></tr>
+    <tr><td><code>forEach(Consumer)</code></td><td><code>void</code> — a side effect per element.</td></tr>
+    <tr><td><code>collect(Collector)</code></td><td>Whatever the collector builds (List, Map, String…).</td></tr>
+    <tr><td><code>reduce(...)</code></td><td>A single aggregated value.</td></tr>
+    <tr><td><code>count()</code></td><td><code>long</code> — element count.</td></tr>
+    <tr><td><code>anyMatch/allMatch/noneMatch(Predicate)</code></td><td><code>boolean</code>, short-circuits.</td></tr>
+    <tr><td><code>findFirst()</code> / <code>findAny()</code></td><td><code>Optional&lt;T&gt;</code>, short-circuits.</td></tr>
+    <tr><td><code>min/max(Comparator)</code></td><td><code>Optional&lt;T&gt;</code>.</td></tr>
+    <tr><td><code>toArray()</code></td><td><code>Object[]</code> or typed array.</td></tr>
+    <tr><td><code>toList()</code> <span class="badge added">16</span></td><td>Unmodifiable <code>List&lt;T&gt;</code> — shorthand for <code>collect(toList())</code>.</td></tr>
+  </table>
+  <pre><code class="java">boolean anyExpensive = orders.stream().anyMatch(o -> o.total() > 1000);   // stops at first match
+Optional&lt;Order&gt; first = orders.stream().filter(o -> o.total() > 1000).findFirst();
+long count = orders.stream().filter(Order::isPaid).count();</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="reduce">4 · reduce() — identity, accumulator, combiner</h2>
+  <p><code>reduce</code> is the most general terminal operation — it folds a stream down to one value.
+  It comes in three overloads, and the difference between them is exactly the part most people find
+  confusing: <strong>what happens to the combiner in parallel</strong>.</p>
+
+  <h3>4.1 · One-arg — no identity, returns <code>Optional</code></h3>
+  <pre><code class="java">Optional&lt;Integer&gt; max = Stream.of(3, 1, 4, 1, 5).reduce(Integer::max);
+// empty stream -> Optional.empty() (no identity to fall back on)</code></pre>
+
+  <h3>4.2 · Two-arg — identity + accumulator, same type</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — manual loop</div>
+      <pre><code class="java">int sum = 0;
+for (int n : numbers) sum += n;</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">reduce(identity, accumulator)</div>
+      <pre><code class="java">int sum = numbers.stream().reduce(0, Integer::sum);
+// identity = 0 (returned for an empty stream, and the starting value)
+// accumulator = (partial, next) -> partial + next</code></pre>
+    </div>
+  </div>
+
+  <h3>4.3 · Three-arg — identity + accumulator + combiner, <strong>different</strong> types</h3>
+  <p>Use this when the accumulated type (<code>U</code>) differs from the element type (<code>T</code>)
+  — e.g. reducing a stream of <code>String</code>s down to a total <code>int</code> length. This is the
+  <strong>only</strong> form that lets <code>U != T</code>, and it's the one that makes parallel
+  execution correct.</p>
+  <pre><code class="java">List&lt;String&gt; words = List.of("foo", "bars", "bazzz");   // lengths: 3, 4, 5
+
+int totalLen = words.stream().reduce(
+    0,                                    // identity: U (int)
+    (partial, word) -> partial + word.length(),   // accumulator: (U, T) -> U
+    Integer::sum                          // combiner: (U, U) -> U
+);
+// totalLen == 12</code></pre>
+
+  <h3>Why the combiner exists — sequential vs parallel</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 230" role="img" aria-label="Sequential reduce chains the accumulator through every element; parallel reduce splits the stream, accumulates each chunk independently, then merges the partial results with the combiner">
+      <defs>
+        <marker id="rdA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <text x="24" y="22" class="dg-title">Sequential — one running accumulator</text>
+      <rect x="24" y="34" width="90" height="34" rx="7" class="dg-box"/><text x="69" y="55" text-anchor="middle" class="dg-text-sm">acc(0,"foo")</text>
+      <rect x="130" y="34" width="90" height="34" rx="7" class="dg-box"/><text x="175" y="55" text-anchor="middle" class="dg-text-sm">acc(3,"bars")</text>
+      <rect x="236" y="34" width="110" height="34" rx="7" class="dg-good-box"/><text x="291" y="55" text-anchor="middle" class="dg-text-sm">acc(7,"bazzz")=12</text>
+      <line x1="114" y1="51" x2="128" y2="51" class="dg-line" marker-end="url(#rdA)"/>
+      <line x1="220" y1="51" x2="234" y2="51" class="dg-line" marker-end="url(#rdA)"/>
+
+      <text x="24" y="110" class="dg-title">Parallel — split, accumulate each chunk, then COMBINE</text>
+      <rect x="24"  y="124" width="150" height="46" rx="8" class="dg-accent"/>
+      <text x="99" y="142" text-anchor="middle" class="dg-text-sm">chunk A: "foo"</text>
+      <text x="99" y="158" text-anchor="middle" class="dg-soft">acc(0,"foo")=3</text>
+      <rect x="200" y="124" width="150" height="46" rx="8" class="dg-accent"/>
+      <text x="275" y="142" text-anchor="middle" class="dg-text-sm">chunk B: "bars","bazzz"</text>
+      <text x="275" y="158" text-anchor="middle" class="dg-soft">acc chain =9</text>
+      <rect x="440" y="130" width="180" height="46" rx="8" class="dg-good-box"/>
+      <text x="530" y="148" text-anchor="middle" class="dg-text-sm">combiner(3, 9) = 12</text>
+      <text x="530" y="164" text-anchor="middle" class="dg-soft">merges the two partial results</text>
+      <line x1="174" y1="147" x2="438" y2="147" class="dg-line" marker-end="url(#rdA)"/>
+      <line x1="350" y1="147" x2="438" y2="150" class="dg-line" marker-end="url(#rdA)"/>
+    </svg>
+    <figcaption>Sequentially, the combiner is never even called — there's only one running value. In
+    <strong>parallel</strong>, each chunk gets its own accumulation, and the <strong>combiner merges
+    the partial results together</strong>. If your combiner is wrong (or you forgot one), parallel and
+    sequential results silently diverge.</figcaption>
+  </figure>
+  <div class="warn"><strong>Common mistake:</strong> writing a 3-arg <code>reduce</code> where the
+  combiner doesn't correctly represent "merge two partial results of the accumulation" — e.g. a
+  combiner with side effects, or one that isn't associative. It'll work by luck sequentially and
+  produce wrong answers only when run in parallel.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="collectors">5 · Collectors, in depth</h2>
+  <p><code>Collectors</code> is a factory of ready-made terminal strategies for <code>collect(...)</code> — from a plain list to a fully grouped, aggregated report.</p>
+
+  <h3>5.1 · The basics — toList, toSet, toMap, joining</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy</div>
+      <pre><code class="java">List&lt;String&gt; names = new ArrayList&lt;&gt;();
+for (Employee e : emps) names.add(e.name());
+StringBuilder sb = new StringBuilder();
+for (int i = 0; i &lt; names.size(); i++) {
+  sb.append(names.get(i));
+  if (i &lt; names.size() - 1) sb.append(", ");
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Collectors</div>
+      <pre><code class="java">List&lt;String&gt; names = emps.stream().map(Employee::name).toList();
+String csv = emps.stream().map(Employee::name).collect(joining(", "));
+String csv2 = emps.stream().map(Employee::name).collect(joining(", ", "[", "]"));  // "[Ada, Bob]"
+
+Map&lt;String, Double&gt; salaryByName = emps.stream()
+    .collect(toMap(Employee::name, Employee::salary));
+// duplicate keys THROW by default — see 5.2 for the fix</code></pre>
+    </div>
+  </div>
+
+  <h3>5.2 · <code>toMap</code> with a merge function — handling duplicate keys</h3>
+  <pre><code class="java">// two employees could share a department; keep the HIGHEST salary per dept
+Map&lt;String, Double&gt; maxSalaryByDept = emps.stream()
+    .collect(toMap(Employee::dept, Employee::salary, Double::max));
+// toMap(keyFn, valueFn, mergeFn) — mergeFn resolves collisions instead of throwing</code></pre>
+
+  <h3>5.3 · <code>groupingBy</code> — the workhorse</h3>
+  <p>Groups elements by a classifier function. Pair it with a <strong>downstream collector</strong> to
+  do more than just collect the raw group into a list.</p>
+  <pre><code class="java">// simplest form: group into List<Employee> per dept
+Map&lt;String, List&lt;Employee&gt;&gt; byDept = emps.stream()
+    .collect(groupingBy(Employee::dept));
+
+// + downstream collector: average salary per dept, instead of the raw list
+Map&lt;String, Double&gt; avgByDept = emps.stream()
+    .collect(groupingBy(Employee::dept, averagingDouble(Employee::salary)));
+
+// + a Map supplier: sorted keys via TreeMap instead of HashMap
+Map&lt;String, Double&gt; avgByDeptSorted = emps.stream()
+    .collect(groupingBy(Employee::dept, TreeMap::new, averagingDouble(Employee::salary)));</code></pre>
+
+  <h3>5.4 · <code>partitioningBy</code> — grouping by <code>true</code>/<code>false</code></h3>
+  <pre><code class="java">Map&lt;Boolean, List&lt;Employee&gt;&gt; highLow = emps.stream()
+    .collect(partitioningBy(e -> e.salary() > 80_000));
+List&lt;Employee&gt; highEarners = highLow.get(true);
+// always has BOTH keys present, even if one group is empty</code></pre>
+
+  <h3>5.5 · Numeric downstream collectors</h3>
+  <pre><code class="java">long total   = emps.stream().collect(counting());                          // same as .count()
+double sum   = emps.stream().collect(summingDouble(Employee::salary));
+double avg   = emps.stream().collect(averagingDouble(Employee::salary));
+DoubleSummaryStatistics stats = emps.stream()
+    .collect(summarizingDouble(Employee::salary));
+// stats.getMin() / getMax() / getAverage() / getSum() / getCount() — all in one pass</code></pre>
+
+  <h3>5.6 · <code>teeing</code> — two collectors, one pass <span class="badge added">12</span></h3>
+  <p><em>Why it matters:</em> without <code>teeing</code>, computing "sum AND count" in one pass meant
+  either two separate stream traversals or a hand-rolled combined accumulator.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — two passes over the stream</div>
+      <pre><code class="java">double sum = emps.stream().mapToDouble(Employee::salary).sum();
+long count = emps.stream().count();
+String stats = "sum=" + sum + " count=" + count;</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">teeing — one pass</div>
+      <pre><code class="java">String stats = emps.stream().collect(teeing(
+    summingDouble(Employee::salary),
+    counting(),
+    (sum, count) -> "sum=" + sum + " count=" + count));
+// "sum=425000.0 count=5"</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="customcollector">6 · Writing a custom Collector</h2>
+  <p>A <code>Collector&lt;T, A, R&gt;</code> has the same four moving parts as a
+  <a href="#pg-topics-streams-gatherers-html">Gatherer</a>, but they build a <em>single final result</em>
+  instead of emitting elements downstream.</p>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 190" role="img" aria-label="A Collector's supplier creates a mutable container, the accumulator adds each element to it, the combiner merges containers for parallel streams, and the finisher converts the container into the final result">
+      <defs>
+        <marker id="ccA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="24"  y="20" width="160" height="40" rx="8" class="dg-box"/>
+      <text x="104" y="45" text-anchor="middle" class="dg-text-sm">supplier() → container A</text>
+      <rect x="24"  y="80" width="160" height="40" rx="8" class="dg-accent"/>
+      <text x="104" y="105" text-anchor="middle" class="dg-text-sm">accumulator(A, T)</text>
+      <rect x="24"  y="140" width="160" height="40" rx="8" class="dg-box"/>
+      <text x="104" y="165" text-anchor="middle" class="dg-text-sm">combiner(A, A) → A</text>
+      <text x="104" y="180" text-anchor="middle" class="dg-soft">(merges, parallel only)</text>
+      <rect x="260" y="80" width="200" height="40" rx="8" class="dg-good-box"/>
+      <text x="360" y="105" text-anchor="middle" class="dg-text-sm">finisher(A) → R</text>
+      <text x="360" y="122" text-anchor="middle" class="dg-soft">final transform → result</text>
+      <line x1="184" y1="100" x2="258" y2="100" class="dg-line" marker-end="url(#ccA)"/>
+      <line x1="104" y1="60"  x2="104" y2="78"  class="dg-line" marker-end="url(#ccA)"/>
+    </svg>
+    <figcaption>Same shape as a <a href="#pg-topics-streams-gatherers-html">Gatherer's anatomy</a> —
+    initializer/integrator/combiner/finisher — but a Collector always ends the stream with one result
+    instead of pushing values back into the pipeline.</figcaption>
+  </figure>
+
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — build a joined string by hand</div>
+      <pre><code class="java">StringJoiner sj = new StringJoiner(", ", "[", "]");
+for (Employee e : emps) sj.add(e.name());
+String joined = sj.toString();
+// works, but isn't a reusable, composable Collector</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Custom Collector.of — reusable &amp; composable</div>
+      <pre><code class="java">Collector&lt;Employee, StringJoiner, String&gt; joinNames = Collector.of(
+    () -> new StringJoiner(", ", "[", "]"),   // supplier
+    (sj, e) -> sj.add(e.name()),              // accumulator
+    StringJoiner::merge,                      // combiner (parallel streams)
+    StringJoiner::toString);                  // finisher
+
+String joined = emps.stream().collect(joinNames);
+// "[Ada, Bob, Cy, Dee, Eve]" — and joinNames can be reused anywhere</code></pre>
+    </div>
+  </div>
+  <p><code>StringJoiner</code> already has a <code>merge</code> method built for exactly this purpose —
+  a nice illustration of how the combiner should genuinely represent "merge two partial containers".</p>
+
+  <!-- ============================================================ -->
+  <h2 id="primitive">7 · Primitive streams — avoiding boxing</h2>
+  <p><code>IntStream</code>, <code>LongStream</code>, <code>DoubleStream</code> avoid boxing every
+  element into an <code>Integer</code>/<code>Long</code>/<code>Double</code> — faster, and come with
+  numeric-only operations like <code>sum()</code> and <code>summaryStatistics()</code>.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — boxed, manual sum</div>
+      <pre><code class="java">List&lt;Integer&gt; nums = List.of(1, 2, 3, 4, 5);
+int sum = 0;
+for (int n : nums) sum += n;   // unboxing on every read</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">IntStream — unboxed, built-in sum</div>
+      <pre><code class="java">int sum = IntStream.rangeClosed(1, 5).sum();
+IntSummaryStatistics stats = emps.stream()
+    .mapToInt(e -> (int) e.salary())
+    .summaryStatistics();
+// stats.getMin() / getMax() / getAverage() — no manual loop
+Stream&lt;Integer&gt; boxedAgain = IntStream.range(0, 5).boxed();   // back to Integer if needed</code></pre>
+    </div>
+  </div>
+  <p>Convert with <code>mapToInt</code>/<code>mapToLong</code>/<code>mapToDouble</code> (object →
+  primitive) and <code>.boxed()</code> (primitive → object).</p>
+
+  <!-- ============================================================ -->
+  <h2 id="parallel">8 · Parallel streams</h2>
+  <p>Adding <code>.parallel()</code> splits the source (via its <code>Spliterator</code>) into chunks,
+  processes them concurrently on the shared <strong>common <code>ForkJoinPool</code></strong>, and
+  merges results with each collector/reducer's combiner.</p>
+
+  <div class="ba">
+    <div class="before"><div class="ba-label">Sequential</div>
+      <pre><code class="java">long count = hugeList.stream()
+    .filter(Item::isExpensive)
+    .count();</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Parallel — one word</div>
+      <pre><code class="java">long count = hugeList.parallelStream()   // or .stream().parallel()
+    .filter(Item::isExpensive)
+    .count();</code></pre>
+    </div>
+  </div>
+
+  <h3>When it actually helps</h3>
+  <table class="data">
+    <tr><th>Helps</th><th>Doesn't help / hurts</th></tr>
+    <tr><td>Large data sets (roughly 10,000+ elements)</td><td>Small collections — splitting overhead exceeds the work</td></tr>
+    <tr><td>CPU-bound work per element</td><td>I/O-bound work (use <a href="#pg-topics-virtual-threads-html">virtual threads</a> or <a href="#pg-topics-streams-gatherers-html"><code>Gatherers.mapConcurrent</code></a> instead)</td></tr>
+    <tr><td>Easily splittable sources: arrays, <code>ArrayList</code>, <code>IntStream.range</code></td><td>Poorly splittable sources: <code>LinkedList</code>, <code>Iterator</code>-based streams</td></tr>
+    <tr><td>Stateless, associative operations</td><td>Order-sensitive or stateful operations (see pitfalls)</td></tr>
+  </table>
+
+  <h3>Verified pitfall — shared mutable state is not thread-safe</h3>
+  <p>This is the #1 real bug with parallel streams: calling a non-thread-safe collection's
+  <code>add</code> from inside <code>forEach</code>.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Broken — throws or silently corrupts</div>
+      <pre><code class="java">List&lt;Integer&gt; unsafe = new ArrayList&lt;&gt;();
+IntStream.range(0, 100_000).parallel().forEach(unsafe::add);
+// multiple threads call ArrayList.add() concurrently —
+// on a real run this throws ArrayIndexOutOfBoundsException
+// (verified: reproduces on the very first attempt)</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Correct — let collect() do the merging</div>
+      <pre><code class="java">List&lt;Integer&gt; safe = IntStream.range(0, 100_000).parallel()
+    .boxed()
+    .collect(Collectors.toList());
+// each chunk accumulates independently; the Collector's
+// combiner merges them safely — no shared mutable state</code></pre>
+    </div>
+  </div>
+  <div class="tip"><strong>Rule of thumb:</strong> never mutate a shared collection from inside a
+  parallel stream. Always finish with <code>collect(...)</code> or <code>reduce(...)</code> and let the
+  combiner do the merging.</div>
+
+  <h3>Custom thread pool (advanced, use sparingly)</h3>
+  <p>Parallel streams always use the shared common <code>ForkJoinPool</code> — sized to your CPU count
+  and shared with everything else in the JVM that uses it. To isolate a parallel stream in its own pool
+  (e.g. to avoid starving other parallel work), submit the whole pipeline as a task:</p>
+  <pre><code class="java">ForkJoinPool customPool = new ForkJoinPool(4);
+long result = customPool.submit(() ->
+    hugeList.parallelStream().filter(Item::isExpensive).count()
+).get();
+customPool.shutdown();</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="advanced">9 · Putting it all together — a sales report</h2>
+  <p>A single pipeline combining <code>groupingBy</code>, a downstream collector, sorting, and a
+  <code>LinkedHashMap</code> to preserve that order — the kind of thing Stream API replaces a whole
+  page of manual code for.</p>
+  <pre><code class="java">record Sale(String region, String product, double amount) {}
+
+List&lt;Sale&gt; sales = List.of(
+    new Sale("West", "Widget", 120),
+    new Sale("East", "Gadget", 300),
+    new Sale("West", "Gadget", 80),
+    new Sale("East", "Widget", 200),
+    new Sale("West", "Widget", 60)
+);
+
+// total sales per region, sorted by total descending
+Map&lt;String, Double&gt; totalsByRegionSorted = sales.stream()
+    .collect(groupingBy(Sale::region, summingDouble(Sale::amount)))
+    .entrySet().stream()
+    .sorted(Map.Entry.&lt;String, Double&gt;comparingByValue().reversed())
+    .collect(toMap(Map.Entry::getKey, Map.Entry::getValue,
+             (a, b) -> a, LinkedHashMap::new));   // (a,b)->a: unused, keys are unique here
+
+System.out.println(totalsByRegionSorted);
+// {East=500.0, West=260.0}   — sorted descending by total, order preserved by LinkedHashMap</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">10 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>Reusing a consumed stream</td><td>Throws <code>IllegalStateException</code> — streams are one-shot; re-create from the source.</td></tr>
+    <tr><td>Mutating shared state inside <code>forEach</code>/<code>map</code></td><td>Not thread-safe under <code>.parallel()</code> — verified to throw/corrupt (see §8).</td></tr>
+    <tr><td>Using <code>peek</code> for side effects/logic</td><td>Meant for debugging only — its execution isn't guaranteed the way you'd expect on a lazy pipeline.</td></tr>
+    <tr><td>Assuming <code>.parallel()</code> is always faster</td><td>Overhead can exceed the win on small collections or I/O-bound work.</td></tr>
+    <tr><td>A non-associative 3-arg <code>reduce</code> combiner</td><td>Works sequentially, gives wrong answers in parallel — see §4.</td></tr>
+    <tr><td>Infinite streams without <code>limit()</code></td><td><code>Stream.generate</code>/<code>iterate</code> never terminate unless bounded.</td></tr>
+    <tr><td><code>toMap</code> with duplicate keys, no merge function</td><td>Throws <code>IllegalStateException</code> at the colliding key — always pass a merge function if duplicates are possible.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">11 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Stream API tool</th></tr>
+    <tr><td>Transform &amp; filter a list for an API response</td><td><code>map</code> + <code>filter</code> + <code>toList</code></td></tr>
+    <tr><td>Group orders by customer, sum totals</td><td><code>groupingBy</code> + <code>summingDouble</code></td></tr>
+    <tr><td>Build a lookup map from a list</td><td><code>toMap(keyFn, valueFn, mergeFn)</code></td></tr>
+    <tr><td>Word/event frequency counting</td><td><code>groupingBy(identity(), counting())</code></td></tr>
+    <tr><td>Report with min/max/avg in one pass</td><td><code>summarizingDouble</code></td></tr>
+    <tr><td>Bulk CPU-bound computation over a large dataset</td><td><code>parallelStream()</code></td></tr>
+    <tr><td>CSV/log line parsing</td><td><code>Files.lines(path)</code> + <code>map</code> + <code>collect</code></td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">12 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>Stream API in one glance</h3>
+    <ul>
+      <li>Pipeline: <code>source → map/filter/flatMap/sorted/distinct → collect/reduce/forEach</code>.</li>
+      <li><code>reduce(id, acc)</code> — same type. <code>reduce(id, acc, combiner)</code> — different type, and what makes parallel correct.</li>
+      <li><code>groupingBy(fn, downstream)</code> and <code>partitioningBy(pred)</code> for reports.</li>
+      <li><code>toMap(k, v, mergeFn)</code> — always pass a merge function if keys can collide.</li>
+      <li>Custom collector: <code>Collector.of(supplier, accumulator, combiner, finisher)</code>.</li>
+      <li>Primitive streams (<code>IntStream</code>...) avoid boxing; <code>.summaryStatistics()</code> gets min/max/avg/sum/count in one pass.</li>
+      <li><code>.parallel()</code> for large, CPU-bound, easily-splittable work — never mutate shared state inside it.</li>
+      <li>A stream is <strong>one-shot</strong> — re-create it from the source to run again.</li>
+    </ul>
+  </div>
+
+  <div class="note"><strong>Beyond Java 8:</strong> the core API above hasn't changed shape since
+  Java 8 — only additions. <code>takeWhile</code>/<code>dropWhile</code> (9), <code>toList()</code>/
+  <code>mapMulti</code> (16), and <code>teeing</code> (12) are covered above. For custom
+  <em>intermediate</em> operations (the missing piece Collectors couldn't do), see
+  <a href="#pg-topics-streams-gatherers-html">Stream Gatherers</a> (final in 24).</div>
 </section>
 <section id="pg-topics-virtual-threads-html" class="print-page">
   <p class="sec-tag">Deep dive · concurrency · complete guide</p>

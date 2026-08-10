@@ -20,7 +20,7 @@ PAGES = [
     "versions/java-21.html", "versions/java-25.html", "versions/java-26.html",
     "topics/var.html", "topics/records.html", "topics/sealed-classes.html",
     "topics/pattern-matching-switch.html", "topics/text-blocks-strings.html",
-    "topics/modules-jpms.html", "topics/virtual-threads.html",
+    "topics/modules-jpms.html", "topics/stream-api.html", "topics/virtual-threads.html",
     "topics/structured-concurrency.html", "topics/scoped-values.html",
     "topics/streams-gatherers.html", "topics/ffm-api.html",
 ]

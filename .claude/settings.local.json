@@ -47,7 +47,24 @@
       "Bash(mkdir -p /tmp/gath-test)",
       "Bash(cat)",
       "Bash(/opt/homebrew/Cellar/openjdk/26.0.1/libexec/openjdk.jdk/Contents/Home/bin/java GathererCompose.java)",
-      "Bash(open topics/ffm-api.html topics/streams-gatherers.html)"
+      "Bash(open topics/ffm-api.html topics/streams-gatherers.html)",
+      "Bash(xargs -r -n1 git update-ref -d)",
+      "Bash(rm -rf .git/refs/original)",
+      "Bash(git reflog *)",
+      "Bash(git gc *)",
+      "Bash(git stash *)",
+      "Bash(git remote *)",
+      "Bash(git ls-remote *)",
+      "Bash(mkdir -p ~/.ssh)",
+      "Bash(chmod 700 ~/.ssh)",
+      "Bash(ssh-keyscan -t rsa,ed25519 github.com)",
+      "Bash(chmod 600 ~/.ssh/known_hosts)",
+      "Bash(ssh-keygen -lf ~/.ssh/known_hosts)",
+      "Bash(curl -sL -m 20 -A \"Mozilla/5.0\" \"https://docs.oracle.com/en/java/javase/24/docs/api/java.base/java/util/stream/Collector.html\" -o /tmp/collector.html)",
+      "Bash(curl -sL -m 20 -A \"Mozilla/5.0\" \"https://docs.oracle.com/en/java/javase/24/docs/api/java.base/java/util/stream/Collectors.html\" -o /tmp/collectors.html)",
+      "Bash(/opt/homebrew/Cellar/openjdk/26.0.1/libexec/openjdk.jdk/Contents/Home/bin/java UnsafeParallel.java)",
+      "Bash(rm -rf /tmp/stream-test)",
+      "Bash(open topics/stream-api.html)"
     ]
   }
 }
