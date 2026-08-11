@@ -151,6 +151,23 @@
   component), and you cannot <code>extend</code> another class (records already extend <code>Record</code>).
   You <em>can</em> <code>implements</code> interfaces.</div>
 
+  <h3>Generic records &amp; local records</h3>
+  <p>Records can take type parameters like any other type, and — since they're just a kind of class —
+  can be declared <strong>locally inside a method</strong>, scoped to exactly where you need a
+  throwaway data shape:</p>
+  <pre><code class="java">record Pair&lt;A, B&gt;(A first, B second) {}
+var p = new Pair&lt;&gt;("x", 42);
+System.out.println(p);   // Pair[first=x, second=42] — verified
+
+List&lt;Order&gt; topByScore(List&lt;Order&gt; orders) {
+  record Scored(Order order, double score) {}   // local record — only exists in this method
+  return orders.stream()
+      .map(o -> new Scored(o, rank(o)))
+      .sorted(comparingDouble(Scored::score).reversed())
+      .map(Scored::order)
+      .toList();
+}</code></pre>
+
   <!-- ============================================================ -->
   <h2 id="immutable">4 · Immutability &amp; defensive copies</h2>
   <p>Records are <strong>shallowly</strong> immutable: the component references can't change, but if a
@@ -241,6 +258,7 @@ int eval(Expr e) {
     <tr><td>Adding instance fields</td><td>Not allowed — all state is components.</td></tr>
     <tr><td>Big records as JPA <code>@Entity</code></td><td>Entities need mutability &amp; a no-arg ctor; records suit <em>projections/DTOs</em>, not entities.</td></tr>
     <tr><td>Reordering components later</td><td>Changes the canonical constructor signature &amp; serialized form — it's part of the API.</td></tr>
+    <tr><td>An <code>array</code>-typed component</td><td>Generated <code>equals</code>/<code>hashCode</code>/<code>toString</code> use <strong>identity</strong> for arrays (like <code>Object[]</code>, not <code>Arrays.equals</code>) — verified: two records holding content-equal <code>byte[]</code> arrays are <code>equals()</code> <code>false</code>, and <code>toString()</code> prints <code>[B@hash</code>, not the contents. Use a <code>List</code> instead of an array in a record.</td></tr>
   </table>
 
   <!-- ============================================================ -->

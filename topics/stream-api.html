@@ -152,6 +152,28 @@ result = new ArrayList&lt;&gt;(new LinkedHashSet&lt;&gt;(result));  // dedupe, k
     </div>
   </div>
 
+  <h3>Multi-key sorting with <code>Comparator</code> chaining</h3>
+  <p>Sorting by more than one field is where <code>Comparator</code>'s static/default methods
+  (<code>comparing</code>, <code>thenComparing</code>, <code>reversed</code>) pay off — no manual
+  <code>compareTo</code> chains.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — hand-written compareTo chain</div>
+      <pre><code class="java">emps.sort((a, b) -> {
+  int byDept = a.dept().compareTo(b.dept());
+  if (byDept != 0) return byDept;
+  return Double.compare(b.salary(), a.salary());   // descending
+});</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Comparator chaining</div>
+      <pre><code class="java">var sorted = emps.stream()
+    .sorted(Comparator.comparing(Employee::dept)
+        .thenComparing(Comparator.comparing(Employee::salary).reversed()))
+    .map(Employee::name)
+    .toList();
+// verified: dept ascending, then salary descending within each dept</code></pre>
+    </div>
+  </div>
+
   <!-- ============================================================ -->
   <h2 id="terminal">3 · Terminal operations</h2>
   <p>Exactly one per pipeline — it triggers execution and produces a result (or a side effect).</p>
@@ -291,7 +313,16 @@ Map&lt;String, Double&gt; avgByDept = emps.stream()
 
 // + a Map supplier: sorted keys via TreeMap instead of HashMap
 Map&lt;String, Double&gt; avgByDeptSorted = emps.stream()
-    .collect(groupingBy(Employee::dept, TreeMap::new, averagingDouble(Employee::salary)));</code></pre>
+    .collect(groupingBy(Employee::dept, TreeMap::new, averagingDouble(Employee::salary)));
+
+// nesting groupingBy inside groupingBy: dept -> salary-bucket -> names
+Map&lt;String, Map&lt;Boolean, List&lt;String&gt;&gt;&gt; nested = emps.stream()
+    .collect(groupingBy(Employee::dept,
+             groupingBy(e -> e.salary() > 70_000,
+             mapping(Employee::name, toList()))));
+// verified: {Sales={false=[Cy, Dee]}, Eng={true=[Ada, Bob]}}
+// the downstream collector of one groupingBy can be another groupingBy —
+// this is how you build a two-level report in a single pass</code></pre>
 
   <h3>5.4 · <code>partitioningBy</code> — grouping by <code>true</code>/<code>false</code></h3>
   <pre><code class="java">Map&lt;Boolean, List&lt;Employee&gt;&gt; highLow = emps.stream()

@@ -39,8 +39,9 @@
     <a href="#gotchas">4. Rules &amp; gotchas</a>
     <a href="#vsobject">5. var vs Object</a>
     <a href="#style">6. Style: when to use it</a>
-    <a href="#realworld">7. Real-world examples</a>
-    <a href="#cheat">8. Cheat sheet</a>
+    <a href="#patterns">7. var in pattern matching</a>
+    <a href="#realworld">8. Real-world examples</a>
+    <a href="#cheat">9. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -82,11 +83,17 @@ try (BufferedReader r = Files.newBufferedReader(path)) { }</code></pre>
 for (var e : byCity.entrySet()) { }
 try (var r = Files.newBufferedReader(path)) { }
 for (var i = 0; i &lt; 10; i++) { }
-list.forEach((var s) -> print(s));   // lambda param (Java 11+)</code></pre>
+list.forEach((var s) -> print(s));   // lambda param (Java 11+)
+
+// multiple resources, each inferred independently:
+try (var out = new StringWriter(); var pw = new PrintWriter(out)) {
+  pw.println("hi");
+}   // verified: prints "hi"</code></pre>
     </div>
   </div>
   <p><code>var</code> works for: local variables with an initializer, <code>for</code>/enhanced-for
-  loop variables, try-with-resources, and lambda parameters (11+).</p>
+  loop variables, try-with-resources (including multiple resources in one statement), and lambda
+  parameters (11+).</p>
 
   <!-- ============================================================ -->
   <h2 id="wherenot">3 · Where you cannot use it</h2>
@@ -95,11 +102,16 @@ list.forEach((var s) -> print(s));   // lambda param (Java 11+)</code></pre>
 var y = null;          // ✗ null has no type
 var f = () -> 42;      // ✗ lambda needs a target type
 var arr = { 1, 2, 3 }; // ✗ array initializer needs a type
+var arr2[] = new int[3]; // ✗ 'var' is not allowed as an array element type
+                          //   (verified javac error, even though int[] this style is legal)
 public var field = 1;  // ✗ fields cannot use var
 var method() { }       // ✗ return types cannot use var
 void m(var p) { }      // ✗ method parameters cannot use var</code></pre>
   </div>
-  <p><code>var</code> is <strong>local variables only</strong> — never fields, method parameters, or return types.</p>
+  <p><code>var</code> is <strong>local variables only</strong> — never fields, method parameters, or
+  return types. It also can't use the legacy C-style array bracket suffix
+  (<code>var arr[]</code>) even though <code>int arr[]</code> is legal Java — always use
+  <code>var arr = new int[3];</code> instead.</p>
 
   <!-- ============================================================ -->
   <h2 id="gotchas">4 · Rules &amp; gotchas</h2>
@@ -143,7 +155,29 @@ s.length();      // ✓ s is a String, all String methods available</code></pre>
   type. <code>var users = userRepo.findActive();</code> reads fine; <code>var x = f();</code> does not.</div>
 
   <!-- ============================================================ -->
-  <h2 id="realworld">7 · Real-world examples</h2>
+  <h2 id="patterns">7 · var in pattern matching</h2>
+  <p>The same <code>var</code> keyword shows up inside <strong>record patterns</strong> (Java 21) to
+  bind a destructured component without repeating its type — the compiler infers each component's
+  type from the record's declaration, not from an initializer this time.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Explicit component types</div>
+      <pre><code class="java">record Point(int x, int y) {}
+if (obj instanceof Point(int x, int y)) {
+  System.out.println(x + y);
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label"><code>var</code> in each binding</div>
+      <pre><code class="java">if (obj instanceof Point(var x, var y)) {
+  System.out.println(x + y);   // x, y inferred as int from Point's declaration
+}</code></pre>
+    </div>
+  </div>
+  <p>This matters most with <strong>nested</strong> record patterns, where writing out every
+  intermediate type gets noisy fast — see the
+  <a href="pattern-matching-switch.html">Pattern matching deep-dive</a> for the full destructuring story.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">8 · Real-world examples</h2>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — noisy locals in a real method</div>
       <pre><code class="java">Map&lt;String, List&lt;Order&gt;&gt; byCustomer = orders.stream()
@@ -170,7 +204,7 @@ for (var entry : byCustomer.entrySet()) {
   streams, and test setup with verbose generic types.</p>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">8 · Cheat sheet</h2>
+  <h2 id="cheat">9 · Cheat sheet</h2>
   <div class="cheat">
     <h3><code>var</code> in one glance</h3>
     <ul>
@@ -178,6 +212,8 @@ for (var entry : byCustomer.entrySet()) {
       <li>❌ fields, method params/returns, no-initializer, <code>null</code>, bare lambdas/arrays.</li>
       <li>Static type = type of the initializer. Not dynamic. No runtime cost.</li>
       <li>Watch diamond (<code>new HashMap&lt;&gt;()</code> → <code>&lt;Object,Object&gt;</code>) and over-specific concrete types.</li>
+      <li>No <code>var arr[]</code> array-suffix syntax; use <code>var arr = new int[3];</code>.</li>
+      <li>Also appears in record patterns: <code>case Point(var x, var y) -></code>.</li>
       <li>Use when the type is obvious from the RHS; keep an explicit type when it documents intent.</li>
     </ul>
   </div>

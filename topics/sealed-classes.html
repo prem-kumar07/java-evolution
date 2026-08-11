@@ -126,7 +126,30 @@ record Add(Expr l, Expr r) implements Expr { }</code></pre>
     </li>
     <li>Every permitted subtype must <strong>directly</strong> extend/implement the sealed type.</li>
     <li>Records are implicitly <code>final</code>, so they slot into <code>permits</code> lists perfectly.</li>
+    <li><strong>Enums work too</strong> — an <code>enum</code> is always implicitly <code>final</code>,
+      so it satisfies a sealed interface's requirement with no extra modifier, and mixes with record
+      subtypes in the same hierarchy:
+      <pre><code class="java">sealed interface Status permits Active, Suspended, Closed {}
+enum Active     implements Status { INSTANCE }
+enum Suspended  implements Status { INSTANCE }
+record Closed(String reason) implements Status {}
+
+String describe(Status s) {
+  return switch (s) {                          // exhaustive — verified
+    case Active a       -> "active";
+    case Suspended sp    -> "suspended";
+    case Closed(var why) -> "closed: " + why;
+  };
+}</code></pre></li>
   </ul>
+  <div class="warn"><strong>Forget a modifier and the compiler tells you exactly what's missing —
+  verified real error:</strong>
+  <pre><code class="java">sealed interface Shape permits Circle {}
+class Circle implements Shape {}   // missing final/sealed/non-sealed
+
+// Shape.java:2: error: sealed, non-sealed or final modifiers expected
+//     class Circle implements Shape {}
+//           ^</code></pre></div>
 
   <!-- ============================================================ -->
   <h2 id="exhaustive">4 · The payoff: exhaustive switch</h2>

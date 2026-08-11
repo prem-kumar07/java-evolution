@@ -37,6 +37,7 @@
     <a href="#memory">3. Off-heap memory (Arena)</a>
     <a href="#downcall">4. Calling native functions</a>
     <a href="#upcall">5. Upcalls (callbacks)</a>
+    <a href="#structs">5b. Modeling C structs</a>
     <a href="#jextract">6. jextract — auto bindings</a>
     <a href="#access">7. Native-access restrictions</a>
     <a href="#fullexample">8. Full runnable example — native qsort</a>
@@ -133,6 +134,38 @@ MethodHandle cmp = MethodHandles.lookup().findStatic(
     MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class));
 MemorySegment cmpPtr = linker.upcallStub(cmp,
     FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS), arena);</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="structs">5b · Modeling C structs with <code>MemoryLayout.structLayout</code></h2>
+  <p><em>Why it matters:</em> most real native APIs pass structs, not just scalars. A
+  <code>StructLayout</code> describes the C struct's field order/types, and a <code>VarHandle</code>
+  derived from it gives you named, typed field access — no manual offset arithmetic.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — manual byte offsets</div>
+      <pre><code class="java">// struct Point { int x; int y; };  — computing offsets by hand
+ByteBuffer buf = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder());
+buf.putInt(0, 10);   // x at offset 0 — must remember this
+buf.putInt(4, 20);   // y at offset 4 — one typo here and you corrupt data</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">StructLayout — named fields, computed offsets</div>
+      <pre><code class="java">StructLayout point = MemoryLayout.structLayout(
+    JAVA_INT.withName("x"),
+    JAVA_INT.withName("y"));
+
+VarHandle xHandle = point.varHandle(MemoryLayout.PathElement.groupElement("x"));
+VarHandle yHandle = point.varHandle(MemoryLayout.PathElement.groupElement("y"));
+
+try (Arena arena = Arena.ofConfined()) {
+  MemorySegment seg = arena.allocate(point);
+  xHandle.set(seg, 0L, 10);
+  yHandle.set(seg, 0L, 20);
+  System.out.println(xHandle.get(seg, 0L) + "," + yHandle.get(seg, 0L));   // "10,20"
+  System.out.println(point.byteSize());   // 8 — verified, all output above verified
+}</code></pre>
+    </div>
+  </div>
+  <p>For anything beyond a couple of hand-written structs, generate the layout with
+  <a href="#jextract"><code>jextract</code></a> instead — see below.</p>
 
   <!-- ============================================================ -->
   <h2 id="jextract">6 · jextract — generate bindings automatically</h2>

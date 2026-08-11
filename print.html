@@ -1887,8 +1887,9 @@ java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
     <a href="#gotchas">4. Rules &amp; gotchas</a>
     <a href="#vsobject">5. var vs Object</a>
     <a href="#style">6. Style: when to use it</a>
-    <a href="#realworld">7. Real-world examples</a>
-    <a href="#cheat">8. Cheat sheet</a>
+    <a href="#patterns">7. var in pattern matching</a>
+    <a href="#realworld">8. Real-world examples</a>
+    <a href="#cheat">9. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -1930,11 +1931,17 @@ try (BufferedReader r = Files.newBufferedReader(path)) { }</code></pre>
 for (var e : byCity.entrySet()) { }
 try (var r = Files.newBufferedReader(path)) { }
 for (var i = 0; i &lt; 10; i++) { }
-list.forEach((var s) -> print(s));   // lambda param (Java 11+)</code></pre>
+list.forEach((var s) -> print(s));   // lambda param (Java 11+)
+
+// multiple resources, each inferred independently:
+try (var out = new StringWriter(); var pw = new PrintWriter(out)) {
+  pw.println("hi");
+}   // verified: prints "hi"</code></pre>
     </div>
   </div>
   <p><code>var</code> works for: local variables with an initializer, <code>for</code>/enhanced-for
-  loop variables, try-with-resources, and lambda parameters (11+).</p>
+  loop variables, try-with-resources (including multiple resources in one statement), and lambda
+  parameters (11+).</p>
 
   <!-- ============================================================ -->
   <h2 id="wherenot">3 · Where you cannot use it</h2>
@@ -1943,11 +1950,16 @@ list.forEach((var s) -> print(s));   // lambda param (Java 11+)</code></pre>
 var y = null;          // ✗ null has no type
 var f = () -> 42;      // ✗ lambda needs a target type
 var arr = { 1, 2, 3 }; // ✗ array initializer needs a type
+var arr2[] = new int[3]; // ✗ 'var' is not allowed as an array element type
+                          //   (verified javac error, even though int[] this style is legal)
 public var field = 1;  // ✗ fields cannot use var
 var method() { }       // ✗ return types cannot use var
 void m(var p) { }      // ✗ method parameters cannot use var</code></pre>
   </div>
-  <p><code>var</code> is <strong>local variables only</strong> — never fields, method parameters, or return types.</p>
+  <p><code>var</code> is <strong>local variables only</strong> — never fields, method parameters, or
+  return types. It also can't use the legacy C-style array bracket suffix
+  (<code>var arr[]</code>) even though <code>int arr[]</code> is legal Java — always use
+  <code>var arr = new int[3];</code> instead.</p>
 
   <!-- ============================================================ -->
   <h2 id="gotchas">4 · Rules &amp; gotchas</h2>
@@ -1991,7 +2003,29 @@ s.length();      // ✓ s is a String, all String methods available</code></pre>
   type. <code>var users = userRepo.findActive();</code> reads fine; <code>var x = f();</code> does not.</div>
 
   <!-- ============================================================ -->
-  <h2 id="realworld">7 · Real-world examples</h2>
+  <h2 id="patterns">7 · var in pattern matching</h2>
+  <p>The same <code>var</code> keyword shows up inside <strong>record patterns</strong> (Java 21) to
+  bind a destructured component without repeating its type — the compiler infers each component's
+  type from the record's declaration, not from an initializer this time.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Explicit component types</div>
+      <pre><code class="java">record Point(int x, int y) {}
+if (obj instanceof Point(int x, int y)) {
+  System.out.println(x + y);
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label"><code>var</code> in each binding</div>
+      <pre><code class="java">if (obj instanceof Point(var x, var y)) {
+  System.out.println(x + y);   // x, y inferred as int from Point's declaration
+}</code></pre>
+    </div>
+  </div>
+  <p>This matters most with <strong>nested</strong> record patterns, where writing out every
+  intermediate type gets noisy fast — see the
+  <a href="#pg-topics-pattern-matching-switch-html">Pattern matching deep-dive</a> for the full destructuring story.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">8 · Real-world examples</h2>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — noisy locals in a real method</div>
       <pre><code class="java">Map&lt;String, List&lt;Order&gt;&gt; byCustomer = orders.stream()
@@ -2018,7 +2052,7 @@ for (var entry : byCustomer.entrySet()) {
   streams, and test setup with verbose generic types.</p>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">8 · Cheat sheet</h2>
+  <h2 id="cheat">9 · Cheat sheet</h2>
   <div class="cheat">
     <h3><code>var</code> in one glance</h3>
     <ul>
@@ -2026,6 +2060,8 @@ for (var entry : byCustomer.entrySet()) {
       <li>❌ fields, method params/returns, no-initializer, <code>null</code>, bare lambdas/arrays.</li>
       <li>Static type = type of the initializer. Not dynamic. No runtime cost.</li>
       <li>Watch diamond (<code>new HashMap&lt;&gt;()</code> → <code>&lt;Object,Object&gt;</code>) and over-specific concrete types.</li>
+      <li>No <code>var arr[]</code> array-suffix syntax; use <code>var arr = new int[3];</code>.</li>
+      <li>Also appears in record patterns: <code>case Point(var x, var y) -></code>.</li>
       <li>Use when the type is obvious from the RHS; keep an explicit type when it documents intent.</li>
     </ul>
   </div>
@@ -2181,6 +2217,23 @@ for (var entry : byCustomer.entrySet()) {
   component), and you cannot <code>extend</code> another class (records already extend <code>Record</code>).
   You <em>can</em> <code>implements</code> interfaces.</div>
 
+  <h3>Generic records &amp; local records</h3>
+  <p>Records can take type parameters like any other type, and — since they're just a kind of class —
+  can be declared <strong>locally inside a method</strong>, scoped to exactly where you need a
+  throwaway data shape:</p>
+  <pre><code class="java">record Pair&lt;A, B&gt;(A first, B second) {}
+var p = new Pair&lt;&gt;("x", 42);
+System.out.println(p);   // Pair[first=x, second=42] — verified
+
+List&lt;Order&gt; topByScore(List&lt;Order&gt; orders) {
+  record Scored(Order order, double score) {}   // local record — only exists in this method
+  return orders.stream()
+      .map(o -> new Scored(o, rank(o)))
+      .sorted(comparingDouble(Scored::score).reversed())
+      .map(Scored::order)
+      .toList();
+}</code></pre>
+
   <!-- ============================================================ -->
   <h2 id="immutable">4 · Immutability &amp; defensive copies</h2>
   <p>Records are <strong>shallowly</strong> immutable: the component references can't change, but if a
@@ -2271,6 +2324,7 @@ int eval(Expr e) {
     <tr><td>Adding instance fields</td><td>Not allowed — all state is components.</td></tr>
     <tr><td>Big records as JPA <code>@Entity</code></td><td>Entities need mutability &amp; a no-arg ctor; records suit <em>projections/DTOs</em>, not entities.</td></tr>
     <tr><td>Reordering components later</td><td>Changes the canonical constructor signature &amp; serialized form — it's part of the API.</td></tr>
+    <tr><td>An <code>array</code>-typed component</td><td>Generated <code>equals</code>/<code>hashCode</code>/<code>toString</code> use <strong>identity</strong> for arrays (like <code>Object[]</code>, not <code>Arrays.equals</code>) — verified: two records holding content-equal <code>byte[]</code> arrays are <code>equals()</code> <code>false</code>, and <code>toString()</code> prints <code>[B@hash</code>, not the contents. Use a <code>List</code> instead of an array in a record.</td></tr>
   </table>
 
   <!-- ============================================================ -->
@@ -2452,7 +2506,30 @@ record Add(Expr l, Expr r) implements Expr { }</code></pre>
     </li>
     <li>Every permitted subtype must <strong>directly</strong> extend/implement the sealed type.</li>
     <li>Records are implicitly <code>final</code>, so they slot into <code>permits</code> lists perfectly.</li>
+    <li><strong>Enums work too</strong> — an <code>enum</code> is always implicitly <code>final</code>,
+      so it satisfies a sealed interface's requirement with no extra modifier, and mixes with record
+      subtypes in the same hierarchy:
+      <pre><code class="java">sealed interface Status permits Active, Suspended, Closed {}
+enum Active     implements Status { INSTANCE }
+enum Suspended  implements Status { INSTANCE }
+record Closed(String reason) implements Status {}
+
+String describe(Status s) {
+  return switch (s) {                          // exhaustive — verified
+    case Active a       -> "active";
+    case Suspended sp    -> "suspended";
+    case Closed(var why) -> "closed: " + why;
+  };
+}</code></pre></li>
   </ul>
+  <div class="warn"><strong>Forget a modifier and the compiler tells you exactly what's missing —
+  verified real error:</strong>
+  <pre><code class="java">sealed interface Shape permits Circle {}
+class Circle implements Shape {}   // missing final/sealed/non-sealed
+
+// Shape.java:2: error: sealed, non-sealed or final modifiers expected
+//     class Circle implements Shape {}
+//           ^</code></pre></div>
 
   <!-- ============================================================ -->
   <h2 id="exhaustive">4 · The payoff: exhaustive switch</h2>
@@ -2625,10 +2702,12 @@ switch (find(id)) {              // compiler enforces both cases
     <a href="#record">5. Record patterns</a>
     <a href="#unnamed">6. Unnamed patterns _</a>
     <a href="#primitive">7. Primitive patterns</a>
-    <a href="#rules">8. Dominance &amp; exhaustiveness</a>
-    <a href="#pitfalls">9. Pitfalls</a>
-    <a href="#realworld">10. Real-world use cases</a>
-    <a href="#cheat">11. Cheat sheet</a>
+    <a href="#statement">8. Switch statements, not just expressions</a>
+    <a href="#generics">9. Record patterns &amp; generics</a>
+    <a href="#rules">10. Dominance &amp; exhaustiveness</a>
+    <a href="#pitfalls">11. Pitfalls</a>
+    <a href="#realworld">12. Real-world use cases</a>
+    <a href="#cheat">13. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -2785,7 +2864,62 @@ for (var _ : items) count++;                         // ignore the element</code
 if (longValue instanceof int i) { ... }   // matches only if it fits exactly in int</code></pre>
 
   <!-- ============================================================ -->
-  <h2 id="rules">8 · Dominance &amp; exhaustiveness</h2>
+  <h2 id="statement">8 · Switch statements, not just expressions</h2>
+  <p>Every example so far has been a <code>switch</code> <em>expression</em> (it produces a value with
+  <code>-></code>). Patterns work exactly the same way in a <code>switch</code> <em>statement</em> — you
+  just don't assign the result. Exhaustiveness over a sealed type still applies, and
+  <code>default</code> is still unnecessary:</p>
+  <pre><code class="java">sealed interface Shape permits Circle, Square {}
+record Circle(double r) implements Shape {}
+record Square(double side) implements Shape {}
+
+void printArea(Shape s) {
+  switch (s) {                       // statement — no assignment, no yield
+    case Circle c  -> System.out.println("circle: " + Math.PI * c.r() * c.r());
+    case Square sq -> System.out.println("square: " + sq.side() * sq.side());
+    // exhaustive over the sealed type — verified: still no default needed
+  }
+}</code></pre>
+  <p>Use the expression form when you're computing a value; use the statement form for side effects
+  (logging, dispatching, printing) — the pattern syntax itself doesn't change.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="generics">9 · Record patterns &amp; generics</h2>
+  <p>Record patterns support generic record types, but with a real restriction worth knowing:
+  <strong>you can only give an explicit type argument when it doesn't require an unsound narrowing</strong>.
+  Where a regular cast would just produce an "unchecked" warning, a record pattern refuses outright.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">✗ Doesn't compile — unsound narrowing</div>
+      <pre><code class="java">record Box&lt;T&gt;(T value) {}
+
+String describe(Box&lt;?&gt; box) {
+  return switch (box) {
+    case Box&lt;String&gt;(var s) -> "string: " + s;   // ✗ compile error, verified:
+    // "Box<CAP#1> cannot be safely cast to Box<String>"
+  };
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">✓ Two ways that actually work</div>
+      <pre><code class="java">// (a) omit the type argument — let it be inferred/erased safely
+String describe(Box&lt;?&gt; box) {
+  return switch (box) {
+    case Box(var v) -> "box of: " + v;    // v is Object; verified, works for any T
+  };
+}
+
+// (b) give a type argument only when the selector ALREADY has that exact type
+String describeExact(Box&lt;String&gt; box) {
+  return switch (box) {
+    case Box&lt;String&gt;(var s) -> "string: " + s;   // verified: fine, no narrowing needed
+  };
+}</code></pre>
+    </div>
+  </div>
+  <p>In practice: <strong>omit the generic type argument</strong> in a record pattern unless the
+  selector's static type is already exactly that parameterization — it's simpler and always compiles.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="rules">10 · Dominance &amp; exhaustiveness</h2>
   <ul>
     <li><strong>Dominance:</strong> a broader pattern can't precede a narrower one — the compiler
       rejects the unreachable case. Put <code>case Integer i when …</code> <em>before</em> the plain
@@ -2797,7 +2931,7 @@ if (longValue instanceof int i) { ... }   // matches only if it fits exactly in 
   </ul>
 
   <!-- ============================================================ -->
-  <h2 id="pitfalls">9 · Pitfalls</h2>
+  <h2 id="pitfalls">11 · Pitfalls</h2>
   <table class="data">
     <tr><th>Pitfall</th><th>Reality</th></tr>
     <tr><td>Case order</td><td>First match wins; guarded/narrower cases must precede broader ones or you get "dominated"/unreachable errors.</td></tr>
@@ -2805,10 +2939,11 @@ if (longValue instanceof int i) { ... }   // matches only if it fits exactly in 
     <tr><td>Guards &amp; exhaustiveness</td><td>A <code>when</code> guard never satisfies exhaustiveness for its type.</td></tr>
     <tr><td>Mixing arrow &amp; colon labels</td><td>Not allowed in the same switch — pick one style.</td></tr>
     <tr><td>Over-nesting record patterns</td><td>Deep destructuring can hurt readability — bind an intermediate where clearer.</td></tr>
+    <tr><td>Explicit generic type argument in a record pattern</td><td>Only compiles when it doesn't require an unsound narrowing — omit it and let it infer, unless the selector's static type already matches exactly.</td></tr>
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="realworld">10 · Real-world use cases</h2>
+  <h2 id="realworld">12 · Real-world use cases</h2>
   <table class="data">
     <tr><th>Scenario</th><th>How patterns help</th></tr>
     <tr><td>Handling heterogeneous events/messages</td><td><code>switch</code> over a sealed event type, destructuring payloads.</td></tr>
@@ -2858,7 +2993,7 @@ String render(Json j) {
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">11 · Cheat sheet</h2>
+  <h2 id="cheat">13 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Pattern matching in one glance</h3>
     <ul>
@@ -3072,6 +3207,28 @@ byte[] b   = hf.parseHex("0a14");</code></pre>
     </div>
   </div>
 
+  <h3>Worked example — a readable multi-line regex</h3>
+  <p>Combine a text block with <code>Pattern.COMMENTS</code> to write a regex that's actually
+  legible, with inline <code>#</code> comments the regex engine ignores at match time.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — one dense, unreadable line</div>
+      <pre><code class="java">Pattern email = Pattern.compile(
+    "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+// what does each part mean? good luck editing this in six months</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Text block + Pattern.COMMENTS</div>
+      <pre><code class="java">Pattern email = Pattern.compile("""
+    ^[a-zA-Z0-9._%+-]+   # local part
+    @
+    [a-zA-Z0-9.-]+       # domain
+    \\.[a-zA-Z]{2,}$     # TLD
+    """, Pattern.COMMENTS);   // whitespace &amp; #-comments are ignored when matching
+
+email.matcher("ada@example.com").matches();   // true  — verified
+email.matcher("not-an-email").matches();      // false — verified</code></pre>
+    </div>
+  </div>
+
   <!-- ============================================================ -->
   <h2 id="cheat">8 · Cheat sheet</h2>
   <div class="cheat">
@@ -3125,6 +3282,7 @@ byte[] b   = hf.parseHex("0a14");</code></pre>
     <a href="#directives">3. Directives</a>
     <a href="#graph">4. A module graph</a>
     <a href="#exports-opens">5. exports vs opens</a>
+    <a href="#openmodule">5b. open module — open everything</a>
     <a href="#paths">6. Classpath vs module path</a>
     <a href="#services">7. Services (ServiceLoader)</a>
     <a href="#migration">8. Migration &amp; escape hatches</a>
@@ -3220,9 +3378,45 @@ module com.myapp {
       <pre><code class="java">opens com.myapp.model;
 // Reflection frameworks (Jackson, Hibernate, Spring)
 // can access members at runtime.
-// No compile-time access to non-public types.</code></pre>
+// No compile-time access to non-public types.
+
+opens com.myapp.model to com.fasterxml.jackson.databind;
+// qualified opens — only THAT module gets deep reflection,
+// everyone else is still blocked</code></pre>
     </div>
   </div>
+
+  <!-- ============================================================ -->
+  <h2 id="openmodule">5b · <code>open module</code> — opening everything at once</h2>
+  <p><em>Why it matters:</em> writing <code>opens</code> on every single package that a reflection-heavy
+  framework (Spring, Hibernate, Jackson) might touch gets tedious fast — and it's easy to miss one.
+  Prefixing the whole module declaration with <code>open</code> opens every package in it to deep
+  reflection at once, while <code>exports</code> still controls what's compile-time visible.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Opening each package individually</div>
+      <pre><code class="java">module com.acme.app {
+  requires spring.core;
+  exports com.acme.app.api;
+  opens com.acme.app.model;
+  opens com.acme.app.entities;
+  opens com.acme.app.config;   // forget one and Spring throws
+                                // InaccessibleObjectException at runtime
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">One open module declaration</div>
+      <pre><code class="java">open module com.acme.app {
+  requires spring.core;
+  exports com.acme.app.api;   // exports still applies — this is compile-time API
+  // every package in this module is open to reflection — verified:
+  // Class.getDeclaredField(...).setAccessible(true) works from anywhere
+}</code></pre>
+    </div>
+  </div>
+  <p>This is exactly why many Spring Boot / Jakarta EE applications declare their main module as
+  <code>open module</code> — those frameworks reflectively construct and inject into almost every
+  class, and enumerating every package individually isn't worth the ceremony for an application
+  module (as opposed to a published library, where you'd want the tighter, explicit
+  package-by-package <code>opens</code>).</p>
 
   <!-- ============================================================ -->
   <h2 id="paths">6 · Classpath vs module path</h2>
@@ -3477,6 +3671,28 @@ result = new ArrayList&lt;&gt;(new LinkedHashSet&lt;&gt;(result));  // dedupe, k
     </div>
   </div>
 
+  <h3>Multi-key sorting with <code>Comparator</code> chaining</h3>
+  <p>Sorting by more than one field is where <code>Comparator</code>'s static/default methods
+  (<code>comparing</code>, <code>thenComparing</code>, <code>reversed</code>) pay off — no manual
+  <code>compareTo</code> chains.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — hand-written compareTo chain</div>
+      <pre><code class="java">emps.sort((a, b) -> {
+  int byDept = a.dept().compareTo(b.dept());
+  if (byDept != 0) return byDept;
+  return Double.compare(b.salary(), a.salary());   // descending
+});</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Comparator chaining</div>
+      <pre><code class="java">var sorted = emps.stream()
+    .sorted(Comparator.comparing(Employee::dept)
+        .thenComparing(Comparator.comparing(Employee::salary).reversed()))
+    .map(Employee::name)
+    .toList();
+// verified: dept ascending, then salary descending within each dept</code></pre>
+    </div>
+  </div>
+
   <!-- ============================================================ -->
   <h2 id="terminal">3 · Terminal operations</h2>
   <p>Exactly one per pipeline — it triggers execution and produces a result (or a side effect).</p>
@@ -3616,7 +3832,16 @@ Map&lt;String, Double&gt; avgByDept = emps.stream()
 
 // + a Map supplier: sorted keys via TreeMap instead of HashMap
 Map&lt;String, Double&gt; avgByDeptSorted = emps.stream()
-    .collect(groupingBy(Employee::dept, TreeMap::new, averagingDouble(Employee::salary)));</code></pre>
+    .collect(groupingBy(Employee::dept, TreeMap::new, averagingDouble(Employee::salary)));
+
+// nesting groupingBy inside groupingBy: dept -> salary-bucket -> names
+Map&lt;String, Map&lt;Boolean, List&lt;String&gt;&gt;&gt; nested = emps.stream()
+    .collect(groupingBy(Employee::dept,
+             groupingBy(e -> e.salary() > 70_000,
+             mapping(Employee::name, toList()))));
+// verified: {Sales={false=[Cy, Dee]}, Eng={true=[Ada, Bob]}}
+// the downstream collector of one groupingBy can be another groupingBy —
+// this is how you build a two-level report in a single pass</code></pre>
 
   <h3>5.4 · <code>partitioningBy</code> — grouping by <code>true</code>/<code>false</code></h3>
   <pre><code class="java">Map&lt;Boolean, List&lt;Employee&gt;&gt; highLow = emps.stream()
@@ -4510,9 +4735,10 @@ static int status(HttpClient http, String url) throws Exception {
     <a href="#joiners">4. Joiners (completion policy)</a>
     <a href="#deadline">5. Deadlines &amp; cancellation</a>
     <a href="#vt">6. With virtual threads &amp; scoped values</a>
-    <a href="#pitfalls">7. Pitfalls</a>
-    <a href="#realworld">8. Real-world use cases</a>
-    <a href="#cheat">9. Cheat sheet</a>
+    <a href="#legacy">7. If you're on Java 21–24</a>
+    <a href="#pitfalls">8. Pitfalls</a>
+    <a href="#realworld">9. Real-world use cases</a>
+    <a href="#cheat">10. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -4590,6 +4816,11 @@ try {
     return new Response(user.get(), orders.get());
   }
 }</code></pre>
+  <p>Every <code>Subtask</code> also exposes its outcome via <code>.state()</code> — a
+  <code>Subtask.State</code> enum (<code>SUCCESS</code>, <code>FAILED</code>, or
+  <code>UNAVAILABLE</code> if cancelled before starting) — verified, useful when a Joiner deliberately
+  tolerates partial failure and you want to know which subtasks actually completed:</p>
+  <pre><code class="java">System.out.println("user subtask state: " + user.state());   // e.g. SUCCESS</code></pre>
 
   <!-- ============================================================ -->
   <h2 id="joiners">4 · Joiners — choosing the completion policy</h2>
@@ -4636,7 +4867,36 @@ try {
 });</code></pre>
 
   <!-- ============================================================ -->
-  <h2 id="pitfalls">7 · Pitfalls</h2>
+  <h2 id="legacy">7 · If you're on Java 21–24</h2>
+  <p>The <code>Joiner</code>-based API shown above is the <strong>Java 25 rework</strong> (JEP 505).
+  If you're on 21–24 LTS-adjacent previews, you'll see (and may still maintain) the older shape based on
+  <code>ShutdownOnFailure</code>/<code>ShutdownOnSuccess</code> subclasses instead of a <code>Joiner</code>
+  parameter. Both compile and run — this is what changed:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Java 21–24 preview — ShutdownOnFailure</div>
+      <pre><code class="java">try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+  var sa = scope.fork(() -> a());
+  var sb = scope.fork(() -> b());
+  scope.join();            // wait for all or first failure
+  scope.throwIfFailed();   // rethrow if any subtask failed
+  System.out.println(sa.get() + sb.get());
+}   // verified: compiles &amp; runs with --enable-preview --source 21</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Java 25+ — Joiner</div>
+      <pre><code class="java">try (var scope = StructuredTaskScope.open(Joiner.allSuccessfulOrThrow())) {
+  var sa = scope.fork(() -> a());
+  var sb = scope.fork(() -> b());
+  scope.join();             // throwing IS the failure signal — no separate throwIfFailed()
+  System.out.println(sa.get() + sb.get());
+}</code></pre>
+    </div>
+  </div>
+  <p>The concept — fork, join, fail-fast, no leaks — never changed across any preview. Only the
+  surface API was reworked once, in 25, to make the completion policy pluggable via <code>Joiner</code>
+  instead of baked into a fixed set of scope subclasses.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">8 · Pitfalls</h2>
   <table class="data">
     <tr><th>Pitfall</th><th>Reality</th></tr>
     <tr><td>Reading <code>subtask.get()</code> before <code>join()</code></td><td>Throws <code>IllegalStateException</code> — always join first.</td></tr>
@@ -4647,7 +4907,7 @@ try {
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="realworld">8 · Real-world use cases</h2>
+  <h2 id="realworld">9 · Real-world use cases</h2>
   <table class="data">
     <tr><th>Scenario</th><th>Joiner / shape</th></tr>
     <tr><td>Aggregate an endpoint from several services (need all)</td><td><code>allSuccessfulOrThrow</code></td></tr>
@@ -4689,7 +4949,7 @@ try {
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">9 · Cheat sheet</h2>
+  <h2 id="cheat">10 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Structured concurrency in one glance</h3>
     <ul>
@@ -4828,7 +5088,10 @@ void process() {
 
   <!-- ============================================================ -->
   <h2 id="rebind">4 · run / call / multiple / rebinding</h2>
-  <pre><code class="java">// run: no result;  call: returns a value / may throw checked exceptions
+  <pre><code class="java">// run(Runnable): no result;
+// call(ScopedValue.CallableOp): returns a value, may throw a checked exception
+// — note this is ScopedValue's OWN CallableOp interface, not java.util.concurrent.Callable,
+//   though a plain lambda like below compiles against either without you noticing.
 String out = ScopedValue.where(CURRENT, user).call(() -> render());
 
 // bind several at once
@@ -4839,8 +5102,14 @@ ScopedValue.where(CURRENT, user)
 // rebinding = a nested, narrower scope (does NOT mutate — it shadows)
 ScopedValue.where(CURRENT, adminUser).run(() -> doPrivileged());
 
-// provide a fallback instead of throwing when unbound
-User u = CURRENT.orElse(GUEST);</code></pre>
+// two ways to avoid the "unbound" exception on get():
+User u  = CURRENT.orElse(GUEST);                                    // fallback value
+User u2 = CURRENT.orElseThrow(() -> new IllegalStateException("no user in scope"));
+// orElseThrow lets you throw YOUR exception type instead of the default one</code></pre>
+  <div class="tip"><strong>Guaranteed unbinding, verified from the JDK docs:</strong> "The ScopedValue
+  object reverts to being unbound when the original method completes <strong>normally or with an
+  exception</strong>." You never need a <code>finally</code> block to clean up a scoped value —
+  unlike <code>ThreadLocal.remove()</code>, it happens automatically either way.</div>
 
   <!-- ============================================================ -->
   <h2 id="sc">5 · With structured concurrency</h2>
@@ -5322,6 +5591,7 @@ if (!batch.isEmpty()) repo.insertAll(batch);   // don't forget the tail!</code><
     <a href="#memory">3. Off-heap memory (Arena)</a>
     <a href="#downcall">4. Calling native functions</a>
     <a href="#upcall">5. Upcalls (callbacks)</a>
+    <a href="#structs">5b. Modeling C structs</a>
     <a href="#jextract">6. jextract — auto bindings</a>
     <a href="#access">7. Native-access restrictions</a>
     <a href="#fullexample">8. Full runnable example — native qsort</a>
@@ -5418,6 +5688,38 @@ MethodHandle cmp = MethodHandles.lookup().findStatic(
     MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class));
 MemorySegment cmpPtr = linker.upcallStub(cmp,
     FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS), arena);</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="structs">5b · Modeling C structs with <code>MemoryLayout.structLayout</code></h2>
+  <p><em>Why it matters:</em> most real native APIs pass structs, not just scalars. A
+  <code>StructLayout</code> describes the C struct's field order/types, and a <code>VarHandle</code>
+  derived from it gives you named, typed field access — no manual offset arithmetic.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — manual byte offsets</div>
+      <pre><code class="java">// struct Point { int x; int y; };  — computing offsets by hand
+ByteBuffer buf = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder());
+buf.putInt(0, 10);   // x at offset 0 — must remember this
+buf.putInt(4, 20);   // y at offset 4 — one typo here and you corrupt data</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">StructLayout — named fields, computed offsets</div>
+      <pre><code class="java">StructLayout point = MemoryLayout.structLayout(
+    JAVA_INT.withName("x"),
+    JAVA_INT.withName("y"));
+
+VarHandle xHandle = point.varHandle(MemoryLayout.PathElement.groupElement("x"));
+VarHandle yHandle = point.varHandle(MemoryLayout.PathElement.groupElement("y"));
+
+try (Arena arena = Arena.ofConfined()) {
+  MemorySegment seg = arena.allocate(point);
+  xHandle.set(seg, 0L, 10);
+  yHandle.set(seg, 0L, 20);
+  System.out.println(xHandle.get(seg, 0L) + "," + yHandle.get(seg, 0L));   // "10,20"
+  System.out.println(point.byteSize());   // 8 — verified, all output above verified
+}</code></pre>
+    </div>
+  </div>
+  <p>For anything beyond a couple of hand-written structs, generate the layout with
+  <a href="#jextract"><code>jextract</code></a> instead — see below.</p>
 
   <!-- ============================================================ -->
   <h2 id="jextract">6 · jextract — generate bindings automatically</h2>

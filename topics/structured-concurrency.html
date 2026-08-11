@@ -43,9 +43,10 @@
     <a href="#joiners">4. Joiners (completion policy)</a>
     <a href="#deadline">5. Deadlines &amp; cancellation</a>
     <a href="#vt">6. With virtual threads &amp; scoped values</a>
-    <a href="#pitfalls">7. Pitfalls</a>
-    <a href="#realworld">8. Real-world use cases</a>
-    <a href="#cheat">9. Cheat sheet</a>
+    <a href="#legacy">7. If you're on Java 21–24</a>
+    <a href="#pitfalls">8. Pitfalls</a>
+    <a href="#realworld">9. Real-world use cases</a>
+    <a href="#cheat">10. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -123,6 +124,11 @@ try {
     return new Response(user.get(), orders.get());
   }
 }</code></pre>
+  <p>Every <code>Subtask</code> also exposes its outcome via <code>.state()</code> — a
+  <code>Subtask.State</code> enum (<code>SUCCESS</code>, <code>FAILED</code>, or
+  <code>UNAVAILABLE</code> if cancelled before starting) — verified, useful when a Joiner deliberately
+  tolerates partial failure and you want to know which subtasks actually completed:</p>
+  <pre><code class="java">System.out.println("user subtask state: " + user.state());   // e.g. SUCCESS</code></pre>
 
   <!-- ============================================================ -->
   <h2 id="joiners">4 · Joiners — choosing the completion policy</h2>
@@ -169,7 +175,36 @@ try {
 });</code></pre>
 
   <!-- ============================================================ -->
-  <h2 id="pitfalls">7 · Pitfalls</h2>
+  <h2 id="legacy">7 · If you're on Java 21–24</h2>
+  <p>The <code>Joiner</code>-based API shown above is the <strong>Java 25 rework</strong> (JEP 505).
+  If you're on 21–24 LTS-adjacent previews, you'll see (and may still maintain) the older shape based on
+  <code>ShutdownOnFailure</code>/<code>ShutdownOnSuccess</code> subclasses instead of a <code>Joiner</code>
+  parameter. Both compile and run — this is what changed:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Java 21–24 preview — ShutdownOnFailure</div>
+      <pre><code class="java">try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+  var sa = scope.fork(() -> a());
+  var sb = scope.fork(() -> b());
+  scope.join();            // wait for all or first failure
+  scope.throwIfFailed();   // rethrow if any subtask failed
+  System.out.println(sa.get() + sb.get());
+}   // verified: compiles &amp; runs with --enable-preview --source 21</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Java 25+ — Joiner</div>
+      <pre><code class="java">try (var scope = StructuredTaskScope.open(Joiner.allSuccessfulOrThrow())) {
+  var sa = scope.fork(() -> a());
+  var sb = scope.fork(() -> b());
+  scope.join();             // throwing IS the failure signal — no separate throwIfFailed()
+  System.out.println(sa.get() + sb.get());
+}</code></pre>
+    </div>
+  </div>
+  <p>The concept — fork, join, fail-fast, no leaks — never changed across any preview. Only the
+  surface API was reworked once, in 25, to make the completion policy pluggable via <code>Joiner</code>
+  instead of baked into a fixed set of scope subclasses.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">8 · Pitfalls</h2>
   <table class="data">
     <tr><th>Pitfall</th><th>Reality</th></tr>
     <tr><td>Reading <code>subtask.get()</code> before <code>join()</code></td><td>Throws <code>IllegalStateException</code> — always join first.</td></tr>
@@ -180,7 +215,7 @@ try {
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="realworld">8 · Real-world use cases</h2>
+  <h2 id="realworld">9 · Real-world use cases</h2>
   <table class="data">
     <tr><th>Scenario</th><th>Joiner / shape</th></tr>
     <tr><td>Aggregate an endpoint from several services (need all)</td><td><code>allSuccessfulOrThrow</code></td></tr>
@@ -222,7 +257,7 @@ try {
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">9 · Cheat sheet</h2>
+  <h2 id="cheat">10 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Structured concurrency in one glance</h3>
     <ul>

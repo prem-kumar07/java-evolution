@@ -40,10 +40,12 @@
     <a href="#record">5. Record patterns</a>
     <a href="#unnamed">6. Unnamed patterns _</a>
     <a href="#primitive">7. Primitive patterns</a>
-    <a href="#rules">8. Dominance &amp; exhaustiveness</a>
-    <a href="#pitfalls">9. Pitfalls</a>
-    <a href="#realworld">10. Real-world use cases</a>
-    <a href="#cheat">11. Cheat sheet</a>
+    <a href="#statement">8. Switch statements, not just expressions</a>
+    <a href="#generics">9. Record patterns &amp; generics</a>
+    <a href="#rules">10. Dominance &amp; exhaustiveness</a>
+    <a href="#pitfalls">11. Pitfalls</a>
+    <a href="#realworld">12. Real-world use cases</a>
+    <a href="#cheat">13. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -200,7 +202,62 @@ for (var _ : items) count++;                         // ignore the element</code
 if (longValue instanceof int i) { ... }   // matches only if it fits exactly in int</code></pre>
 
   <!-- ============================================================ -->
-  <h2 id="rules">8 · Dominance &amp; exhaustiveness</h2>
+  <h2 id="statement">8 · Switch statements, not just expressions</h2>
+  <p>Every example so far has been a <code>switch</code> <em>expression</em> (it produces a value with
+  <code>-></code>). Patterns work exactly the same way in a <code>switch</code> <em>statement</em> — you
+  just don't assign the result. Exhaustiveness over a sealed type still applies, and
+  <code>default</code> is still unnecessary:</p>
+  <pre><code class="java">sealed interface Shape permits Circle, Square {}
+record Circle(double r) implements Shape {}
+record Square(double side) implements Shape {}
+
+void printArea(Shape s) {
+  switch (s) {                       // statement — no assignment, no yield
+    case Circle c  -> System.out.println("circle: " + Math.PI * c.r() * c.r());
+    case Square sq -> System.out.println("square: " + sq.side() * sq.side());
+    // exhaustive over the sealed type — verified: still no default needed
+  }
+}</code></pre>
+  <p>Use the expression form when you're computing a value; use the statement form for side effects
+  (logging, dispatching, printing) — the pattern syntax itself doesn't change.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="generics">9 · Record patterns &amp; generics</h2>
+  <p>Record patterns support generic record types, but with a real restriction worth knowing:
+  <strong>you can only give an explicit type argument when it doesn't require an unsound narrowing</strong>.
+  Where a regular cast would just produce an "unchecked" warning, a record pattern refuses outright.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">✗ Doesn't compile — unsound narrowing</div>
+      <pre><code class="java">record Box&lt;T&gt;(T value) {}
+
+String describe(Box&lt;?&gt; box) {
+  return switch (box) {
+    case Box&lt;String&gt;(var s) -> "string: " + s;   // ✗ compile error, verified:
+    // "Box<CAP#1> cannot be safely cast to Box<String>"
+  };
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">✓ Two ways that actually work</div>
+      <pre><code class="java">// (a) omit the type argument — let it be inferred/erased safely
+String describe(Box&lt;?&gt; box) {
+  return switch (box) {
+    case Box(var v) -> "box of: " + v;    // v is Object; verified, works for any T
+  };
+}
+
+// (b) give a type argument only when the selector ALREADY has that exact type
+String describeExact(Box&lt;String&gt; box) {
+  return switch (box) {
+    case Box&lt;String&gt;(var s) -> "string: " + s;   // verified: fine, no narrowing needed
+  };
+}</code></pre>
+    </div>
+  </div>
+  <p>In practice: <strong>omit the generic type argument</strong> in a record pattern unless the
+  selector's static type is already exactly that parameterization — it's simpler and always compiles.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="rules">10 · Dominance &amp; exhaustiveness</h2>
   <ul>
     <li><strong>Dominance:</strong> a broader pattern can't precede a narrower one — the compiler
       rejects the unreachable case. Put <code>case Integer i when …</code> <em>before</em> the plain
@@ -212,7 +269,7 @@ if (longValue instanceof int i) { ... }   // matches only if it fits exactly in 
   </ul>
 
   <!-- ============================================================ -->
-  <h2 id="pitfalls">9 · Pitfalls</h2>
+  <h2 id="pitfalls">11 · Pitfalls</h2>
   <table class="data">
     <tr><th>Pitfall</th><th>Reality</th></tr>
     <tr><td>Case order</td><td>First match wins; guarded/narrower cases must precede broader ones or you get "dominated"/unreachable errors.</td></tr>
@@ -220,10 +277,11 @@ if (longValue instanceof int i) { ... }   // matches only if it fits exactly in 
     <tr><td>Guards &amp; exhaustiveness</td><td>A <code>when</code> guard never satisfies exhaustiveness for its type.</td></tr>
     <tr><td>Mixing arrow &amp; colon labels</td><td>Not allowed in the same switch — pick one style.</td></tr>
     <tr><td>Over-nesting record patterns</td><td>Deep destructuring can hurt readability — bind an intermediate where clearer.</td></tr>
+    <tr><td>Explicit generic type argument in a record pattern</td><td>Only compiles when it doesn't require an unsound narrowing — omit it and let it infer, unless the selector's static type already matches exactly.</td></tr>
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="realworld">10 · Real-world use cases</h2>
+  <h2 id="realworld">12 · Real-world use cases</h2>
   <table class="data">
     <tr><th>Scenario</th><th>How patterns help</th></tr>
     <tr><td>Handling heterogeneous events/messages</td><td><code>switch</code> over a sealed event type, destructuring payloads.</td></tr>
@@ -273,7 +331,7 @@ String render(Json j) {
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">11 · Cheat sheet</h2>
+  <h2 id="cheat">13 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Pattern matching in one glance</h3>
     <ul>

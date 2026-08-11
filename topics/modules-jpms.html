@@ -38,6 +38,7 @@
     <a href="#directives">3. Directives</a>
     <a href="#graph">4. A module graph</a>
     <a href="#exports-opens">5. exports vs opens</a>
+    <a href="#openmodule">5b. open module — open everything</a>
     <a href="#paths">6. Classpath vs module path</a>
     <a href="#services">7. Services (ServiceLoader)</a>
     <a href="#migration">8. Migration &amp; escape hatches</a>
@@ -133,9 +134,45 @@ module com.myapp {
       <pre><code class="java">opens com.myapp.model;
 // Reflection frameworks (Jackson, Hibernate, Spring)
 // can access members at runtime.
-// No compile-time access to non-public types.</code></pre>
+// No compile-time access to non-public types.
+
+opens com.myapp.model to com.fasterxml.jackson.databind;
+// qualified opens — only THAT module gets deep reflection,
+// everyone else is still blocked</code></pre>
     </div>
   </div>
+
+  <!-- ============================================================ -->
+  <h2 id="openmodule">5b · <code>open module</code> — opening everything at once</h2>
+  <p><em>Why it matters:</em> writing <code>opens</code> on every single package that a reflection-heavy
+  framework (Spring, Hibernate, Jackson) might touch gets tedious fast — and it's easy to miss one.
+  Prefixing the whole module declaration with <code>open</code> opens every package in it to deep
+  reflection at once, while <code>exports</code> still controls what's compile-time visible.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Opening each package individually</div>
+      <pre><code class="java">module com.acme.app {
+  requires spring.core;
+  exports com.acme.app.api;
+  opens com.acme.app.model;
+  opens com.acme.app.entities;
+  opens com.acme.app.config;   // forget one and Spring throws
+                                // InaccessibleObjectException at runtime
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">One open module declaration</div>
+      <pre><code class="java">open module com.acme.app {
+  requires spring.core;
+  exports com.acme.app.api;   // exports still applies — this is compile-time API
+  // every package in this module is open to reflection — verified:
+  // Class.getDeclaredField(...).setAccessible(true) works from anywhere
+}</code></pre>
+    </div>
+  </div>
+  <p>This is exactly why many Spring Boot / Jakarta EE applications declare their main module as
+  <code>open module</code> — those frameworks reflectively construct and inject into almost every
+  class, and enumerating every package individually isn't worth the ceremony for an application
+  module (as opposed to a published library, where you'd want the tighter, explicit
+  package-by-package <code>opens</code>).</p>
 
   <!-- ============================================================ -->
   <h2 id="paths">6 · Classpath vs module path</h2>

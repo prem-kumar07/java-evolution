@@ -208,6 +208,28 @@ byte[] b   = hf.parseHex("0a14");</code></pre>
     </div>
   </div>
 
+  <h3>Worked example — a readable multi-line regex</h3>
+  <p>Combine a text block with <code>Pattern.COMMENTS</code> to write a regex that's actually
+  legible, with inline <code>#</code> comments the regex engine ignores at match time.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — one dense, unreadable line</div>
+      <pre><code class="java">Pattern email = Pattern.compile(
+    "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+// what does each part mean? good luck editing this in six months</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Text block + Pattern.COMMENTS</div>
+      <pre><code class="java">Pattern email = Pattern.compile("""
+    ^[a-zA-Z0-9._%+-]+   # local part
+    @
+    [a-zA-Z0-9.-]+       # domain
+    \\.[a-zA-Z]{2,}$     # TLD
+    """, Pattern.COMMENTS);   // whitespace &amp; #-comments are ignored when matching
+
+email.matcher("ada@example.com").matches();   // true  — verified
+email.matcher("not-an-email").matches();      // false — verified</code></pre>
+    </div>
+  </div>
+
   <!-- ============================================================ -->
   <h2 id="cheat">8 · Cheat sheet</h2>
   <div class="cheat">

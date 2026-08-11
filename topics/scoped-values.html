@@ -124,7 +124,10 @@ void process() {
 
   <!-- ============================================================ -->
   <h2 id="rebind">4 · run / call / multiple / rebinding</h2>
-  <pre><code class="java">// run: no result;  call: returns a value / may throw checked exceptions
+  <pre><code class="java">// run(Runnable): no result;
+// call(ScopedValue.CallableOp): returns a value, may throw a checked exception
+// — note this is ScopedValue's OWN CallableOp interface, not java.util.concurrent.Callable,
+//   though a plain lambda like below compiles against either without you noticing.
 String out = ScopedValue.where(CURRENT, user).call(() -> render());
 
 // bind several at once
@@ -135,8 +138,14 @@ ScopedValue.where(CURRENT, user)
 // rebinding = a nested, narrower scope (does NOT mutate — it shadows)
 ScopedValue.where(CURRENT, adminUser).run(() -> doPrivileged());
 
-// provide a fallback instead of throwing when unbound
-User u = CURRENT.orElse(GUEST);</code></pre>
+// two ways to avoid the "unbound" exception on get():
+User u  = CURRENT.orElse(GUEST);                                    // fallback value
+User u2 = CURRENT.orElseThrow(() -> new IllegalStateException("no user in scope"));
+// orElseThrow lets you throw YOUR exception type instead of the default one</code></pre>
+  <div class="tip"><strong>Guaranteed unbinding, verified from the JDK docs:</strong> "The ScopedValue
+  object reverts to being unbound when the original method completes <strong>normally or with an
+  exception</strong>." You never need a <code>finally</code> block to clean up a scoped value —
+  unlike <code>ThreadLocal.remove()</code>, it happens automatically either way.</div>
 
   <!-- ============================================================ -->
   <h2 id="sc">5 · With structured concurrency</h2>
