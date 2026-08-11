@@ -71,9 +71,27 @@ for (var e : scores.entrySet()) { }   // type inferred</code></pre>
   </div>
 
   <h3>Nest-based access control <span class="badge added">Added in 11</span></h3>
-  <p><em>Why it matters:</em> nested and outer classes can access each other's <code>private</code>
-  members directly. Before, <code>javac</code> generated synthetic bridge methods to fake it; now the
-  JVM understands "nests" natively (also fixes some reflection quirks).</p>
+  <p><em>Why it matters:</em> the Java <em>source</em> for a nested class accessing an outer class's
+  <code>private</code> member always looked the same — but before 11, the compiler had to generate a
+  hidden <strong>synthetic package-private accessor method</strong> to make that legal at the bytecode
+  level (JVMs only understood per-<em>class</em> access, not per-<em>source-file nest</em>). Java 11
+  taught the JVM the concept of a "nest" directly, so no synthetic bridge methods are generated, and
+  reflection can now correctly enumerate nestmates.</p>
+  <pre><code class="java">public class Outer {
+  private int secret = 42;
+  class Inner { int reveal() { return secret; } }   // compiles the same in 8 and 11...
+
+  public static void main(String[] args) {
+    System.out.println(new Outer().new Inner().reveal());   // 42
+    // ...but the JVM's view of the relationship changed:
+    for (Class&lt;?&gt; c : Outer.class.getNestMembers())
+      System.out.println("nestmate: " + c.getName());
+  }
+}
+// nestmate: Outer
+// nestmate: Outer$Inner        (verified output)</code></pre>
+  <p><code>Class.getNestMembers()</code> and <code>Class.getNestHost()</code> <span class="badge added">Added in 11</span>
+  are the new reflection APIs that expose this relationship directly.</p>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
@@ -181,7 +199,17 @@ java Hello.java arg1 arg2</code></pre>
   </div>
   <ul>
     <li><strong>Flight Recorder (JFR)</strong> <span class="badge jep">JEP 328</span> — low-overhead
-      production profiling, now open-source &amp; built in: <code>java -XX:StartFlightRecording ...</code></li>
+      production profiling, previously a paid Oracle-JDK-only feature, now open-source and built into
+      every JDK:
+      <pre><code class="java">// record for 60s starting at JVM launch
+java -XX:StartFlightRecording=duration=60s,filename=app.jfr -jar app.jar
+
+// or control it live on a running JVM by PID, no restart needed
+jcmd &lt;pid&gt; JFR.start duration=60s filename=app.jfr
+jcmd &lt;pid&gt; JFR.dump filename=snapshot.jfr
+jcmd &lt;pid&gt; JFR.stop</code></pre>
+      Open the resulting <code>.jfr</code> file in <strong>JDK Mission Control</strong> to see CPU,
+      allocation, GC and lock-contention data with near-zero overhead.</li>
     <li><strong>Application Class-Data Sharing</strong> <span class="badge added">Added in 10</span> —
       share class metadata across JVMs to cut startup time.</li>
   </ul>

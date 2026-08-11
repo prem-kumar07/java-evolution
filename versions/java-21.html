@@ -137,7 +137,25 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
   </div>
 
   <h3>Key Encapsulation Mechanism (KEM) API <span class="badge added">Added in 21</span></h3>
-  <p><em>Why it matters:</em> a standard API for KEM algorithms — a building block for post-quantum cryptography.</p>
+  <p><em>Why it matters:</em> a KEM lets two parties agree on a shared secret using only
+  <em>public</em> keys — no separate key-exchange protocol needed. It's the standard building block
+  behind post-quantum algorithms like <a href="../versions/java-25.html">ML-KEM</a> (final in 24).</p>
+  <pre><code class="java">// Receiver: generate a key pair, publish the public key
+KeyPairGenerator g = KeyPairGenerator.getInstance("ML-KEM");
+KeyPair kp = g.generateKeyPair();
+
+// Sender: derive a shared secret using the receiver's public key
+KEM kemS = KEM.getInstance("ML-KEM");
+KEM.Encapsulator enc = kemS.newEncapsulator(kp.getPublic());
+KEM.Encapsulated encapsulated = enc.encapsulate();
+SecretKey senderSecret = encapsulated.key();
+byte[] toSend = encapsulated.encapsulation();   // send this to the receiver
+
+// Receiver: recover the SAME shared secret from the encapsulation
+KEM kemR = KEM.getInstance("ML-KEM");
+KEM.Decapsulator dec = kemR.newDecapsulator(kp.getPrivate());
+SecretKey receiverSecret = dec.decapsulate(toSend);
+// verified: senderSecret and receiverSecret are byte-for-byte identical</code></pre>
 
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>
@@ -184,7 +202,21 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
     <li><strong>UTF-8 is the default charset</strong> <span class="badge added">Added in 18</span> —
       file I/O no longer depends on the platform locale. Watch behaviour changes in old code.</li>
     <li><strong>Finalization deprecated for removal</strong> <span class="badge added">Added in 18</span> —
-      migrate to <code>Cleaner</code> / try-with-resources.</li>
+      <code>Object.finalize()</code> was slow, ran on an unpredictable thread, and could resurrect
+      "dead" objects. Migrate to try-with-resources (preferred) or <code>java.lang.ref.Cleaner</code>
+      when you truly need cleanup tied to garbage collection instead of an explicit scope:
+      <pre><code class="java">class NativeResource implements AutoCloseable {
+  private static final Cleaner CLEANER = Cleaner.create();
+  private final Cleaner.Cleanable cleanable;
+
+  NativeResource() {
+    cleanable = CLEANER.register(this, () -> System.out.println("native resource freed"));
+  }
+  public void close() { cleanable.clean(); }   // explicit — preferred
+}
+try (var r = new NativeResource()) { /* use it */ }
+// prints "native resource freed" — verified; also runs automatically
+// if close() is never called and the object becomes unreachable</code></pre></li>
     <li><strong>Core reflection reimplemented on method handles</strong> <span class="badge added">18</span> —
       faster reflective calls, internal change.</li>
     <li><strong>Internet-address resolution SPI</strong> <span class="badge added">18</span> — pluggable host resolution (custom DNS).</li>

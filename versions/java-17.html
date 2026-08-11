@@ -197,6 +197,30 @@ try (var channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
   // ... read/write like any SocketChannel
 }</code></pre>
 
+  <h3>Enhanced pseudorandom generators <span class="badge added">Added in 17</span></h3>
+  <p><em>Why it matters:</em> <code>java.util.Random</code> locked you into one algorithm forever.
+  The new <code>RandomGenerator</code> interface lets you pick from 17 built-in algorithms
+  (including modern, statistically stronger ones like Xoshiro/L128X) through one uniform API.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — one fixed algorithm</div>
+      <pre><code class="java">Random r = new Random(42);
+int x = r.nextInt(100);
+// SplittableRandom / ThreadLocalRandom existed, but each has its
+// own type — no common interface, can't swap algorithms easily</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — pluggable algorithm, one interface</div>
+      <pre><code class="java">RandomGenerator rng =
+    RandomGeneratorFactory.of("Xoshiro256PlusPlus").create(42);
+int x = rng.nextInt(100);
+// swap "Xoshiro256PlusPlus" for "L64X128MixRandom", "Well44497b"...
+// same call sites, different algorithm
+
+RandomGeneratorFactory.all()               // discover what's available
+    .map(RandomGeneratorFactory::name)
+    .forEach(System.out::println);</code></pre>
+    </div>
+  </div>
+
   <h3>Other API additions</h3>
   <pre><code class="java">// Collectors.teeing — combine two collectors in one pass (Added in 12)
 var stats = nums.stream().collect(Collectors.teeing(
@@ -206,10 +230,6 @@ var stats = nums.stream().collect(Collectors.teeing(
 
 // HexFormat — bytes ↔ hex without manual loops (Added in 17)
 String hex = HexFormat.of().formatHex(new byte[]{1, 2, 3});   // "010203"
-
-// Enhanced pseudorandom generators (Added in 17)
-RandomGenerator rng =
-    RandomGeneratorFactory.of("Xoshiro256PlusPlus").create(42);
 
 // String extras: indent / transform / formatted (Added in 12 / 15)
 "Hi %s".formatted("Ada");
@@ -231,8 +251,11 @@ name.transform(String::toUpperCase);</code></pre>
     </div>
   </div>
   <ul>
-    <li><strong>jpackage</strong> <span class="badge added">Added in 16</span> — build native installers
-      (<code>.dmg</code>, <code>.msi</code>, <code>.deb</code>) from your app + a runtime.</li>
+    <li><strong>jpackage</strong> <span class="badge added">Added in 16</span> — build a native,
+      double-clickable installer from your app + a bundled JRE, so end users don't need Java installed:
+      <pre><code class="java">jpackage --input target/ --name MyApp --main-jar myapp.jar \
+    --main-class com.acme.Main --type dmg     # or: msi, exe, deb, rpm, pkg
+# produces MyApp.dmg — a self-contained installer, no separate JRE download</code></pre></li>
     <li>The JDK source moved from <strong>Mercurial to Git &amp; GitHub</strong>
       <span class="badge added">Added in 16</span>.</li>
   </ul>
@@ -243,7 +266,18 @@ name.transform(String::toUpperCase);</code></pre>
     <li><strong>ZGC</strong> and <strong>Shenandoah</strong> low-pause collectors reached
       <em>production</em> <span class="badge added">Added in 15</span>.</li>
     <li><strong>Hidden classes</strong> <span class="badge added">15</span> — for frameworks that
-      generate classes at runtime (lambdas, proxies) without leaking them.</li>
+      generate classes at runtime (lambdas, proxies, dynamic mixins) without leaking them into the
+      normal classloader namespace — a hidden class can't be found by name, and is garbage-collected
+      independently of its defining loader:
+      <pre><code class="java">byte[] bytecode = /* generated or loaded class bytes */;
+Lookup lookup = MethodHandles.lookup().defineHiddenClass(bytecode, true);
+Class&lt;?&gt; hidden = lookup.lookupClass();
+
+hidden.isHidden();              // true
+Class.forName(hidden.getName()); // throws ClassNotFoundException — verified:
+// it genuinely cannot be looked up by name, unlike a normal generated class</code></pre>
+      This is what frameworks like Spring, Mockito and lambda metafactories now use internally instead
+      of leaking throwaway classes into your classloader.</li>
     <li><strong>Strong encapsulation of JDK internals by default</strong>
       <span class="badge added">16</span> <span class="badge jep">JEP 403 (17)</span> — run
       <code>jdeps --jdk-internals</code> before upgrading.</li>

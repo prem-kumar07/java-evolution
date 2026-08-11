@@ -163,14 +163,45 @@ for (int i = 0; i + 3 &lt;= xs.size(); i++)
   <p>Writing your own gatherer → <a href="../topics/streams-gatherers.html">Streams &amp; Gatherers deep-dive</a>.</p>
 
   <h3>Foreign Function &amp; Memory API <span class="badge added">Final in 22</span></h3>
-  <p>Call native libraries and manage off-heap memory in pure Java — the safe replacement for JNI. →
+  <p><em>Why it matters:</em> call native libraries and manage off-heap memory in pure Java — the
+  safe, supported replacement for JNI.</p>
+  <pre><code class="java">// call C's strlen() — no C glue code, no build step
+Linker linker = Linker.nativeLinker();
+MethodHandle strlen = linker.downcallHandle(
+    linker.defaultLookup().find("strlen").orElseThrow(),
+    FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+
+try (Arena arena = Arena.ofConfined()) {
+  MemorySegment cString = arena.allocateFrom("hello");
+  long len = (long) strlen.invoke(cString);   // -> 5
+}</code></pre>
+  <p>A complete, runnable program (off-heap memory + downcall + upcall) →
   <a href="../topics/ffm-api.html">FFM deep-dive</a>.</p>
 
   <h3>Cryptography</h3>
-  <pre><code class="java">// Key Derivation Function API (Final in 25)
-KDF hkdf = KDF.getInstance("HKDF-SHA256");
+  <p><em>Why it matters:</em> the Key Derivation Function API gives HKDF (and future algorithms) a
+  standard, uniform API — before 25, teams either hand-rolled HKDF from <code>javax.crypto.Mac</code>
+  (easy to get subtly wrong) or pulled in a third-party crypto library just for this.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — hand-rolled HKDF via Mac</div>
+      <pre><code class="java">// HKDF-Extract, manually, using HMAC — easy to get wrong
+Mac hmac = Mac.getInstance("HmacSHA256");
+hmac.init(new SecretKeySpec(salt, "HmacSHA256"));
+byte[] prk = hmac.doFinal(initialKeyMaterial);
+// ...then a hand-written HKDF-Expand loop with a counter byte,
+// concatenating info + counter + previous block each round</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 25) — one standard API</div>
+      <pre><code class="java">KDF hkdf = KDF.getInstance("HKDF-SHA256");
+AlgorithmParameterSpec params = HKDFParameterSpec.ofExtract()
+    .addIKM(initialKeyMaterial)
+    .addSalt(salt).thenExpand(info, 32);
 
-// Quantum-resistant algorithms (Added in 24)
+SecretKey key = hkdf.deriveKey("AES", params);   // a 32-byte AES key
+// verified: derives a correct 32-byte key in one call</code></pre>
+    </div>
+  </div>
+  <pre><code class="java">// Quantum-resistant algorithms (Added in 24) — see the KEM walkthrough on the Java 21 page
 KeyPairGenerator kem = KeyPairGenerator.getInstance("ML-KEM");   // JEP 496
 Signature       dsa = Signature.getInstance("ML-DSA");          // JEP 497</code></pre>
 
@@ -197,8 +228,20 @@ Signature       dsa = Signature.getInstance("ML-DSA");          // JEP 497</code
 
   <ul>
     <li><strong>Launch multi-file source programs</strong> <span class="badge added">Added in 22</span> —
-      <code>java Main.java</code> compiles referenced sibling files on demand (no build tool). See
-      <a href="../quickstart.html">Quick start</a>.</li>
+      <code>java Main.java</code> also compiles any sibling <code>.java</code> files it references, on
+      demand — no build tool, no manifest, for small multi-class programs:
+      <pre><code class="java">// Main.java
+void main() {
+  IO.println(Greeter.greet("world"));
+}
+
+// Greeter.java (same directory)
+class Greeter {
+  static String greet(String name) { return "Hello, " + name; }
+}
+
+// java Main.java   — compiles BOTH files and runs, in one step</code></pre>
+      See <a href="../quickstart.html">Quick start</a> for single-file launch too.</li>
     <li><strong>Project Leyden — faster startup:</strong> AOT Class Loading &amp; Linking
       <span class="badge added">24</span>, plus AOT command-line ergonomics &amp; method profiling
       <span class="badge added">25</span> shift work from run time to a training/build step.</li>

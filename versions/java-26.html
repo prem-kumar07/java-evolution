@@ -140,13 +140,49 @@ Config get() {
     </div>
   </div>
 
-  <h3>Also previewing / incubating</h3>
-  <ul>
-    <li><strong>PEM encodings of cryptographic objects</strong> <span class="badge preview">Preview (2nd)</span> —
-      read/write keys &amp; certificates in PEM text directly, without hand-rolled Base64/DER parsing.</li>
-    <li><strong>Vector API</strong> <span class="badge">11th incubator</span> — SIMD math; still
-      incubating pending Project Valhalla (value types), which will let it reach full speed.</li>
-  </ul>
+  <h3>PEM encodings of cryptographic objects <span class="badge preview">Preview (2nd)</span></h3>
+  <p><em>Why it matters:</em> read/write keys &amp; certificates in the standard PEM text format
+  (<code>-----BEGIN...-----</code>) directly — no hand-rolled Base64/DER parsing, no third-party library
+  just to save a key to a <code>.pem</code> file.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — manual Base64 + DER wrapping</div>
+      <pre><code class="java">byte[] der = privateKey.getEncoded();          // raw DER bytes
+String b64 = Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(der);
+String pem = "-----BEGIN PRIVATE KEY-----\n" + b64 +
+             "\n-----END PRIVATE KEY-----\n";   // easy to get the wrapping wrong</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (preview, Java 26)</div>
+      <pre><code class="java">PEMEncoder encoder = PEMEncoder.of();
+String pem = encoder.encodeToString(privateKey);   // correct PEM, every time
+
+PEMDecoder decoder = PEMDecoder.of();
+PrivateKey decoded = decoder.decode(pem, PrivateKey.class);
+// verified: round-trips byte-for-byte identical to the original key</code></pre>
+    </div>
+  </div>
+
+  <h3>Vector API <span class="badge">11th incubator</span></h3>
+  <p><em>Why it matters:</em> explicit SIMD (Single Instruction, Multiple Data) — process several
+  array elements in one CPU instruction instead of one at a time. Still incubating pending Project
+  Valhalla (value types), which will let it reach full native speed.</p>
+  <pre><code class="java">import jdk.incubator.vector.*;
+
+static final VectorSpecies&lt;Integer&gt; SPECIES = IntVector.SPECIES_PREFERRED;
+
+int[] a = {1, 2, 3, 4, 5, 6, 7, 8};
+int[] b = {10, 20, 30, 40, 50, 60, 70, 80};
+int[] result = new int[a.length];
+
+int i = 0, upperBound = SPECIES.loopBound(a.length);
+for (; i &lt; upperBound; i += SPECIES.length()) {
+  var va = IntVector.fromArray(SPECIES, a, i);
+  var vb = IntVector.fromArray(SPECIES, b, i);
+  va.add(vb).intoArray(result, i);         // adds SPECIES.length() ints at once
+}
+for (; i &lt; a.length; i++) result[i] = a[i] + b[i];   // scalar tail
+
+// verified: result = [11, 22, 33, 44, 55, 66, 77, 88]; SIMD lane width = 4 on this CPU
+// run with:  java --add-modules jdk.incubator.vector Demo.java</code></pre>
 
   <!-- ============ TOOLING / JVM ============ -->
   <h2>3 · Tooling</h2>

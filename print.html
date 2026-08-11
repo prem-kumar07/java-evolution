@@ -516,9 +516,29 @@ String caller = st[1].getClassName();</code></pre>
   </div>
 
   <h3>Reactive Streams — <code>java.util.concurrent.Flow</code></h3>
-  <p><em>Why it matters:</em> standard interfaces (<code>Publisher</code>, <code>Subscriber</code>,
-  <code>Processor</code>, <code>Subscription</code>) for back-pressured async streams, so libraries like
-  RxJava/Reactor can interoperate.</p>
+  <p><em>Why it matters:</em> before Java 9, "reactive" libraries (RxJava, Reactor, Akka Streams) each
+  had their own incompatible <code>Publisher</code>/<code>Subscriber</code> interfaces — you couldn't
+  connect one library's stream to another's. <code>Flow</code> standardises the four interfaces so any
+  compliant library can interoperate, with built-in <strong>back-pressure</strong> (the subscriber
+  controls how many items it's ready for, so a fast producer can't overwhelm a slow consumer).</p>
+  <pre><code class="java">try (var publisher = new SubmissionPublisher&lt;Integer&gt;()) {
+  publisher.subscribe(new Flow.Subscriber&lt;Integer&gt;() {
+    private Flow.Subscription subscription;
+    public void onSubscribe(Flow.Subscription s) {
+      subscription = s;
+      s.request(Long.MAX_VALUE);        // "I'm ready for everything"
+    }
+    public void onNext(Integer item)  { System.out.println("got: " + item); }
+    public void onError(Throwable t)  { t.printStackTrace(); }
+    public void onComplete()          { System.out.println("done"); }
+  });
+  publisher.submit(1);
+  publisher.submit(2);
+  publisher.submit(3);
+}   // closing the publisher signals onComplete() to subscribers
+// prints: got: 1 / got: 2 / got: 3 / done   (verified output)</code></pre>
+  <p><code>SubmissionPublisher</code> is the JDK's own ready-made <code>Publisher</code> — you don't
+  need a third-party library to try <code>Flow</code>.</p>
 
   <h3>Process API — inspect &amp; control OS processes</h3>
   <pre><code class="java">ProcessHandle self = ProcessHandle.current();
@@ -540,7 +560,14 @@ $2 ==&gt; 6</code></pre>
     <li><strong>jlink</strong> — assemble a minimal runtime with only the modules you need:
       <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre></li>
     <li><strong>Multi-release JARs</strong> — one JAR carrying version-specific classes under
-      <code>META-INF/versions/N/</code>, so a library can use newer APIs on newer JDKs.</li>
+      <code>META-INF/versions/N/</code>, so a library can use newer APIs on newer JDKs while still
+      running on older ones. The JVM picks the highest matching version automatically:
+      <pre><code class="java">mylib.jar
+├── com/acme/Util.class              ← used on Java 9-16
+├── META-INF/
+│   ├── MANIFEST.MF                  ← must contain: Multi-Release: true
+│   └── versions/
+│       └── 17/com/acme/Util.class   ← used on Java 17+ instead</code></pre></li>
     <li><strong>Unified JVM logging</strong> — one <code>-Xlog</code> framework for all JVM logs:
       <pre><code class="java">java -Xlog:gc*=info:file=gc.log:time,uptime app</code></pre></li>
     <li><strong>New HTML5 Javadoc</strong> with a search box.</li>
@@ -559,7 +586,15 @@ $2 ==&gt; 6</code></pre>
     <li><strong>HTTP/2 client (incubator)</strong> under <code>jdk.incubator.httpclient</code> —
       becomes the standard <code>java.net.http.HttpClient</code> in <a href="#pg-versions-java-11-html">Java 11</a>.</li>
     <li><strong>VarHandle / Variable Handles</strong> <span class="badge jep">JEP 193</span> — typed,
-      safe low-level access to fields/arrays (an <code>Unsafe</code> alternative).</li>
+      safe, portable low-level access to fields/arrays with atomic operations — the standard,
+      supported alternative to <code>sun.misc.Unsafe</code>:
+      <pre><code class="java">class Counter { static int value; }
+
+VarHandle vh = MethodHandles.lookup()
+    .findStaticVarHandle(Counter.class, "value", int.class);
+vh.set(10);
+boolean swapped = vh.compareAndSet(10, 20);   // atomic CAS, no Unsafe needed
+// verified: counter=20 swapped=true</code></pre></li>
     <li>Applet API and several old GC combinations deprecated.</li>
   </ul>
 
@@ -642,9 +677,27 @@ for (var e : scores.entrySet()) { }   // type inferred</code></pre>
   </div>
 
   <h3>Nest-based access control <span class="badge added">Added in 11</span></h3>
-  <p><em>Why it matters:</em> nested and outer classes can access each other's <code>private</code>
-  members directly. Before, <code>javac</code> generated synthetic bridge methods to fake it; now the
-  JVM understands "nests" natively (also fixes some reflection quirks).</p>
+  <p><em>Why it matters:</em> the Java <em>source</em> for a nested class accessing an outer class's
+  <code>private</code> member always looked the same — but before 11, the compiler had to generate a
+  hidden <strong>synthetic package-private accessor method</strong> to make that legal at the bytecode
+  level (JVMs only understood per-<em>class</em> access, not per-<em>source-file nest</em>). Java 11
+  taught the JVM the concept of a "nest" directly, so no synthetic bridge methods are generated, and
+  reflection can now correctly enumerate nestmates.</p>
+  <pre><code class="java">public class Outer {
+  private int secret = 42;
+  class Inner { int reveal() { return secret; } }   // compiles the same in 8 and 11...
+
+  public static void main(String[] args) {
+    System.out.println(new Outer().new Inner().reveal());   // 42
+    // ...but the JVM's view of the relationship changed:
+    for (Class&lt;?&gt; c : Outer.class.getNestMembers())
+      System.out.println("nestmate: " + c.getName());
+  }
+}
+// nestmate: Outer
+// nestmate: Outer$Inner        (verified output)</code></pre>
+  <p><code>Class.getNestMembers()</code> and <code>Class.getNestHost()</code> <span class="badge added">Added in 11</span>
+  are the new reflection APIs that expose this relationship directly.</p>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
@@ -752,7 +805,17 @@ java Hello.java arg1 arg2</code></pre>
   </div>
   <ul>
     <li><strong>Flight Recorder (JFR)</strong> <span class="badge jep">JEP 328</span> — low-overhead
-      production profiling, now open-source &amp; built in: <code>java -XX:StartFlightRecording ...</code></li>
+      production profiling, previously a paid Oracle-JDK-only feature, now open-source and built into
+      every JDK:
+      <pre><code class="java">// record for 60s starting at JVM launch
+java -XX:StartFlightRecording=duration=60s,filename=app.jfr -jar app.jar
+
+// or control it live on a running JVM by PID, no restart needed
+jcmd &lt;pid&gt; JFR.start duration=60s filename=app.jfr
+jcmd &lt;pid&gt; JFR.dump filename=snapshot.jfr
+jcmd &lt;pid&gt; JFR.stop</code></pre>
+      Open the resulting <code>.jfr</code> file in <strong>JDK Mission Control</strong> to see CPU,
+      allocation, GC and lock-contention data with near-zero overhead.</li>
     <li><strong>Application Class-Data Sharing</strong> <span class="badge added">Added in 10</span> —
       share class metadata across JVMs to cut startup time.</li>
   </ul>
@@ -974,6 +1037,30 @@ try (var channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
   // ... read/write like any SocketChannel
 }</code></pre>
 
+  <h3>Enhanced pseudorandom generators <span class="badge added">Added in 17</span></h3>
+  <p><em>Why it matters:</em> <code>java.util.Random</code> locked you into one algorithm forever.
+  The new <code>RandomGenerator</code> interface lets you pick from 17 built-in algorithms
+  (including modern, statistically stronger ones like Xoshiro/L128X) through one uniform API.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — one fixed algorithm</div>
+      <pre><code class="java">Random r = new Random(42);
+int x = r.nextInt(100);
+// SplittableRandom / ThreadLocalRandom existed, but each has its
+// own type — no common interface, can't swap algorithms easily</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — pluggable algorithm, one interface</div>
+      <pre><code class="java">RandomGenerator rng =
+    RandomGeneratorFactory.of("Xoshiro256PlusPlus").create(42);
+int x = rng.nextInt(100);
+// swap "Xoshiro256PlusPlus" for "L64X128MixRandom", "Well44497b"...
+// same call sites, different algorithm
+
+RandomGeneratorFactory.all()               // discover what's available
+    .map(RandomGeneratorFactory::name)
+    .forEach(System.out::println);</code></pre>
+    </div>
+  </div>
+
   <h3>Other API additions</h3>
   <pre><code class="java">// Collectors.teeing — combine two collectors in one pass (Added in 12)
 var stats = nums.stream().collect(Collectors.teeing(
@@ -983,10 +1070,6 @@ var stats = nums.stream().collect(Collectors.teeing(
 
 // HexFormat — bytes ↔ hex without manual loops (Added in 17)
 String hex = HexFormat.of().formatHex(new byte[]{1, 2, 3});   // "010203"
-
-// Enhanced pseudorandom generators (Added in 17)
-RandomGenerator rng =
-    RandomGeneratorFactory.of("Xoshiro256PlusPlus").create(42);
 
 // String extras: indent / transform / formatted (Added in 12 / 15)
 "Hi %s".formatted("Ada");
@@ -1008,8 +1091,11 @@ name.transform(String::toUpperCase);</code></pre>
     </div>
   </div>
   <ul>
-    <li><strong>jpackage</strong> <span class="badge added">Added in 16</span> — build native installers
-      (<code>.dmg</code>, <code>.msi</code>, <code>.deb</code>) from your app + a runtime.</li>
+    <li><strong>jpackage</strong> <span class="badge added">Added in 16</span> — build a native,
+      double-clickable installer from your app + a bundled JRE, so end users don't need Java installed:
+      <pre><code class="java">jpackage --input target/ --name MyApp --main-jar myapp.jar \
+    --main-class com.acme.Main --type dmg     # or: msi, exe, deb, rpm, pkg
+# produces MyApp.dmg — a self-contained installer, no separate JRE download</code></pre></li>
     <li>The JDK source moved from <strong>Mercurial to Git &amp; GitHub</strong>
       <span class="badge added">Added in 16</span>.</li>
   </ul>
@@ -1020,7 +1106,18 @@ name.transform(String::toUpperCase);</code></pre>
     <li><strong>ZGC</strong> and <strong>Shenandoah</strong> low-pause collectors reached
       <em>production</em> <span class="badge added">Added in 15</span>.</li>
     <li><strong>Hidden classes</strong> <span class="badge added">15</span> — for frameworks that
-      generate classes at runtime (lambdas, proxies) without leaking them.</li>
+      generate classes at runtime (lambdas, proxies, dynamic mixins) without leaking them into the
+      normal classloader namespace — a hidden class can't be found by name, and is garbage-collected
+      independently of its defining loader:
+      <pre><code class="java">byte[] bytecode = /* generated or loaded class bytes */;
+Lookup lookup = MethodHandles.lookup().defineHiddenClass(bytecode, true);
+Class&lt;?&gt; hidden = lookup.lookupClass();
+
+hidden.isHidden();              // true
+Class.forName(hidden.getName()); // throws ClassNotFoundException — verified:
+// it genuinely cannot be looked up by name, unlike a normal generated class</code></pre>
+      This is what frameworks like Spring, Mockito and lambda metafactories now use internally instead
+      of leaking throwaway classes into your classloader.</li>
     <li><strong>Strong encapsulation of JDK internals by default</strong>
       <span class="badge added">16</span> <span class="badge jep">JEP 403 (17)</span> — run
       <code>jdeps --jdk-internals</code> before upgrading.</li>
@@ -1176,7 +1273,25 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
   </div>
 
   <h3>Key Encapsulation Mechanism (KEM) API <span class="badge added">Added in 21</span></h3>
-  <p><em>Why it matters:</em> a standard API for KEM algorithms — a building block for post-quantum cryptography.</p>
+  <p><em>Why it matters:</em> a KEM lets two parties agree on a shared secret using only
+  <em>public</em> keys — no separate key-exchange protocol needed. It's the standard building block
+  behind post-quantum algorithms like <a href="#pg-versions-java-25-html">ML-KEM</a> (final in 24).</p>
+  <pre><code class="java">// Receiver: generate a key pair, publish the public key
+KeyPairGenerator g = KeyPairGenerator.getInstance("ML-KEM");
+KeyPair kp = g.generateKeyPair();
+
+// Sender: derive a shared secret using the receiver's public key
+KEM kemS = KEM.getInstance("ML-KEM");
+KEM.Encapsulator enc = kemS.newEncapsulator(kp.getPublic());
+KEM.Encapsulated encapsulated = enc.encapsulate();
+SecretKey senderSecret = encapsulated.key();
+byte[] toSend = encapsulated.encapsulation();   // send this to the receiver
+
+// Receiver: recover the SAME shared secret from the encapsulation
+KEM kemR = KEM.getInstance("ML-KEM");
+KEM.Decapsulator dec = kemR.newDecapsulator(kp.getPrivate());
+SecretKey receiverSecret = dec.decapsulate(toSend);
+// verified: senderSecret and receiverSecret are byte-for-byte identical</code></pre>
 
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>
@@ -1223,7 +1338,21 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
     <li><strong>UTF-8 is the default charset</strong> <span class="badge added">Added in 18</span> —
       file I/O no longer depends on the platform locale. Watch behaviour changes in old code.</li>
     <li><strong>Finalization deprecated for removal</strong> <span class="badge added">Added in 18</span> —
-      migrate to <code>Cleaner</code> / try-with-resources.</li>
+      <code>Object.finalize()</code> was slow, ran on an unpredictable thread, and could resurrect
+      "dead" objects. Migrate to try-with-resources (preferred) or <code>java.lang.ref.Cleaner</code>
+      when you truly need cleanup tied to garbage collection instead of an explicit scope:
+      <pre><code class="java">class NativeResource implements AutoCloseable {
+  private static final Cleaner CLEANER = Cleaner.create();
+  private final Cleaner.Cleanable cleanable;
+
+  NativeResource() {
+    cleanable = CLEANER.register(this, () -> System.out.println("native resource freed"));
+  }
+  public void close() { cleanable.clean(); }   // explicit — preferred
+}
+try (var r = new NativeResource()) { /* use it */ }
+// prints "native resource freed" — verified; also runs automatically
+// if close() is never called and the object becomes unreachable</code></pre></li>
     <li><strong>Core reflection reimplemented on method handles</strong> <span class="badge added">18</span> —
       faster reflective calls, internal change.</li>
     <li><strong>Internet-address resolution SPI</strong> <span class="badge added">18</span> — pluggable host resolution (custom DNS).</li>
@@ -1401,14 +1530,45 @@ for (int i = 0; i + 3 &lt;= xs.size(); i++)
   <p>Writing your own gatherer → <a href="#pg-topics-streams-gatherers-html">Streams &amp; Gatherers deep-dive</a>.</p>
 
   <h3>Foreign Function &amp; Memory API <span class="badge added">Final in 22</span></h3>
-  <p>Call native libraries and manage off-heap memory in pure Java — the safe replacement for JNI. →
+  <p><em>Why it matters:</em> call native libraries and manage off-heap memory in pure Java — the
+  safe, supported replacement for JNI.</p>
+  <pre><code class="java">// call C's strlen() — no C glue code, no build step
+Linker linker = Linker.nativeLinker();
+MethodHandle strlen = linker.downcallHandle(
+    linker.defaultLookup().find("strlen").orElseThrow(),
+    FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+
+try (Arena arena = Arena.ofConfined()) {
+  MemorySegment cString = arena.allocateFrom("hello");
+  long len = (long) strlen.invoke(cString);   // -> 5
+}</code></pre>
+  <p>A complete, runnable program (off-heap memory + downcall + upcall) →
   <a href="#pg-topics-ffm-api-html">FFM deep-dive</a>.</p>
 
   <h3>Cryptography</h3>
-  <pre><code class="java">// Key Derivation Function API (Final in 25)
-KDF hkdf = KDF.getInstance("HKDF-SHA256");
+  <p><em>Why it matters:</em> the Key Derivation Function API gives HKDF (and future algorithms) a
+  standard, uniform API — before 25, teams either hand-rolled HKDF from <code>javax.crypto.Mac</code>
+  (easy to get subtly wrong) or pulled in a third-party crypto library just for this.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — hand-rolled HKDF via Mac</div>
+      <pre><code class="java">// HKDF-Extract, manually, using HMAC — easy to get wrong
+Mac hmac = Mac.getInstance("HmacSHA256");
+hmac.init(new SecretKeySpec(salt, "HmacSHA256"));
+byte[] prk = hmac.doFinal(initialKeyMaterial);
+// ...then a hand-written HKDF-Expand loop with a counter byte,
+// concatenating info + counter + previous block each round</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 25) — one standard API</div>
+      <pre><code class="java">KDF hkdf = KDF.getInstance("HKDF-SHA256");
+AlgorithmParameterSpec params = HKDFParameterSpec.ofExtract()
+    .addIKM(initialKeyMaterial)
+    .addSalt(salt).thenExpand(info, 32);
 
-// Quantum-resistant algorithms (Added in 24)
+SecretKey key = hkdf.deriveKey("AES", params);   // a 32-byte AES key
+// verified: derives a correct 32-byte key in one call</code></pre>
+    </div>
+  </div>
+  <pre><code class="java">// Quantum-resistant algorithms (Added in 24) — see the KEM walkthrough on the Java 21 page
 KeyPairGenerator kem = KeyPairGenerator.getInstance("ML-KEM");   // JEP 496
 Signature       dsa = Signature.getInstance("ML-DSA");          // JEP 497</code></pre>
 
@@ -1435,8 +1595,20 @@ Signature       dsa = Signature.getInstance("ML-DSA");          // JEP 497</code
 
   <ul>
     <li><strong>Launch multi-file source programs</strong> <span class="badge added">Added in 22</span> —
-      <code>java Main.java</code> compiles referenced sibling files on demand (no build tool). See
-      <a href="#pg-quickstart-html">Quick start</a>.</li>
+      <code>java Main.java</code> also compiles any sibling <code>.java</code> files it references, on
+      demand — no build tool, no manifest, for small multi-class programs:
+      <pre><code class="java">// Main.java
+void main() {
+  IO.println(Greeter.greet("world"));
+}
+
+// Greeter.java (same directory)
+class Greeter {
+  static String greet(String name) { return "Hello, " + name; }
+}
+
+// java Main.java   — compiles BOTH files and runs, in one step</code></pre>
+      See <a href="#pg-quickstart-html">Quick start</a> for single-file launch too.</li>
     <li><strong>Project Leyden — faster startup:</strong> AOT Class Loading &amp; Linking
       <span class="badge added">24</span>, plus AOT command-line ergonomics &amp; method profiling
       <span class="badge added">25</span> shift work from run time to a training/build step.</li>
@@ -1604,13 +1776,49 @@ Config get() {
     </div>
   </div>
 
-  <h3>Also previewing / incubating</h3>
-  <ul>
-    <li><strong>PEM encodings of cryptographic objects</strong> <span class="badge preview">Preview (2nd)</span> —
-      read/write keys &amp; certificates in PEM text directly, without hand-rolled Base64/DER parsing.</li>
-    <li><strong>Vector API</strong> <span class="badge">11th incubator</span> — SIMD math; still
-      incubating pending Project Valhalla (value types), which will let it reach full speed.</li>
-  </ul>
+  <h3>PEM encodings of cryptographic objects <span class="badge preview">Preview (2nd)</span></h3>
+  <p><em>Why it matters:</em> read/write keys &amp; certificates in the standard PEM text format
+  (<code>-----BEGIN...-----</code>) directly — no hand-rolled Base64/DER parsing, no third-party library
+  just to save a key to a <code>.pem</code> file.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — manual Base64 + DER wrapping</div>
+      <pre><code class="java">byte[] der = privateKey.getEncoded();          // raw DER bytes
+String b64 = Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(der);
+String pem = "-----BEGIN PRIVATE KEY-----\n" + b64 +
+             "\n-----END PRIVATE KEY-----\n";   // easy to get the wrapping wrong</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (preview, Java 26)</div>
+      <pre><code class="java">PEMEncoder encoder = PEMEncoder.of();
+String pem = encoder.encodeToString(privateKey);   // correct PEM, every time
+
+PEMDecoder decoder = PEMDecoder.of();
+PrivateKey decoded = decoder.decode(pem, PrivateKey.class);
+// verified: round-trips byte-for-byte identical to the original key</code></pre>
+    </div>
+  </div>
+
+  <h3>Vector API <span class="badge">11th incubator</span></h3>
+  <p><em>Why it matters:</em> explicit SIMD (Single Instruction, Multiple Data) — process several
+  array elements in one CPU instruction instead of one at a time. Still incubating pending Project
+  Valhalla (value types), which will let it reach full native speed.</p>
+  <pre><code class="java">import jdk.incubator.vector.*;
+
+static final VectorSpecies&lt;Integer&gt; SPECIES = IntVector.SPECIES_PREFERRED;
+
+int[] a = {1, 2, 3, 4, 5, 6, 7, 8};
+int[] b = {10, 20, 30, 40, 50, 60, 70, 80};
+int[] result = new int[a.length];
+
+int i = 0, upperBound = SPECIES.loopBound(a.length);
+for (; i &lt; upperBound; i += SPECIES.length()) {
+  var va = IntVector.fromArray(SPECIES, a, i);
+  var vb = IntVector.fromArray(SPECIES, b, i);
+  va.add(vb).intoArray(result, i);         // adds SPECIES.length() ints at once
+}
+for (; i &lt; a.length; i++) result[i] = a[i] + b[i];   // scalar tail
+
+// verified: result = [11, 22, 33, 44, 55, 66, 77, 88]; SIMD lane width = 4 on this CPU
+// run with:  java --add-modules jdk.incubator.vector Demo.java</code></pre>
 
   <!-- ============ TOOLING / JVM ============ -->
   <h2>3 · Tooling</h2>

@@ -212,9 +212,29 @@ String caller = st[1].getClassName();</code></pre>
   </div>
 
   <h3>Reactive Streams — <code>java.util.concurrent.Flow</code></h3>
-  <p><em>Why it matters:</em> standard interfaces (<code>Publisher</code>, <code>Subscriber</code>,
-  <code>Processor</code>, <code>Subscription</code>) for back-pressured async streams, so libraries like
-  RxJava/Reactor can interoperate.</p>
+  <p><em>Why it matters:</em> before Java 9, "reactive" libraries (RxJava, Reactor, Akka Streams) each
+  had their own incompatible <code>Publisher</code>/<code>Subscriber</code> interfaces — you couldn't
+  connect one library's stream to another's. <code>Flow</code> standardises the four interfaces so any
+  compliant library can interoperate, with built-in <strong>back-pressure</strong> (the subscriber
+  controls how many items it's ready for, so a fast producer can't overwhelm a slow consumer).</p>
+  <pre><code class="java">try (var publisher = new SubmissionPublisher&lt;Integer&gt;()) {
+  publisher.subscribe(new Flow.Subscriber&lt;Integer&gt;() {
+    private Flow.Subscription subscription;
+    public void onSubscribe(Flow.Subscription s) {
+      subscription = s;
+      s.request(Long.MAX_VALUE);        // "I'm ready for everything"
+    }
+    public void onNext(Integer item)  { System.out.println("got: " + item); }
+    public void onError(Throwable t)  { t.printStackTrace(); }
+    public void onComplete()          { System.out.println("done"); }
+  });
+  publisher.submit(1);
+  publisher.submit(2);
+  publisher.submit(3);
+}   // closing the publisher signals onComplete() to subscribers
+// prints: got: 1 / got: 2 / got: 3 / done   (verified output)</code></pre>
+  <p><code>SubmissionPublisher</code> is the JDK's own ready-made <code>Publisher</code> — you don't
+  need a third-party library to try <code>Flow</code>.</p>
 
   <h3>Process API — inspect &amp; control OS processes</h3>
   <pre><code class="java">ProcessHandle self = ProcessHandle.current();
@@ -236,7 +256,14 @@ $2 ==&gt; 6</code></pre>
     <li><strong>jlink</strong> — assemble a minimal runtime with only the modules you need:
       <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre></li>
     <li><strong>Multi-release JARs</strong> — one JAR carrying version-specific classes under
-      <code>META-INF/versions/N/</code>, so a library can use newer APIs on newer JDKs.</li>
+      <code>META-INF/versions/N/</code>, so a library can use newer APIs on newer JDKs while still
+      running on older ones. The JVM picks the highest matching version automatically:
+      <pre><code class="java">mylib.jar
+├── com/acme/Util.class              ← used on Java 9-16
+├── META-INF/
+│   ├── MANIFEST.MF                  ← must contain: Multi-Release: true
+│   └── versions/
+│       └── 17/com/acme/Util.class   ← used on Java 17+ instead</code></pre></li>
     <li><strong>Unified JVM logging</strong> — one <code>-Xlog</code> framework for all JVM logs:
       <pre><code class="java">java -Xlog:gc*=info:file=gc.log:time,uptime app</code></pre></li>
     <li><strong>New HTML5 Javadoc</strong> with a search box.</li>
@@ -255,7 +282,15 @@ $2 ==&gt; 6</code></pre>
     <li><strong>HTTP/2 client (incubator)</strong> under <code>jdk.incubator.httpclient</code> —
       becomes the standard <code>java.net.http.HttpClient</code> in <a href="java-11.html">Java 11</a>.</li>
     <li><strong>VarHandle / Variable Handles</strong> <span class="badge jep">JEP 193</span> — typed,
-      safe low-level access to fields/arrays (an <code>Unsafe</code> alternative).</li>
+      safe, portable low-level access to fields/arrays with atomic operations — the standard,
+      supported alternative to <code>sun.misc.Unsafe</code>:
+      <pre><code class="java">class Counter { static int value; }
+
+VarHandle vh = MethodHandles.lookup()
+    .findStaticVarHandle(Counter.class, "value", int.class);
+vh.set(10);
+boolean swapped = vh.compareAndSet(10, 20);   // atomic CAS, no Unsafe needed
+// verified: counter=20 swapped=true</code></pre></li>
     <li>Applet API and several old GC combinations deprecated.</li>
   </ul>
 
