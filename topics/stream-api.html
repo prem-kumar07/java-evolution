@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Stream API — complete guide</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
 </head>
 <body data-root="../" data-page="topics/stream-api.html" data-title="Stream API">
@@ -303,7 +304,7 @@ Map&lt;String, Double&gt; maxSalaryByDept = emps.stream()
   <h3>5.3 · <code>groupingBy</code> — the workhorse</h3>
   <p>Groups elements by a classifier function. Pair it with a <strong>downstream collector</strong> to
   do more than just collect the raw group into a list.</p>
-  <pre><code class="java">// simplest form: group into List<Employee> per dept
+  <pre><code class="java">// simplest form: group into List&lt;Employee&gt; per dept
 Map&lt;String, List&lt;Employee&gt;&gt; byDept = emps.stream()
     .collect(groupingBy(Employee::dept));
 

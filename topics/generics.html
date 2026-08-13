@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generics — complete guide</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/generics.html" data-title="Generics">
+<main>
+  <p class="sec-tag">Deep dive · language · complete guide</p>
+  <h1>Generics</h1>
+  <p class="lead">
+    Generics let <strong>types</strong> be parameters, the same way method parameters let
+    <strong>values</strong> be parameters. <code>Box&lt;T&gt;</code> is one class that works for
+    <code>Box&lt;String&gt;</code>, <code>Box&lt;Integer&gt;</code>, or any type — with the compiler
+    checking every use, and zero runtime cost.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">0</span><span class="lbl">runtime overhead — erased at compile time</span></div>
+    <div class="stat"><span class="num">0</span><span class="lbl">casts needed with generic APIs</span></div>
+    <div class="stat"><span class="num">compile-time</span><span class="lbl">type safety instead of runtime surprises</span></div>
+    <div class="stat"><span class="num">PECS</span><span class="lbl">Producer Extends, Consumer Super</span></div>
+    <div class="stat"><span class="num">Java 5</span><span class="lbl">introduced (2004)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Before generics, a collection held <code>Object</code> — anything could go in, so anything could
+    come out, and the compiler couldn't stop you from putting a <code>String</code> into a list of
+    <code>Integer</code>s. The bug surfaced later as a <code>ClassCastException</code>, often far from
+    where the mistake was made. Generics move that check from a runtime surprise to a compile-time error.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#why">1. Why generics — before &amp; after</a>
+    <a href="#classes">2. Generic classes &amp; methods</a>
+    <a href="#inference">3. Type inference &amp; the diamond</a>
+    <a href="#bounds">4. Bounded, multiple, and recursive bounds</a>
+    <a href="#wildcards">5. Wildcards &amp; PECS</a>
+    <a href="#erasure">6. Type erasure — verified with real bytecode</a>
+    <a href="#restrictions">7. What you cannot do with generics</a>
+    <a href="#pitfalls">8. Pitfalls</a>
+    <a href="#realworld">9. Real-world use cases</a>
+    <a href="#cheat">10. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="why">1 · Why generics — before &amp; after</h2>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before generics (pre-Java 5) — casts everywhere</div>
+      <pre><code class="java">List names = new ArrayList();     // holds Object
+names.add("Ada");
+names.add(42);                    // compiles fine — no error yet!
+
+String s = (String) names.get(0); // manual cast, could fail
+String s2 = (String) names.get(1); // ClassCastException AT RUNTIME, far from the bug</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — the compiler catches it immediately</div>
+      <pre><code class="java">List&lt;String&gt; names = new ArrayList&lt;&gt;();
+names.add("Ada");
+names.add(42);                    // COMPILE ERROR right here — caught immediately
+
+String s = names.get(0);          // no cast needed at all</code></pre>
+    </div>
+  </div>
+  <p>Three concrete benefits, straight from Oracle's own generics tutorial: <strong>stronger
+  compile-time checks</strong>, <strong>elimination of casts</strong>, and the ability to
+  <strong>write one algorithm that works across many types</strong> safely.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="classes">2 · Generic classes &amp; methods</h2>
+  <div class="ba">
+    <div class="before"><div class="ba-label">A non-generic box — only safe with Object</div>
+      <pre><code class="java">public class Box {
+  private Object content;
+  public void set(Object content) { this.content = content; }
+  public Object get() { return content; }
+}
+Box b = new Box();
+b.set("hello");
+String s = (String) b.get();   // cast required, and nothing stops b.set(42)</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">A generic box — one class, every type, type-safe</div>
+      <pre><code class="java">public class Box&lt;T&gt; {
+  private T content;
+  public void set(T content) { this.content = content; }
+  public T get() { return content; }
+}
+Box&lt;String&gt; b = new Box&lt;&gt;();
+b.set("hello");
+String s = b.get();            // no cast; b.set(42) would not compile</code></pre>
+    </div>
+  </div>
+
+  <h3>Naming convention — verified from Oracle's own tutorial</h3>
+  <table class="data">
+    <tr><th>Letter</th><th>Means</th></tr>
+    <tr><td><code>E</code></td><td>Element (used extensively by the Collections Framework)</td></tr>
+    <tr><td><code>K</code>, <code>V</code></td><td>Key, Value (maps)</td></tr>
+    <tr><td><code>N</code></td><td>Number</td></tr>
+    <tr><td><code>T</code></td><td>Type</td></tr>
+    <tr><td><code>S</code>, <code>U</code>, <code>V</code>...</td><td>2nd, 3rd, 4th type, when you need more than one</td></tr>
+  </table>
+  <p>Single uppercase letters are a convention, not a rule — but stray from it and readers will assume
+  you meant something else, since every JDK generic type follows it.</p>
+
+  <h3>Generic methods — the type parameter belongs to the method, not the class</h3>
+  <pre><code class="java">// a static generic method: &lt;U&gt; is declared right before the return type
+public static &lt;U&gt; void addBox(U u, List&lt;Box&lt;U&gt;&gt; boxes) {
+  boxes.add(new Box&lt;&gt;(u));
+}
+
+// the compiler infers U from the arguments — no need to specify it
+List&lt;Box&lt;Integer&gt;&gt; boxes = new ArrayList&lt;&gt;();
+BoxDemo.&lt;Integer&gt;addBox(10, boxes);   // explicit type witness — rarely needed
+BoxDemo.addBox(10, boxes);            // inferred automatically — the usual way</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="inference">3 · Type inference &amp; the diamond</h2>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before Java 7 — repeat the type on both sides</div>
+      <pre><code class="java">Map&lt;String, List&lt;String&gt;&gt; map = new HashMap&lt;String, List&lt;String&gt;&gt;();</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">The diamond <code>&lt;&gt;</code> — let the compiler infer it</div>
+      <pre><code class="java">Map&lt;String, List&lt;String&gt;&gt; map = new HashMap&lt;&gt;();
+// the compiler infers &lt;String, List&lt;String&gt;&gt; from the declared variable type</code></pre>
+    </div>
+  </div>
+  <div class="warn"><strong>Gotcha:</strong> <code>new HashMap()</code> with no diamond at all uses the
+  <em>raw type</em> — you lose type checking silently (an unchecked-conversion warning, not an error).
+  Always use either the full parameterization or the empty diamond <code>&lt;&gt;</code>, never bare
+  <code>new HashMap()</code> when assigning to a parameterized variable.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="bounds">4 · Bounded, multiple, and recursive bounds</h2>
+  <p>By default a type parameter accepts anything. <code>extends</code> narrows it to a specific
+  hierarchy — and despite the keyword, it also means "implements" for interfaces.</p>
+  <pre><code class="java">// simple bound: T must be a Number (or subtype)
+static double sumOf(List&lt;? extends Number&gt; nums) { ... }
+
+// multiple bounds: at most ONE class, then any number of interfaces —
+// the class (if any) must be listed first
+static &lt;T extends Number & Comparable&lt;T&gt;&gt; T max(T a, T b) {
+  return a.compareTo(b) >= 0 ? a : b;
+}
+// verified: max(3, 7) -> 7
+
+// recursive bound: T must be comparable to itself — this is exactly
+// how Collections.max() and Comparable-based sorting are declared in the JDK
+static &lt;T extends Comparable&lt;T&gt;&gt; T maxOf(T a, T b) {
+  return a.compareTo(b) >= 0 ? a : b;
+}
+// verified: maxOf("apple", "banana") -> "banana"</code></pre>
+  <div class="tip"><strong>Recursive bounds look strange the first time</strong>
+  (<code>T extends Comparable&lt;T&gt;</code> — "T is comparable to itself") but they're everywhere in
+  the JDK once you know to look: <code>Enum&lt;E extends Enum&lt;E&gt;&gt;</code> is declared exactly
+  this way.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="wildcards">5 · Wildcards &amp; PECS</h2>
+  <p>A wildcard (<code>?</code>) represents an <em>unknown</em> type — used at the call site, not in a
+  declaration, when you need flexibility a plain type parameter can't give you.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 760 210" role="img" aria-label="PECS: use extends for a producer you only read from, use super for a consumer you only write to, use a plain type when you do both">
+      <defs>
+        <marker id="pcA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="20"  y="20" width="220" height="86" rx="10" class="dg-good-box"/>
+      <text x="130" y="48" text-anchor="middle" class="dg-text">List&lt;? extends Number&gt;</text>
+      <text x="130" y="68" text-anchor="middle" class="dg-soft">a PRODUCER — you only read</text>
+      <text x="130" y="86" text-anchor="middle" class="dg-soft">"Producer Extends"</text>
+      <circle cx="130" cy="150" r="14" class="dg-good"/><text x="130" y="155" text-anchor="middle" class="dg-on-accent">→</text>
+      <text x="130" y="185" text-anchor="middle" class="dg-soft">data flows OUT to you</text>
+
+      <rect x="270" y="20" width="220" height="86" rx="10" class="dg-warn-box"/>
+      <text x="380" y="48" text-anchor="middle" class="dg-text">List&lt;? super Integer&gt;</text>
+      <text x="380" y="68" text-anchor="middle" class="dg-soft">a CONSUMER — you only write</text>
+      <text x="380" y="86" text-anchor="middle" class="dg-soft">"Consumer Super"</text>
+      <circle cx="380" cy="150" r="14" class="dg-warn"/><text x="380" y="155" text-anchor="middle" class="dg-on-accent">←</text>
+      <text x="380" y="185" text-anchor="middle" class="dg-soft">data flows IN from you</text>
+
+      <rect x="520" y="20" width="220" height="86" rx="10" class="dg-box"/>
+      <text x="630" y="48" text-anchor="middle" class="dg-text">List&lt;T&gt;</text>
+      <text x="630" y="68" text-anchor="middle" class="dg-soft">both — you read AND write</text>
+      <text x="630" y="86" text-anchor="middle" class="dg-soft">use an exact type parameter</text>
+      <text x="630" y="150" text-anchor="middle" class="dg-soft">↔</text>
+      <text x="630" y="185" text-anchor="middle" class="dg-soft">both directions</text>
+    </svg>
+    <figcaption>PECS: <strong>P</strong>roducer <strong>E</strong>xtends, <strong>C</strong>onsumer
+    <strong>S</strong>uper. If you only pull values out, use <code>extends</code>. If you only push
+    values in, use <code>super</code>. If you do both, wildcards can't help — use a plain type.</figcaption>
+  </figure>
+
+  <div class="ba">
+    <div class="before"><div class="ba-label">Too restrictive — only accepts List&lt;Number&gt; exactly</div>
+      <pre><code class="java">static double sum(List&lt;Number&gt; nums) { ... }
+sum(List.of(1, 2, 3));       // ✗ compile error — List&lt;Integer&gt; is NOT a List&lt;Number&gt;</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Upper-bounded wildcard — accepts any subtype</div>
+      <pre><code class="java">static double sum(List&lt;? extends Number&gt; nums) {
+  double total = 0;
+  for (Number n : nums) total += n.doubleValue();   // read-only access as Number
+  return total;
+}
+sum(List.of(1, 2, 3));        // ✓ works — verified: 6.0
+sum(List.of(1.5, 2.5));       // ✓ works — verified: 4.0</code></pre>
+    </div>
+  </div>
+  <pre><code class="java">// lower-bounded wildcard: write Integers into anything that can hold them
+static void addIntegers(List&lt;? super Integer&gt; list) {
+  list.add(1);
+  list.add(2);
+}
+List&lt;Number&gt; dest = new ArrayList&lt;&gt;();
+addIntegers(dest);             // verified: dest == [1, 2]
+
+// unbounded wildcard: List<?> — you can read as Object, but can only WRITE null
+List&lt;?&gt; unknown = List.of(1, 2, 3);
+Object o = unknown.get(0);     // fine — verified
+// unknown.add("x");           // would NOT compile — the element type is truly unknown</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="erasure">6 · Type erasure — verified with real bytecode</h2>
+  <p>Generics are a <strong>compile-time</strong> feature. The compiler checks your types, then erases
+  them: <code>T</code> becomes <code>Object</code> (or its first bound), and inserts casts where needed
+  to keep the illusion of type safety at runtime.</p>
+  <pre><code class="java">class Node&lt;T&gt; { T data; void setData(T data) { this.data = data; } }
+
+// after erasure, the compiler actually generates:
+class Node { Object data; void setData(Object data) { this.data = data; } }</code></pre>
+
+  <h3>Bridge methods — verified with real javap output</h3>
+  <p>Erasure creates a real, observable side effect when a subclass narrows a generic method's type.
+  Here's the exact scenario, run and disassembled for real:</p>
+  <pre><code class="java">class Node&lt;T&gt; {
+  T data;
+  Node(T data) { this.data = data; }
+  void setData(T data) { System.out.println("Node.setData"); this.data = data; }
+}
+class MyNode extends Node&lt;Integer&gt; {
+  MyNode(Integer data) { super(data); }
+  @Override void setData(Integer data) {           // looks like an override...
+    System.out.println("MyNode.setData");
+    super.setData(data);
+  }
+}
+
+MyNode mn = new MyNode(5);
+Node n = mn;              // raw type reference
+n.setData("Hello");       // compiles (with an unchecked warning) — erased to setData(Object)</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">Exception in thread "main" java.lang.ClassCastException:
+  class java.lang.String cannot be cast to class java.lang.Integer
+    at MyNode.setData(BridgeDemo.java:12)
+    at BridgeDemo.main(BridgeDemo.java:24)</code></pre>
+  After erasure, <code>Node.setData(T)</code> becomes <code>Node.setData(Object)</code> — so
+  <code>MyNode.setData(Integer)</code> no longer overrides it by signature. To preserve polymorphism,
+  the compiler silently generates a synthetic <strong>bridge method</strong>. Verified with
+  <code>javap -p MyNode</code>:
+  <pre><code class="java">void setData(java.lang.Integer);   // your real method
+void setData(java.lang.Object);    // compiler-generated bridge — casts, then delegates</code></pre>
+  The bridge method is what actually gets called, casts its argument to <code>Integer</code>, and
+  <em>that cast</em> is where the <code>ClassCastException</code> is thrown — not inside your code at all.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="restrictions">7 · What you cannot do with generics</h2>
+  <p>All seven of these are direct, real consequences of erasure — verified against Oracle's own
+  "Restrictions on Generics" reference.</p>
+  <table class="data">
+    <tr><th>Restriction</th><th>Why (and the workaround)</th></tr>
+    <tr><td>Cannot instantiate with primitives: <code>Pair&lt;int, char&gt;</code></td><td>Only reference types — use <code>Pair&lt;Integer, Character&gt;</code> (autoboxed).</td></tr>
+    <tr><td>Cannot create an instance of a type parameter: <code>new T()</code></td><td>The compiler can't know what <code>T</code> is at runtime. Workaround: pass a <code>Supplier&lt;T&gt;</code> or a <code>Class&lt;T&gt;</code> and use reflection.</td></tr>
+    <tr><td>Cannot declare static fields of a type parameter</td><td>A static field is shared by all instances, but each instantiation could have a different <code>T</code> — there's no single answer for what type it would be.</td></tr>
+    <tr><td>Cannot use <code>instanceof</code> or cast against a parameterized type: <code>x instanceof List&lt;String&gt;</code></td><td>Erased at runtime — the JVM can't tell <code>List&lt;Integer&gt;</code> from <code>List&lt;String&gt;</code>. You can check <code>x instanceof List&lt;?&gt;</code> instead.</td></tr>
+    <tr><td>Cannot create arrays of a parameterized type: <code>new List&lt;String&gt;[10]</code></td><td>Arrays check their element type at runtime (<code>ArrayStoreException</code>); erasure would silently defeat that safety check, so it's forbidden outright.</td></tr>
+    <tr><td>A generic class cannot extend <code>Throwable</code></td><td>Exception types must be resolvable at both compile and catch time — erasure would make <code>catch</code> clauses ambiguous.</td></tr>
+    <tr><td>Cannot overload two methods that erase to the same signature</td><td><code>void m(List&lt;String&gt; x)</code> and <code>void m(List&lt;Integer&gt; x)</code> both erase to <code>m(List)</code> — a duplicate-method compile error.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">8 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>Using a raw type (<code>List</code> with no <code>&lt;&gt;</code> at all)</td><td>Compiles with an unchecked warning and disables generic type checking for that variable entirely — always parameterize.</td></tr>
+    <tr><td>Assuming generics add runtime type safety to arrays</td><td>Arrays are reified (checked at runtime); generics are erased. Mixing the two is exactly why <code>List&lt;T&gt;[]</code> is forbidden.</td></tr>
+    <tr><td>Expecting <code>List&lt;Object&gt;</code> and <code>List&lt;?&gt;</code> to behave the same</td><td>You can insert anything into a <code>List&lt;Object&gt;</code>. Into a <code>List&lt;?&gt;</code> you can only insert <code>null</code> — the element type is truly unknown to the compiler.</td></tr>
+    <tr><td>Suppressing an unchecked-cast warning without understanding why</td><td><code>@SuppressWarnings("unchecked")</code> silences the compiler, not the risk. Only use it when you've manually verified type safety (e.g. wrapping a known-safe reflective call).</td></tr>
+    <tr><td>Trying to overload by generic parameter type alone</td><td>Erasure makes the overloads identical — a real compile error, not a subtle bug, so at least you find out immediately.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">9 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Generics feature</th></tr>
+    <tr><td>Type-safe collections (every <code>List</code>/<code>Map</code> you use)</td><td>Generic classes</td></tr>
+    <tr><td>A repository/DAO layer generic over entity type</td><td><code>Repository&lt;T, ID&gt;</code> pattern</td></tr>
+    <tr><td>A method that accepts "any list of numbers" for a calculation</td><td><code>List&lt;? extends Number&gt;</code> (PECS producer)</td></tr>
+    <tr><td>A method that fills any compatible collection</td><td><code>List&lt;? super T&gt;</code> (PECS consumer), e.g. <code>Collections.copy</code></td></tr>
+    <tr><td>Sorting/comparing arbitrary comparable types</td><td>Recursive bound <code>&lt;T extends Comparable&lt;T&gt;&gt;</code></td></tr>
+    <tr><td>A typed <code>Result&lt;T&gt;</code>/<code>Optional&lt;T&gt;</code>-style wrapper</td><td>Generic class combined with <a href="sealed-classes.html">sealed types</a></td></tr>
+    <tr><td>A builder or factory generic over the thing it builds</td><td>Generic methods with inferred type parameters</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">10 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>Generics in one glance</h3>
+    <ul>
+      <li><code>class Box&lt;T&gt; { T value; }</code> — one type parameter, works for any reference type.</li>
+      <li>Naming: <code>E</code> element, <code>K</code>/<code>V</code> key/value, <code>N</code> number, <code>T</code> type.</li>
+      <li>Diamond: <code>new HashMap&lt;&gt;()</code> — never bare <code>new HashMap()</code> when the variable is parameterized.</li>
+      <li>Bounds: <code>&lt;T extends Number&gt;</code>; multiple: <code>&lt;T extends Number &amp; Comparable&lt;T&gt;&gt;</code> (class first).</li>
+      <li><strong>PECS:</strong> <code>? extends</code> to read (producer), <code>? super</code> to write (consumer).</li>
+      <li>Erasure: <code>T</code> → <code>Object</code>/bound at compile time — zero runtime cost, but no runtime type info either.</li>
+      <li>Can't: <code>new T()</code>, static fields of <code>T</code>, <code>instanceof List&lt;String&gt;</code>, arrays of parameterized types, extend <code>Throwable</code> generically.</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

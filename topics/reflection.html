@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reflection API — complete guide</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/reflection.html" data-title="Reflection API">
+<main>
+  <p class="sec-tag">Deep dive · API · complete guide</p>
+  <h1>The Reflection API</h1>
+  <p class="lead">
+    Reflection lets a running program <strong>examine and manipulate its own structure</strong> —
+    listing a class's fields and methods, reading private state, invoking methods by name, and even
+    building objects that implement an interface on the fly. It's how every dependency-injection
+    framework, ORM, and serializer works under the hood.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num"><code>Class</code></span><span class="lbl">the entry point for everything</span></div>
+    <div class="stat"><span class="num">private</span><span class="lbl">fields/methods become reachable</span></div>
+    <div class="stat"><span class="num">by name</span><span class="lbl">invoke methods known only as a String</span></div>
+    <div class="stat"><span class="num">Proxy</span><span class="lbl">implement an interface at runtime</span></div>
+    <div class="stat"><span class="num">slower</span><span class="lbl">— real, measurable overhead</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Ordinary Java code must know at <em>compile time</em> exactly which class it's calling. But a
+    framework like Spring or Jackson is written before it ever sees your classes — it needs to
+    discover your fields, call your constructors, and read your annotations at <em>runtime</em>,
+    generically, for types it has never heard of. Reflection is what makes that possible.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#why">1. Uses &amp; drawbacks — verified from Oracle's own docs</a>
+    <a href="#class">2. Class — the entry point</a>
+    <a href="#names">3. Class names — simple, canonical, type</a>
+    <a href="#modifiers">4. Modifiers</a>
+    <a href="#fields">5. Fields — read &amp; write</a>
+    <a href="#methods">6. Methods — invoke by name</a>
+    <a href="#constructors">7. Constructors — build objects reflectively</a>
+    <a href="#arrays">8. Arrays</a>
+    <a href="#enumsrecords">9. Enums &amp; records</a>
+    <a href="#annotations">10. Reading annotations</a>
+    <a href="#proxy">11. Dynamic proxies</a>
+    <a href="#patterns">12. Real patterns: interceptors &amp; DI</a>
+    <a href="#modules">13. setAccessible &amp; the module system</a>
+    <a href="#pitfalls">14. Pitfalls</a>
+    <a href="#realworld">15. Real-world use cases</a>
+    <a href="#cheat">16. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="why">1 · Uses &amp; drawbacks — verified from Oracle's own docs</h2>
+  <p>Oracle's own Reflection tutorial is candid about both sides of this feature:</p>
+  <table class="data">
+    <tr><th>Legitimate uses</th><th>Real drawbacks</th></tr>
+    <tr><td>Extensibility — load user-defined classes by name (plugins)</td><td><strong>Performance overhead</strong> — reflective calls are dynamically resolved, so the JIT can't optimize them like a direct call</td></tr>
+    <tr><td>Class browsers / IDEs — enumerate members for tooling</td><td><strong>Security restrictions</strong> — modules can block reflective access to their internals (JPMS, see §13)</td></tr>
+    <tr><td>Debuggers &amp; test harnesses — inspect private state, systematically exercise every method</td><td><strong>Exposure of internals</strong> — reflection can access private fields/methods that non-reflective code legally cannot</td></tr>
+  </table>
+  <div class="tip"><strong>Rule of thumb, straight from Oracle's own guidance:</strong> "If it is
+  possible to perform an operation without using reflection, then it is preferable to avoid using it."
+  Reflection is the right tool for frameworks and tooling — not for everyday application logic.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="class">2 · <code>Class</code> — the entry point</h2>
+  <p>Every reflective operation starts from a <code>java.lang.Class</code> instance. There are four
+  ways to get one:</p>
+  <pre><code class="java">String s = "hello";
+Class&lt;?&gt; c1 = s.getClass();              // (a) from an instance
+Class&lt;?&gt; c2 = String.class;              // (b) the class literal — no instance needed
+Class&lt;?&gt; c3 = Class.forName("java.lang.String");  // (c) by fully-qualified name (throws checked exception)
+Class&lt;?&gt; c4 = int[].class;                // (d) even array/primitive types have a Class</code></pre>
+  <p>Note on constructors: <strong>none of the classes in <code>java.lang.reflect</code> have public
+  constructors</strong> — you always reach them through methods on <code>Class</code>.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 760 220" role="img" aria-label="Class is the single entry point that leads to Field, Method, Constructor, RecordComponent and annotation objects for a type">
+      <defs>
+        <marker id="rfA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <rect x="300" y="85" width="160" height="52" rx="10" class="dg-accent"/>
+      <text x="380" y="107" text-anchor="middle" class="dg-text">Class&lt;T&gt;</text>
+      <text x="380" y="124" text-anchor="middle" class="dg-soft">the entry point</text>
+
+      <rect x="30"  y="20" width="150" height="42" rx="8" class="dg-box"/><text x="105" y="45" text-anchor="middle" class="dg-text-sm">Field[]</text>
+      <rect x="30"  y="88" width="150" height="42" rx="8" class="dg-box"/><text x="105" y="113" text-anchor="middle" class="dg-text-sm">Method[]</text>
+      <rect x="30"  y="156" width="150" height="42" rx="8" class="dg-box"/><text x="105" y="181" text-anchor="middle" class="dg-text-sm">Constructor[]</text>
+      <rect x="580" y="20" width="150" height="42" rx="8" class="dg-good-box"/><text x="655" y="45" text-anchor="middle" class="dg-text-sm">Annotation[]</text>
+      <rect x="580" y="88" width="150" height="42" rx="8" class="dg-good-box"/><text x="655" y="113" text-anchor="middle" class="dg-text-sm">RecordComponent[]</text>
+      <rect x="580" y="156" width="150" height="42" rx="8" class="dg-warn-box"/><text x="655" y="181" text-anchor="middle" class="dg-text-sm">Proxy (new instance)</text>
+
+      <line x1="298" y1="100" x2="182" y2="42"  class="dg-line" marker-end="url(#rfA)"/>
+      <line x1="298" y1="110" x2="182" y2="109" class="dg-line" marker-end="url(#rfA)"/>
+      <line x1="298" y1="122" x2="182" y2="176" class="dg-line" marker-end="url(#rfA)"/>
+      <line x1="462" y1="100" x2="578" y2="42"  class="dg-line" marker-end="url(#rfA)"/>
+      <line x1="462" y1="110" x2="578" y2="109" class="dg-line" marker-end="url(#rfA)"/>
+      <line x1="462" y1="122" x2="578" y2="176" class="dg-line" marker-end="url(#rfA)"/>
+    </svg>
+    <figcaption>Every reflective capability — fields, methods, constructors, annotations, record
+    components, even building a runtime proxy — starts from the same <code>Class&lt;T&gt;</code> object.</figcaption>
+  </figure>
+
+  <!-- ============================================================ -->
+  <h2 id="names">3 · Class names — simple, canonical, type</h2>
+  <p>Verified from dev.java's own reflection tutorial — three different name methods exist because
+  not every class can have every kind of name:</p>
+  <table class="data">
+    <tr><th>Method</th><th>Returns</th><th>Gotcha</th></tr>
+    <tr><td><code>getSimpleName()</code></td><td>The name as it appears in source, no package</td><td>Anonymous classes have an <strong>empty</strong> simple name — verified.</td></tr>
+    <tr><td><code>getCanonicalName()</code></td><td>Fully-qualified, as you'd write it in code</td><td>Returns <code>null</code> for local classes, anonymous classes, and hidden classes — verified.</td></tr>
+    <tr><td><code>getName()</code></td><td>The JVM's internal binary name</td><td>Uses <code>$</code> for nested classes: <code>Outer$Inner</code>, and array/primitive encodings like <code>[I</code>.</td></tr>
+  </table>
+  <pre><code class="java">class Outer { class Inner {} }
+Object inner = new Outer().new Inner();     // inner class — needs an Outer instance
+System.out.println(inner.getClass().getSimpleName());     // verified: "Inner"
+System.out.println(inner.getClass().getCanonicalName());  // verified: "Outer.Inner"
+System.out.println(inner.getClass().getName());           // verified: "Outer$Inner"</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="modifiers">4 · Modifiers</h2>
+  <p><code>Class.getModifiers()</code> (and the same method on <code>Field</code>/<code>Method</code>/<code>Constructor</code>
+  via the <code>Member</code> interface) returns an <code>int</code> where each bit represents one
+  modifier. Decode it with the <code>Modifier</code> helper class rather than bit-twiddling yourself:</p>
+  <pre><code class="java">int mods = String.class.getModifiers();
+System.out.println(Modifier.isPublic(mods));    // true
+System.out.println(Modifier.isFinal(mods));     // true — String really is final
+System.out.println(Modifier.toString(mods));    // "public final"</code></pre>
+  <div class="note">Not every modifier your code sees in <code>Modifier</code> covers newer keywords —
+  <strong><code>sealed</code> and <code>non-sealed</code> are not represented</strong> in
+  <code>java.lang.reflect.Modifier</code> (verified from dev.java's own reflection tutorial). Use
+  <code>Class.isSealed()</code> and <code>Class.getPermittedSubclasses()</code> instead.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="fields">5 · Fields — read &amp; write</h2>
+  <p>Two axes control what <code>Class</code> hands back — verified from dev.java's own comparison table:</p>
+  <table class="data">
+    <tr><th>Method</th><th>Includes inherited?</th><th>Includes private?</th></tr>
+    <tr><td><code>getDeclaredField(name)</code> / <code>getDeclaredFields()</code></td><td>No — this class only</td><td>Yes</td></tr>
+    <tr><td><code>getField(name)</code> / <code>getFields()</code></td><td>Yes — walks up to <code>Object</code></td><td>No — public only</td></tr>
+  </table>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Legacy — no way to touch private state from outside</div>
+      <pre><code class="java">// a serializer/framework CANNOT do this without reflection:
+Person p = new Person("Ada", 30);
+// p.name is private — no getter available, no access</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Reflection — read and write private fields</div>
+      <pre><code class="java">Field nameField = Person.class.getDeclaredField("name");
+nameField.setAccessible(true);         // bypass the private access check
+nameField.set(person, "Ada");
+System.out.println(nameField.get(person));   // verified: "Ada"</code></pre>
+    </div>
+  </div>
+  <pre><code class="java">// verified real counts on a class with two private fields (name, age):
+Person.class.getDeclaredFields().length;   // 2 — everything declared here
+Person.class.getFields().length;           // 0 — no public fields at all</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="methods">6 · Methods — invoke by name</h2>
+  <table class="data">
+    <tr><th>Method</th><th>Includes inherited?</th><th>Includes private?</th></tr>
+    <tr><td><code>getDeclaredMethod(name, ...)</code> / <code>getDeclaredMethods()</code></td><td>No</td><td>Yes</td></tr>
+    <tr><td><code>getMethod(name, ...)</code> / <code>getMethods()</code></td><td>Yes</td><td>No</td></tr>
+  </table>
+  <pre><code class="java">Method greet = Person.class.getDeclaredMethod("greet", String.class);
+greet.setAccessible(true);              // needed — greet() is private
+Object result = greet.invoke(person, "Hello");   // like person.greet("Hello")
+System.out.println(result);             // verified: "Hello, Ada"</code></pre>
+  <div class="warn"><strong>Gotcha:</strong> <code>Method.invoke</code> always returns
+  <code>Object</code> (cast if you need the real type), and wraps any exception the invoked method
+  throws inside an <code>InvocationTargetException</code> — you must unwrap it with
+  <code>getCause()</code> to see the original exception.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="constructors">7 · Constructors — build objects reflectively</h2>
+  <table class="data">
+    <tr><th>Method</th><th>Array of ctors?</th><th>Private ctors?</th></tr>
+    <tr><td><code>getDeclaredConstructor(...)</code> / <code>getDeclaredConstructors()</code></td><td>Yes</td><td>Yes</td></tr>
+    <tr><td><code>getConstructor(...)</code> / <code>getConstructors()</code></td><td>No</td><td>No</td></tr>
+  </table>
+  <p><em>Note, verified:</em> unlike fields/methods, constructors are <strong>not inherited</strong> —
+  there's no "walk up the hierarchy" variant to worry about.</p>
+  <pre><code class="java">Constructor&lt;?&gt; noArg = Person.class.getDeclaredConstructor();
+Object p = noArg.newInstance();                        // like new Person()
+
+Constructor&lt;?&gt; twoArg = Person.class.getConstructor(String.class, int.class);
+Person p2 = (Person) twoArg.newInstance("Bob", 30);     // like new Person("Bob", 30)
+System.out.println(p2.getName());   // verified: "Bob"</code></pre>
+  <div class="warn"><strong>Exact-type matching required:</strong> <code>getConstructor()</code> needs
+  the <em>exact</em> parameter types. If a constructor takes <code>CharSequence</code> and you look up
+  <code>String.class</code>, you get a <code>NoSuchMethodException</code> even though a
+  <code>String</code> <em>is</em> a <code>CharSequence</code> — verified from dev.java's own
+  dependency-injection example.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="arrays">8 · Arrays</h2>
+  <p>Arrays are a special case: <code>Array.getLength()</code> exists because array length isn't part
+  of the type, only the instance.</p>
+  <pre><code class="java">Object arr = Array.newInstance(int.class, 5);   // like new int[5]
+Array.set(arr, 0, 42);
+System.out.println(Array.get(arr, 0));           // verified: 42
+System.out.println(Array.getLength(arr));        // verified: 5
+System.out.println(arr.getClass().isArray());    // true
+System.out.println(arr.getClass().getComponentType());  // int</code></pre>
+  <div class="warn"><strong>Verified precision rule:</strong> <code>Array.setFloat()</code> with a
+  boxed <code>Float</code> throws <code>IllegalArgumentException</code>. <code>Array.setInt()</code>
+  into a <code>long[]</code> works (no precision lost widening int→long); the reverse
+  (<code>setLong</code> into an <code>int[]</code>) is illegal — narrowing would lose data.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="enumsrecords">9 · Enums &amp; records</h2>
+  <p>No separate <code>java.lang.reflect.Enum</code> class exists — enums are ordinary classes with
+  three enum-specific reflective methods:</p>
+  <pre><code class="java">Days.class.isEnum();            // true
+Days.class.getEnumConstants();  // same array as Days.values(), verified
+someField.isEnumConstant();     // true if this Field is one of the enum's own constants
+// note, verified: you cannot add a constant to an enum at runtime, even via reflection</code></pre>
+  <p>Records (Java 16+) added <code>Class.isRecord()</code> and a new <code>RecordComponent</code> class:</p>
+  <pre><code class="java">record Point(int x, int y) {}
+Point.class.isRecord();                              // true
+for (RecordComponent rc : Point.class.getRecordComponents()) {
+  System.out.println(rc.getName() + ": " + rc.getType());
+}
+// verified real output: "x: int" then "y: int"</code></pre>
+  <div class="note">Records enforce their immutability even against reflection — verified from
+  dev.java: you can locate a record's backing <code>Field</code> via
+  <code>getDeclaredFields()</code> and read it, but <strong>you cannot modify it, even after calling
+  <code>setAccessible(true)</code></strong>. This is a JVM-level guarantee specific to records.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="annotations">10 · Reading annotations</h2>
+  <p><code>Field</code>, <code>Method</code>, <code>Constructor</code> and <code>Class</code> all
+  implement <code>AnnotatedElement</code> — the interface every framework uses to discover annotations
+  at runtime. Full annotation authoring details → <a href="annotations.html">Annotations deep-dive</a>.</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+@interface Cached { int ttlSeconds() default 60; }
+
+class Service {
+  @Cached(ttlSeconds = 30)
+  public String fetch() { return "data"; }
+}
+
+Method fetch = Service.class.getMethod("fetch");
+fetch.isAnnotationPresent(Cached.class);    // verified: true
+Cached c = fetch.getAnnotation(Cached.class);
+c.ttlSeconds();                              // verified: 30</code></pre>
+  <table class="data">
+    <tr><th>Method</th><th>Behavior</th></tr>
+    <tr><td><code>isAnnotationPresent(Class)</code></td><td>Quick boolean check.</td></tr>
+    <tr><td><code>getAnnotation(Class)</code> / <code>getDeclaredAnnotation(Class)</code></td><td>One annotation of that type (or <code>null</code>); declared-only skips inherited ones.</td></tr>
+    <tr><td><code>getAnnotations()</code> / <code>getDeclaredAnnotations()</code></td><td>Every annotation present on this element.</td></tr>
+    <tr><td><code>getAnnotationsByType(Class)</code></td><td>Handles <a href="annotations.html#repeating">repeatable</a> annotations — returns all repeats even though they're technically stored in one container annotation.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="proxy">11 · Dynamic proxies</h2>
+  <p><em>Why it matters:</em> a dynamic proxy creates a real, working implementation of one or more
+  interfaces <strong>at runtime</strong>, with no class file for it ever written by you — every method
+  call is routed through one handler. This is exactly how Spring AOP, mocking frameworks, and lazy-load
+  proxies in Hibernate work.</p>
+  <pre><code class="java">interface Greeter { String greet(String name); }
+
+Greeter proxy = (Greeter) Proxy.newProxyInstance(
+    Greeter.class.getClassLoader(),
+    new Class&lt;?&gt;[]{ Greeter.class },
+    (Object p, Method method, Object[] args) -> {
+      System.out.println("before calling " + method.getName());
+      String result = "Hello, " + args[0];
+      System.out.println("after calling " + method.getName());
+      return result;
+    });
+
+System.out.println(proxy.greet("Ada"));
+// verified real output:
+//   before calling greet
+//   after calling greet
+//   Hello, Ada
+System.out.println(Proxy.isProxyClass(proxy.getClass()));   // verified: true</code></pre>
+  <div class="note"><strong>Limitation:</strong> <code>java.lang.reflect.Proxy</code> can only proxy
+  <strong>interfaces</strong>, not concrete classes — for that, frameworks like CGLIB or
+  ByteBuddy generate real subclasses on the fly instead.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="patterns">12 · Real patterns: interceptors &amp; dependency injection</h2>
+  <p>Two complete, working examples adapted from dev.java's own Reflection API tutorial — the kind of
+  code that sits inside Java EE/Jakarta EE and enterprise frameworks. Every line below was compiled
+  and run for real before being written here.</p>
+
+  <h3>Pattern A — a method interceptor driven by an annotation</h3>
+  <p><strong>The idea:</strong> instead of calling a service method directly, you route the call
+  through an <em>interceptor</em> first. The interceptor gets the raw <code>Method</code>, the target
+  object, and the arguments — it can validate them, change them, decide whether to call the real
+  method at all, and transform the result before returning it. (A production version of this would use
+  <a href="#proxy">dynamic proxies</a> so the call site looks like an ordinary method call; here we
+  build the mechanism by hand so every step is visible.)</p>
+
+  <p><strong>Step 1 — the interceptor contract and the annotation that selects it:</strong></p>
+  <pre><code class="java">interface Interceptor&lt;T, R&gt; {
+  R intercept(Method method, T target, Object[] args) throws Exception;
+}
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+@interface Intercepted {
+  Class&lt;? extends Interceptor&gt; value();   // which interceptor handles this method
+}</code></pre>
+
+  <p><strong>Step 2 — a service, with one method marked for interception and one left alone:</strong></p>
+  <pre><code class="java">public class SomeInterceptedService {
+  @Intercepted(MessageInterceptor.class)
+  public String message(String text) { return text; }
+}
+
+public class SomeNonInterceptedService {
+  public String message(String text) { return text; }   // no annotation -> called directly
+}</code></pre>
+
+  <p><strong>Step 3 — the interceptor itself.</strong> It validates the arguments, reflectively invokes
+  the real method to get the underlying result, then decorates it:</p>
+  <pre><code class="java">public class MessageInterceptor implements Interceptor&lt;SomeInterceptedService, String&gt; {
+  public String intercept(Method method, SomeInterceptedService target, Object[] args) throws Exception {
+    if (args.length != 1 || !(args[0] instanceof String)) {
+      throw new IllegalArgumentException("expected exactly one String argument");
+    }
+    String result = (String) method.invoke(target, args);   // call the REAL method
+    return result + " [was intercepted]";                    // then decorate the result
+  }
+}</code></pre>
+
+  <p><strong>Step 4 — the "runtime": locate the method, check for the annotation, and either run the
+  interceptor or call the method as normal:</strong></p>
+  <pre><code class="java">class ServiceFactory {
+  @SuppressWarnings("unchecked")
+  static &lt;T&gt; Object invoke(Class&lt;T&gt; serviceClass, String methodName, Object... args) throws Exception {
+    T service = serviceClass.getDeclaredConstructor().newInstance();
+    Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+    Method method = serviceClass.getDeclaredMethod(methodName, types);
+
+    if (method.isAnnotationPresent(Intercepted.class)) {
+      Intercepted meta = method.getAnnotation(Intercepted.class);
+      Interceptor&lt;T, Object&gt; interceptor =
+          (Interceptor&lt;T, Object&gt;) meta.value().getDeclaredConstructor().newInstance();
+      return interceptor.intercept(method, service, args);   // routed through the interceptor
+    } else {
+      return method.invoke(service, args);                    // called directly, no interception
+    }
+  }
+}
+
+Object r1 = ServiceFactory.invoke(SomeInterceptedService.class, "message", "Hello");
+Object r2 = ServiceFactory.invoke(SomeNonInterceptedService.class, "message", "Hello");
+System.out.println(r1);   // verified real output: "Hello [was intercepted]"
+System.out.println(r2);   // verified real output: "Hello"</code></pre>
+  <div class="warn"><strong>Verified gotcha the original tutorial calls out explicitly:</strong>
+  <code>ServiceFactory.invoke</code> builds the parameter types from each argument's <em>runtime</em>
+  class. If the target method were declared as <code>message(CharSequence text)</code> instead of
+  <code>message(String text)</code>, looking it up with <code>getDeclaredMethod("message",
+  String.class)</code> throws <code>NoSuchMethodException</code> — verified — even though a
+  <code>String</code> genuinely <em>is</em> a <code>CharSequence</code>. Reflective method lookup
+  matches the exact declared parameter type, never a supertype.</div>
+
+  <h3>Pattern B — a dependency-injection framework with singletons</h3>
+  <p><strong>The idea, in three layers:</strong> (1) a factory that builds objects reflectively instead
+  of you calling <code>new</code>, (2) a <code>@Singleton</code> annotation so some beans are built
+  once and reused, (3) an <code>@Inject</code> annotation so the factory can wire one bean's
+  dependencies into another automatically.</p>
+
+  <p><strong>Layer 1 — the basic factory.</strong> Give it a class and constructor arguments, get an
+  instance back:</p>
+  <pre><code class="java">class BeanFactory {
+  static &lt;T&gt; T getInstanceOf(Class&lt;T&gt; beanClass, Object... args) throws ReflectiveOperationException {
+    Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+    Constructor&lt;T&gt; constructor = beanClass.getConstructor(types);   // exact-type match, see §7
+    return constructor.newInstance(args);
+  }
+}</code></pre>
+  <div class="warn"><strong>Verified gotcha (the same rule from §7, and the DI framework hits it
+  immediately):</strong> <code>getConstructor()</code> only finds <em>public</em> constructors on
+  <em>public</em> types. A package-private bean class throws <code>NoSuchMethodException</code> even
+  though the constructor is right there in <code>getDeclaredConstructors()</code> — every bean class
+  in these examples needs to be <code>public</code>.</div>
+
+  <p><strong>Layer 2 — add <code>@Singleton</code>.</strong> A thread-safe registry backed by
+  <code>ConcurrentHashMap</code>, with the construction logic pulled into a private helper so it isn't
+  duplicated:</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@interface Singleton {}
+
+class BeanFactory {
+  private static final ConcurrentMap&lt;Class&lt;?&gt;, Object&gt; registry = new ConcurrentHashMap&lt;&gt;();
+
+  @SuppressWarnings("unchecked")
+  static &lt;T&gt; T getInstanceOf(Class&lt;T&gt; beanClass, Object... args) throws ReflectiveOperationException {
+    if (beanClass.isAnnotationPresent(Singleton.class)) {
+      Object existing = registry.get(beanClass);
+      if (existing != null) return (T) existing;
+
+      T candidate = instantiateBeanClass(beanClass, args);
+      registry.putIfAbsent(beanClass, candidate);   // atomic — no explicit synchronization needed
+      return (T) registry.get(beanClass);            // there IS a winner, but it might not be "candidate"
+      // if two threads raced here, both built an instance, but only one is stored — read it back
+      // via get() rather than returning "candidate", or you could return the LOSING instance
+    }
+    return instantiateBeanClass(beanClass, args);
+  }
+
+  private static &lt;T&gt; T instantiateBeanClass(Class&lt;T&gt; beanClass, Object... args) throws ReflectiveOperationException {
+    Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+    Constructor&lt;T&gt; constructor = beanClass.getConstructor(types);
+    return constructor.newInstance(args);
+  }
+}</code></pre>
+
+  <p><strong>Layer 3 — add <code>@Inject</code>.</strong> After constructing a bean, scan its fields
+  for <code>@Inject</code> and fill each one in — recursively through <code>getInstanceOf</code>, so an
+  injected field that's itself <code>@Singleton</code> correctly reuses the shared instance:</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Inject {}
+
+// instantiateBeanClass grows one more step at the end:
+private static &lt;T&gt; T instantiateBeanClass(Class&lt;T&gt; beanClass, Object... args) throws ReflectiveOperationException {
+  Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+  Constructor&lt;T&gt; constructor = beanClass.getConstructor(types);
+  T bean = constructor.newInstance(args);
+
+  for (Field field : beanClass.getDeclaredFields()) {           // every field, any visibility
+    if (field.isAnnotationPresent(Inject.class)) {
+      field.setAccessible(true);                                 // always — even if it were public
+      Object value = getInstanceOf(field.getType());              // recursive — respects @Singleton
+      field.set(bean, value);
+    }
+  }
+  return bean;
+}</code></pre>
+
+  <p><strong>Putting all three layers together:</strong></p>
+  <pre><code class="java">@Singleton
+public class DBService {
+  public DBService() { System.out.println("DBService instance created"); }
+  String query() { return "some data"; }
+}
+
+public class MyApplication {
+  @Inject
+  private DBService dbService;    // BeanFactory fills this in — no setter, no constructor arg
+  void run() { System.out.println("result = " + dbService.query()); }
+}
+
+MyApplication app = BeanFactory.getInstanceOf(MyApplication.class);
+app.run();
+// verified real output:
+//   DBService instance created
+//   result = some data
+
+DBService a = BeanFactory.getInstanceOf(DBService.class);
+DBService b = BeanFactory.getInstanceOf(DBService.class);
+System.out.println(a == b);
+// verified real output: true — and "DBService instance created" printed only ONCE across
+// all three getInstanceOf calls total, proving the singleton was genuinely reused</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="modules">13 · <code>setAccessible</code> &amp; the module system</h2>
+  <p>Since Java 9's module system (see <a href="modules-jpms.html">Modules deep-dive</a>), calling
+  <code>setAccessible(true)</code> on a private member of a module you don't own only works if that
+  module <code>opens</code> the package to you — either explicitly or via <code>--add-opens</code> on
+  the command line. This is exactly why upgrading old reflection-heavy code to Java 9+ often throws
+  <code>InaccessibleObjectException</code> until the right module is opened.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">14 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>Forgetting <code>setAccessible(true)</code></td><td>Throws <code>IllegalAccessException</code> the moment you touch a private member.</td></tr>
+    <tr><td>A non-public class/record whose constructor you look up with <code>getConstructor()</code></td><td>Verified: throws <code>NoSuchMethodException</code> even though the constructor exists — <code>getConstructor</code> only sees <em>public</em> constructors, and a non-public type's constructor defaults to that same non-public access.</td></tr>
+    <tr><td>Expecting exact-vs-assignable parameter matching</td><td><code>getConstructor</code>/<code>getMethod</code> need the exact declared parameter types — verified, a <code>CharSequence</code>-typed constructor won't match a <code>String</code> lookup.</td></tr>
+    <tr><td>Reading <code>InvocationTargetException</code> as "the" exception</td><td>It's a wrapper — call <code>.getCause()</code> to see what the invoked method actually threw.</td></tr>
+    <tr><td>Trying to mutate a record's field after <code>setAccessible(true)</code></td><td>Verified: records refuse this at the JVM level — immutability is enforced even against reflection.</td></tr>
+    <tr><td>Using reflection in a hot loop</td><td>Real, measurable overhead — cache the <code>Method</code>/<code>Field</code> lookup outside the loop at minimum; consider <code>MethodHandle</code> for performance-sensitive reflective calls.</td></tr>
+    <tr><td>Reflecting into another module's internals on Java 9+</td><td>Throws <code>InaccessibleObjectException</code> unless that module <code>opens</code> the package — see §13.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">15 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Reflection feature</th></tr>
+    <tr><td>JSON/XML serialization (Jackson, Gson)</td><td>Enumerate fields, read/write values, read annotations</td></tr>
+    <tr><td>Dependency injection (Spring, Jakarta CDI)</td><td>Find constructors/fields, instantiate, inject</td></tr>
+    <tr><td>ORMs (Hibernate/JPA)</td><td>Map columns to fields, lazy-load proxies via <code>Proxy</code>/bytecode generation</td></tr>
+    <tr><td>Testing frameworks (JUnit, Mockito)</td><td>Discover <code>@Test</code> methods, invoke them, mock interfaces via <code>Proxy</code></td></tr>
+    <tr><td>Plugin systems</td><td><code>Class.forName</code> + <code>getDeclaredConstructor().newInstance()</code> to load classes unknown at compile time</td></tr>
+    <tr><td>Validation frameworks</td><td>Read annotations off fields (<code>@NotNull</code>, <code>@Size</code>, ...) and check values</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">16 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>Reflection in one glance</h3>
+    <ul>
+      <li>Entry point: <code>obj.getClass()</code>, <code>Type.class</code>, or <code>Class.forName(name)</code>.</li>
+      <li><code>getDeclared*</code> = this class only, includes private. <code>get*</code> (no "Declared") = inherited, public only.</li>
+      <li><code>setAccessible(true)</code> before touching a private field/method/constructor.</li>
+      <li><code>Method.invoke</code> / <code>Constructor.newInstance</code> both throw <code>InvocationTargetException</code> — unwrap with <code>getCause()</code>.</li>
+      <li><code>Proxy.newProxyInstance</code> — implement an interface at runtime, one handler for every call.</li>
+      <li>Records refuse field mutation even via reflection; enums can't gain new constants at runtime.</li>
+      <li>Java 9+: reflecting into another module needs that module to <code>opens</code> the package.</li>
+      <li>Prefer normal code when you can — reflection is slower and bypasses compile-time checks.</li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

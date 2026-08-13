@@ -3,32 +3,56 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Java 9 → 26 — Learn the New Features</title>
+  <title>Java Evolution — Every Java Feature, Version by Version</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body data-root="./" data-page="index.html" data-title="Home">
 <main>
 
-  <p class="sec-tag">A hands-on reference</p>
-  <h1>Java 9 → 26 — everything new, version by version</h1>
+  <div class="hero-banner">
+    <img src="assets/favicon.svg" alt="" class="hero-logo">
+    <div>
+      <p class="sec-tag">A hands-on reference, updated every release</p>
+      <h1>Java Evolution</h1>
+    </div>
+  </div>
   <p class="lead">
-    A quick way to learn what changed in Java from 9 to 26 — organised by
+    Every Java feature, version by version, from <strong>Java 8 onward</strong> — organised by
     <strong>language features</strong>, <strong>new APIs</strong>, <strong>tooling</strong> and
     <strong>JVM/other</strong> changes, with tiny <strong>before → after</strong> snippets so you can
     see the old way and the new way side by side.
   </p>
 
+  <nav class="version-chain" aria-label="Java release timeline">
+    <a href="versions/java-8.html"  class="vc-node lts">8</a><span class="vc-line"></span>
+    <a href="versions/java-9.html"  class="vc-node">9</a><span class="vc-line"></span>
+    <a href="versions/java-11.html" class="vc-node lts">11</a><span class="vc-line"></span>
+    <a href="versions/java-17.html" class="vc-node lts">17</a><span class="vc-line"></span>
+    <a href="versions/java-21.html" class="vc-node lts">21</a><span class="vc-line"></span>
+    <a href="versions/java-25.html" class="vc-node lts">25</a><span class="vc-line"></span>
+    <a href="versions/java-26.html" class="vc-node">26</a><span class="vc-line vc-line-dash"></span>
+    <span class="vc-node vc-node-next" title="Updated as new releases ship">→</span>
+  </nav>
+
   <div class="note">
     <strong>How the versions work.</strong> Java ships every 6 months, but only some releases are
-    <span class="badge lts">LTS</span> (long-term support). This guide has a page for each
-    <em>major stepping-stone</em> release — <strong>9, 11, 17, 21, 25, 26</strong> — and folds the
-    features of the in-between releases into the next stepping stone, always tagged with the version
-    that introduced them (e.g. <span class="badge added">Added in 14</span>). So Java 17 also covers
-    the good stuff from 12–16, Java 21 covers 18–20, and Java 25 covers 22–24.
+    <span class="badge lts">LTS</span> (long-term support, filled above). This guide has a page for
+    each <em>major stepping-stone</em> release and folds the features of the in-between releases into
+    the next stepping stone, always tagged with the version that introduced them (e.g.
+    <span class="badge added">Added in 14</span>). So Java 17 also covers the good stuff from 12–16,
+    Java 21 covers 18–20, and Java 25 covers 22–24. This page is updated to cover each new release as
+    it ships — currently through Java 26.
   </div>
 
   <h2>Release timeline</h2>
   <div class="timeline">
+    <div class="tl-item lts">
+      <div class="tl-date">March 2014 · <span class="badge lts">LTS</span></div>
+      <div class="tl-title"><a href="versions/java-8.html">Java 8</a></div>
+      <div>Lambdas, Streams, default/static interface methods, method references, Optional, the new
+      <code>java.time</code> API, CompletableFuture — the modern Java baseline.</div>
+    </div>
     <div class="tl-item">
       <div class="tl-date">Sept 2017</div>
       <div class="tl-title"><a href="versions/java-9.html">Java 9</a></div>
@@ -67,7 +91,7 @@
       <h3>⚡ Quick start</h3>
       <p>Install JDKs, switch between versions, JShell, run preview / incubator / single-file code.</p>
     </a>
-    <a class="card" href="versions/java-9.html">
+    <a class="card" href="versions/java-8.html">
       <h3>📦 Browse by version</h3>
       <p>What each release added, with 5 sections and before/after code per feature.</p>
     </a>
@@ -80,6 +104,9 @@
   <h2>Deep-dive topics</h2>
   <p>The most important new concepts each get their own page — full details, rules, gotchas and how they evolved from preview to final:</p>
   <div class="card-grid">
+    <a class="card" href="topics/generics.html"><h3>Generics</h3><p>Type parameters, wildcards, PECS, erasure (Java 5).</p></a>
+    <a class="card" href="topics/reflection.html"><h3>Reflection API</h3><p>Inspect &amp; invoke at runtime, dynamic proxies.</p></a>
+    <a class="card" href="topics/annotations.html"><h3>Annotations</h3><p>Metadata, retention, meta-annotations, processing.</p></a>
     <a class="card" href="topics/var.html"><h3>var</h3><p>Local-variable type inference (Java 10).</p></a>
     <a class="card" href="topics/records.html"><h3>Records</h3><p>Transparent data carriers (Java 16).</p></a>
     <a class="card" href="topics/sealed-classes.html"><h3>Sealed classes</h3><p>Controlled inheritance (Java 17).</p></a>

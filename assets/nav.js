@@ -20,12 +20,18 @@
       { href: "print.html", label: "Print / all-in-one" }
     ]},
     { title: "By version", items: [
+      { href: "versions/java-8.html",  label: "Java 8  · LTS" },
       { href: "versions/java-9.html",  label: "Java 9" },
       { href: "versions/java-11.html", label: "Java 11  (+10)  · LTS" },
       { href: "versions/java-17.html", label: "Java 17  (+12–16)  · LTS" },
       { href: "versions/java-21.html", label: "Java 21  (+18–20)  · LTS" },
       { href: "versions/java-25.html", label: "Java 25  (+22–24)  · LTS" },
       { href: "versions/java-26.html", label: "Java 26" }
+    ]},
+    { title: "Deep dives — core Java", items: [
+      { href: "topics/generics.html",               label: "Generics" },
+      { href: "topics/reflection.html",             label: "Reflection API" },
+      { href: "topics/annotations.html",            label: "Annotations" }
     ]},
     { title: "Deep dives — language", items: [
       { href: "topics/var.html",                    label: "var — local-variable type inference" },
@@ -65,13 +71,19 @@
   }
   applyTheme(saved);
 
+  /* ---------- sidebar collapse (desktop only, persisted) ---------- */
+  var collapsed;
+  try { collapsed = localStorage.getItem("java-doc-sidebar-collapsed") === "1"; } catch (e) { collapsed = false; }
+  if (collapsed) document.documentElement.classList.add("sidebar-collapsed");
+
   /* ---------- build sidebar ---------- */
   var sidebar = document.createElement("aside");
   sidebar.id = "sidebar";
 
   var brand = document.createElement("div");
   brand.className = "brand";
-  brand.innerHTML = '<span class="logo">Java</span><span>9 → 26 Guide</span>';
+  brand.innerHTML = '<img src="' + root + 'assets/favicon.svg" alt="" class="brand-logo">' +
+                     '<span>Java Evolution</span>';
   brand.style.cursor = "pointer";
   brand.onclick = function () { location.href = root + "index.html"; };
   sidebar.appendChild(brand);
@@ -127,6 +139,21 @@
   menuBtn.textContent = "☰";
   menuBtn.onclick = function () { sidebar.classList.toggle("open"); };
   left.appendChild(menuBtn);
+
+  var collapseBtn = document.createElement("button");
+  collapseBtn.className = "sidebar-collapse-toggle";
+  collapseBtn.setAttribute("aria-label", "Toggle sidebar");
+  function collapseLabel() {
+    return document.documentElement.classList.contains("sidebar-collapsed") ? "☰" : "⟨";
+  }
+  collapseBtn.textContent = collapseLabel();
+  collapseBtn.title = "Toggle sidebar";
+  collapseBtn.onclick = function () {
+    var isCollapsed = document.documentElement.classList.toggle("sidebar-collapsed");
+    try { localStorage.setItem("java-doc-sidebar-collapsed", isCollapsed ? "1" : "0"); } catch (e) {}
+    collapseBtn.textContent = collapseLabel();
+  };
+  left.appendChild(collapseBtn);
 
   var crumbs = document.createElement("div");
   crumbs.className = "crumbs";

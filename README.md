@@ -1,7 +1,8 @@
-# Java 9 → 26 — Learn the New Features
+# Java Evolution
 
-An offline, self-contained HTML reference for everything new in Java from **9 to 26**,
-organised by version and by deep-dive topic, with concise **before → after** code snippets.
+An offline, self-contained HTML reference for every Java feature since **Java 8** — kept
+up to date every release — organised by version and by deep-dive topic, with concise
+**before → after** code snippets.
 
 ## How to open
 
@@ -22,6 +23,7 @@ features.html         A–Z filterable feature index (feature → version → st
 print.html            All-in-one, print/PDF-friendly build (generated)
 
 versions/             One page per stepping-stone release (5 sections + before/after each)
+  java-8.html   (LTS) lambdas, streams, default methods, Optional, java.time, CompletableFuture
   java-9.html         Modules, JShell, collection factories, Flow
   java-11.html  (LTS) var (10), HttpClient, single-file launch, String/Files APIs
   java-17.html  (LTS) records, sealed, switch expressions, text blocks, patterns  (folds in 12–16)
@@ -31,7 +33,8 @@ versions/             One page per stepping-stone release (5 sections + before/a
 
 topics/               Deep-dive pages
   var, records, sealed-classes, pattern-matching-switch, text-blocks-strings, modules-jpms,
-  virtual-threads, structured-concurrency, scoped-values, streams-gatherers, ffm-api
+  stream-api, virtual-threads, structured-concurrency, scoped-values, streams-gatherers,
+  ffm-api, jvm-memory-gc
 
 assets/
   style.css           Light/dark theme, responsive layout

@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Java 8 — new features</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="versions/java-8.html" data-title="Java 8">
+<main>
+  <p class="sec-tag">March 2014 · <span class="badge lts">LTS</span></p>
+  <h1>Java 8 <span class="badge lts">LTS</span></h1>
+  <p class="lead">
+    The release that reshaped how Java code is written. <strong>Lambda expressions</strong>,
+    <strong>the Streams API</strong>, and <strong>default methods</strong> brought functional-style
+    programming into the language itself, while <strong>Optional</strong>, the new
+    <strong><code>java.time</code></strong> API, and <strong>CompletableFuture</strong> fixed three of
+    Java's longest-standing API pain points in one release. This is where this guide's Java 9–26
+    story begins.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">λ</span><span class="lbl">lambda expressions</span></div>
+    <div class="stat"><span class="num">Streams</span><span class="lbl">bulk data operations</span></div>
+    <div class="stat"><span class="num">default</span><span class="lbl">methods on interfaces</span></div>
+    <div class="stat"><span class="num">java.time</span><span class="lbl">a real date/time API</span></div>
+    <div class="stat"><span class="num">LTS</span><span class="lbl">still widely deployed a decade later</span></div>
+  </div>
+
+  <div class="gotcha">
+    <strong>⚠ Migration watch-outs (7 → 8).</strong>
+    <ul>
+      <li><strong>PermGen removed</strong> — <code>-XX:PermSize</code>/<code>-XX:MaxPermSize</code> are
+        now silently ignored (no error) in favor of Metaspace, which grows in native memory. Full story
+        → <a href="../topics/jvm-memory-gc.html">JVM Memory &amp; GC deep-dive</a>.</li>
+      <li><strong>DocLint</strong> checks Javadoc comments strictly by default — malformed HTML in doc
+        comments that <code>javac</code> used to ignore can now fail a build.</li>
+      <li><strong>Default methods + multiple interfaces:</strong> implementing two interfaces that
+        declare the <em>same</em> default method signature is a compile error unless your class
+        overrides it — rare, but a real new failure mode that didn't exist in 7.</li>
+      <li><strong>Nashorn replaces Rhino</strong> as the bundled JavaScript engine — scripts relying on
+        Rhino-specific behavior may need adjustment.</li>
+    </ul>
+  </div>
+
+  <!-- ============ LANGUAGE ============ -->
+  <h2>1 · Language features</h2>
+
+  <h3>Lambda expressions</h3>
+  <p><em>Why it matters:</em> passing behavior around used to mean an anonymous class — four lines of
+  ceremony to express one line of logic. Lambdas make the behavior <em>itself</em> the value.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — anonymous class</div>
+      <pre><code class="java">Comparator&lt;String&gt; byLength = new Comparator&lt;String&gt;() {
+  @Override
+  public int compare(String a, String b) {
+    return Integer.compare(a.length(), b.length());
+  }
+};
+button.addActionListener(new ActionListener() {
+  public void actionPerformed(ActionEvent e) {
+    System.out.println("clicked");
+  }
+});</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — lambda</div>
+      <pre><code class="java">Comparator&lt;String&gt; byLength = (a, b) -> Integer.compare(a.length(), b.length());
+button.addActionListener(e -> System.out.println("clicked"));</code></pre>
+    </div>
+  </div>
+
+  <h3>Functional interfaces — <code>java.util.function</code></h3>
+  <p><em>Why it matters:</em> a lambda needs a <em>target type</em> — an interface with exactly one
+  abstract method. Java 8 shipped a standard library of them so you rarely need to declare your own.</p>
+  <pre><code class="java">Function&lt;Integer, Integer&gt; square = x -> x * x;      // T -> R
+Predicate&lt;Integer&gt;         isEven = x -> x % 2 == 0;  // T -> boolean
+Supplier&lt;String&gt;           sup    = () -> "value";    // () -> T
+Consumer&lt;String&gt;           con    = System.out::println; // T -> void
+BiFunction&lt;Integer,Integer,Integer&gt; add = (a, b) -> a + b;
+
+System.out.println(square.apply(5));      // 25 — verified
+// mark your own with @FunctionalInterface for a compiler check:
+@FunctionalInterface
+interface Greeter { String greet(String name); }</code></pre>
+
+  <h3>Method references</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — a lambda that just forwards</div>
+      <pre><code class="java">names.forEach(s -> System.out.println(s));
+list.stream().map(s -> s.toUpperCase());</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — four forms of ::</div>
+      <pre><code class="java">names.forEach(System.out::println);       // instance method on a particular object
+list.stream().map(String::toUpperCase);   // instance method, unbound receiver
+list.stream().map(Integer::parseInt);     // static method
+list.stream().map(Order::new);            // constructor reference</code></pre>
+    </div>
+  </div>
+
+  <h3>Default &amp; static methods on interfaces</h3>
+  <p><em>Why it matters:</em> before 8, adding <em>any</em> method to a published interface broke
+  every existing implementer. Default methods let an interface evolve without breaking anyone.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — adding a method breaks every implementer</div>
+      <pre><code class="java">interface Greeter {
+  String greet(String name);
+  // adding greetLoudly() here breaks every class that implements Greeter
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — default method, source-compatible</div>
+      <pre><code class="java">interface Greeter {
+  String greet(String name);
+  default String greetLoudly(String name) {   // existing implementers unaffected
+    return greet(name).toUpperCase();
+  }
+  static Greeter simple() {                    // static methods too
+    return name -> "Hello, " + name;
+  }
+}
+// verified: Greeter.simple().greetLoudly("Ada") -> "HELLO, ADA"</code></pre>
+    </div>
+  </div>
+  <p>This is exactly the mechanism that let <code>Collection</code>/<code>Map</code> grow
+  <code>forEach</code>, <code>stream()</code>, <code>removeIf</code> and more without breaking every
+  existing collection implementation ever written — see §2.</p>
+
+  <h3>Repeating annotations &amp; type annotations</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — a wrapper array annotation, always</div>
+      <pre><code class="java">@Schedules({ @Schedule(day="Mon"), @Schedule(day="Fri") })
+class Job {}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — repeat it directly</div>
+      <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Repeatable(Schedules.class)   // still needs a container annotation declared...
+@interface Schedule { String day(); }
+
+@Schedule(day = "Mon")
+@Schedule(day = "Fri")          // ...but you write this at the use site
+class Job {}
+// Job.class.getAnnotationsByType(Schedule.class) -> [Mon, Fri] — verified</code></pre>
+    </div>
+  </div>
+  <div class="warn"><strong>Gotcha, verified:</strong> forgetting <code>@Retention(RetentionPolicy.RUNTIME)</code>
+  on the annotation means <code>getAnnotationsByType</code> silently returns an empty array at
+  runtime — no error, just missing data.</div>
+  <p><strong>Type annotations</strong> (JSR 308) let annotations appear anywhere a type is used, not
+  just on declarations — <code>List&lt;@NonNull String&gt;</code> — mainly consumed by external
+  static-analysis tools like Checker Framework rather than the JDK itself.</p>
+
+  <!-- ============ APIs ============ -->
+  <h2>2 · New &amp; updated APIs</h2>
+
+  <h3>The Streams API</h3>
+  <p><em>Why it matters:</em> filtering, transforming and aggregating collections in bulk, declaratively,
+  instead of a mutable-accumulator <code>for</code> loop every time.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">List&lt;String&gt; names = new ArrayList&lt;&gt;();
+for (Employee e : employees) {
+  if (e.salary() &gt; 50_000) names.add(e.name().toUpperCase());
+}
+Collections.sort(names);</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — Streams</div>
+      <pre><code class="java">List&lt;String&gt; names = employees.stream()
+    .filter(e -> e.salary() &gt; 50_000)
+    .map(e -> e.name().toUpperCase())
+    .sorted()
+    .collect(Collectors.toList());</code></pre>
+    </div>
+  </div>
+  <p>Streams are deep enough to earn their own page — creating streams, every intermediate/terminal
+  operation, <code>reduce</code>'s three overloads, the full <code>Collectors</code> catalogue, custom
+  collectors, and parallel streams → <a href="../topics/stream-api.html">Stream API complete guide</a>.</p>
+
+  <h3><code>Optional&lt;T&gt;</code></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — null checks, or a silent NPE later</div>
+      <pre><code class="java">User user = findUser(id);         // might return null
+if (user != null) {
+  String name = user.getName();
+  System.out.println(name);
+} else {
+  System.out.println("unknown");
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — the absence is in the type</div>
+      <pre><code class="java">Optional&lt;User&gt; user = findUser(id);
+System.out.println(
+    user.map(User::getName).orElse("unknown"));
+// verified: opt.map(String::length).orElse(0)</code></pre>
+    </div>
+  </div>
+
+  <h3>The <code>java.time</code> API (JSR-310)</h3>
+  <p><em>Why it matters:</em> the old <code>java.util.Date</code>/<code>Calendar</code> were mutable,
+  not thread-safe, had months indexed from zero, and threw checked exceptions for basic parsing —
+  widely regarded as one of Java's worst original API designs. <code>java.time</code> replaces all of it.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — mutable, zero-indexed months, unsafe</div>
+      <pre><code class="java">Calendar cal = Calendar.getInstance();
+cal.set(2014, Calendar.MARCH, 18);   // MARCH is month 2, not 3 — a classic bug source
+cal.add(Calendar.DAY_OF_MONTH, 10);
+Date result = cal.getTime();
+SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd");  // NOT thread-safe
+System.out.println(fmt.format(result));</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — immutable, readable, thread-safe</div>
+      <pre><code class="java">LocalDate date = LocalDate.of(2014, Month.MARCH, 18);
+LocalDate result = date.plusDays(10);
+System.out.println(result.format(DateTimeFormatter.ISO_LOCAL_DATE));
+// verified: "2014-03-28"
+
+Duration.ofMinutes(90);              // amount of time, machine-precision
+Period.ofMonths(3);                  // amount of time, human/calendar terms
+Instant.now();                       // a point on the machine timeline (UTC)
+ZonedDateTime.now(ZoneId.of("Asia/Kolkata"));   // time zone aware</code></pre>
+    </div>
+  </div>
+
+  <h3><code>CompletableFuture</code></h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — plain Future, no composition</div>
+      <pre><code class="java">Future&lt;String&gt; f = executor.submit(() -> fetch());
+String result = f.get();          // blocks; can't chain another async step
+String upper = result.toUpperCase();  // has to happen after the blocking get()</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After — composable, non-blocking chains</div>
+      <pre><code class="java">CompletableFuture&lt;String&gt; cf = CompletableFuture
+    .supplyAsync(() -> fetch())          // fetch() returns "async result!"
+    .thenApply(String::toUpperCase)
+    .exceptionally(ex -> "fallback");
+System.out.println(cf.get());   // verified real output: "ASYNC RESULT!"</code></pre>
+    </div>
+  </div>
+
+  <h3>Collection default methods, <code>Base64</code>, and more</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before</div>
+      <pre><code class="java">for (Map.Entry&lt;String,Integer&gt; e : scores.entrySet()) {
+  System.out.println(e.getKey() + "=" + e.getValue());
+}
+Integer old = scores.get("Ada");
+scores.put("Ada", old == null ? 5 : old + 5);
+
+for (Iterator&lt;Integer&gt; it = nums.iterator(); it.hasNext(); ) {
+  if (it.next() % 2 == 0) it.remove();
+}
+
+String encoded = new sun.misc.BASE64Encoder().encode("hi".getBytes());  // internal, unsupported API</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After</div>
+      <pre><code class="java">scores.forEach((k, v) -> System.out.println(k + "=" + v));   // Map default method
+scores.merge("Ada", 5, Integer::sum);                          // add-or-update in one call
+scores.computeIfAbsent("Bob", k -> 0);
+// verified: {Bob=0, Ada=95}
+
+nums.removeIf(n -> n % 2 == 0);      // Collection default method
+nums.replaceAll(n -> n * 10);
+// verified: [10, 30, 50]
+
+String encoded = Base64.getEncoder().encodeToString("hi".getBytes());
+// verified: "aGk="  — a real, public, supported API at last
+
+int[] arr = {5,3,1,4,2};
+Arrays.parallelSort(arr);             // verified: [1, 2, 3, 4, 5]</code></pre>
+    </div>
+  </div>
+  <pre><code class="java">// StringJoiner — build delimited strings without a manual loop
+StringJoiner sj = new StringJoiner(", ", "[", "]");
+sj.add("a").add("b").add("c");
+System.out.println(sj);   // verified: "[a, b, c]"</code></pre>
+
+  <!-- ============ TOOLING ============ -->
+  <h2>3 · Tooling</h2>
+  <ul>
+    <li><strong>Nashorn</strong> — a new, faster JavaScript engine replacing Rhino, invoked from the
+      command line or embedded via <code>javax.script</code>:
+      <pre><code class="java">jjs
+jjs&gt; print("hello from Nashorn")</code></pre>
+      (Nashorn itself was later deprecated in 11 and removed in 15 — see <a href="java-11.html">Java 11</a>.)</li>
+    <li><strong>DocLint</strong> — <code>javac</code> now validates Javadoc comment syntax by default;
+      run <code>javadoc -Xdoclint:none</code> to suppress it while migrating an old codebase.</li>
+    <li><strong>Compact Profiles</strong> — three subsets of the full JRE
+      (<code>compact1/2/3</code>) for constrained/embedded devices, letting you target less than the
+      full platform footprint.</li>
+    <li><strong>Access to parameter names at runtime</strong> — compile with <code>-parameters</code>
+      and reflect on real parameter names instead of <code>arg0</code>, <code>arg1</code> — the
+      foundation frameworks like Spring rely on for parameter-name-based binding.</li>
+  </ul>
+
+  <!-- ============ JVM / OTHER ============ -->
+  <h2>4 · JVM / performance / other</h2>
+  <ul>
+    <li><strong>PermGen removed; Metaspace introduced</strong> <span class="badge jep">JEP 122</span> —
+      class metadata moved out of the heap into native memory that grows automatically. The
+      long-standing <code>OutOfMemoryError: PermGen space</code> became
+      <code>OutOfMemoryError: Metaspace</code> instead, now bounded by
+      <code>-XX:MaxMetaspaceSize</code> rather than a fixed heap region. Full story →
+      <a href="../topics/jvm-memory-gc.html">JVM Memory &amp; GC deep-dive</a>.</li>
+    <li><strong>HashMap collision handling with balanced trees</strong> <span class="badge jep">JEP 180</span> —
+      when many keys land in the same bucket (pathological hashing, or hostile input), that bucket
+      converts from a linked list to a tree, turning a potential O(n) worst case into O(log n).</li>
+    <li><strong>Reduce cache contention</strong> <span class="badge jep">JEP 142</span> — the
+      <code>@Contended</code> annotation pads a field to its own cache line, avoiding false sharing
+      between threads on multi-core hardware.</li>
+    <li><strong>AES intrinsics</strong> <span class="badge jep">JEP 164</span> — hardware AES
+      instructions used automatically where available, meaningfully speeding up encryption.</li>
+    <li><strong>Small VM</strong> <span class="badge jep">JEP 148</span> and a large batch of
+      <strong>security/crypto updates</strong> (TLS SNI, stronger password-based encryption, PKCS#11
+      on 64-bit Windows) rounded out the release.</li>
+  </ul>
+
+  <!-- ============ SUMMARY ============ -->
+  <h2>5 · Summary cheat-sheet</h2>
+  <div class="cheat">
+    <h3>Java 8 in one glance</h3>
+    <ul>
+      <li><strong>Lambdas:</strong> <code>(a, b) -> a + b</code>; <strong>method refs:</strong> <code>String::toUpperCase</code></li>
+      <li><strong>Functional interfaces:</strong> <code>Function / Predicate / Supplier / Consumer / BiFunction</code></li>
+      <li><strong>Interfaces:</strong> <code>default</code> and <code>static</code> methods</li>
+      <li><strong>Streams:</strong> <code>collection.stream().filter().map().collect()</code> → <a href="../topics/stream-api.html">full guide</a></li>
+      <li><strong>Optional:</strong> <code>Optional&lt;T&gt;</code> — absence is part of the type</li>
+      <li><strong>Time:</strong> <code>LocalDate / LocalDateTime / Duration / Period / Instant</code> replace <code>Date</code>/<code>Calendar</code></li>
+      <li><strong>Async:</strong> <code>CompletableFuture</code> — composable, non-blocking chains</li>
+      <li><strong>Collections:</strong> <code>forEach / removeIf / merge / computeIfAbsent</code> (default methods)</li>
+      <li><strong>Also new:</strong> <code>Base64</code>, <code>StringJoiner</code>, <code>Arrays.parallelSort</code>, repeating annotations</li>
+      <li><strong>JVM:</strong> PermGen → Metaspace → <a href="../topics/jvm-memory-gc.html">deep dive</a></li>
+    </ul>
+  </div>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>
