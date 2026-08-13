@@ -42,6 +42,9 @@
       { href: "topics/scoped-values.html",          label: "Scoped values" },
       { href: "topics/streams-gatherers.html",      label: "Streams & Gatherers" },
       { href: "topics/ffm-api.html",                label: "Foreign Function & Memory API" }
+    ]},
+    { title: "Deep dives — JVM & memory", items: [
+      { href: "topics/jvm-memory-gc.html",          label: "JVM Memory Model & GC" }
     ]}
   ];
 

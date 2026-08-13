@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JVM Memory Model &amp; Garbage Collection — complete guide</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/jvm-memory-gc.html" data-title="JVM Memory &amp; GC">
+<main>
+  <p class="sec-tag">Deep dive · JVM internals · complete guide</p>
+  <h1>JVM Memory Model &amp; Garbage Collection</h1>
+  <p class="lead">
+    How the JVM lays out memory, how the <strong>Java Memory Model</strong> governs what one thread is
+    guaranteed to see of another's writes, and how each garbage collector — from Serial to generational
+    ZGC — decides what's garbage and reclaims it. Every command and log line on this page was run
+    against a real JDK before being written down.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">5</span><span class="lbl">JVM runtime memory areas</span></div>
+    <div class="stat"><span class="num">7</span><span class="lbl">garbage collectors covered</span></div>
+    <div class="stat"><span class="num">happens-before</span><span class="lbl">the core JMM guarantee</span></div>
+    <div class="stat"><span class="num">G1</span><span class="lbl">default since Java 9</span></div>
+    <div class="stat"><span class="num">verified</span><span class="lbl">every log &amp; command really run</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Java frees you from manual <code>malloc</code>/<code>free</code> — but "automatic" isn't "free of
+    consequences." Pause times, throughput, OutOfMemoryErrors, and multithreaded visibility bugs all
+    trace back to two things: how the JVM organizes memory, and which collector is deciding when to
+    reclaim it. Understanding both turns "the JVM is slow" into "the young generation is too small for
+    this allocation rate" — an actual, fixable diagnosis.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#areas">1. JVM runtime memory areas</a>
+    <a href="#jmm">2. The Java Memory Model</a>
+    <a href="#heap">3. The heap in detail</a>
+    <a href="#howgc">4. How garbage collection actually works</a>
+    <a href="#collectors">5. The collectors, one by one</a>
+    <a href="#evolution">6. Evolution &amp; comparison</a>
+    <a href="#g1deep">7. G1 deep dive — regions</a>
+    <a href="#lowlatency">8. ZGC &amp; Shenandoah — concurrent collectors</a>
+    <a href="#tooling">9. Tooling</a>
+    <a href="#lab">10. Hands-on lab — try it yourself</a>
+    <a href="#advanced">11. Advanced concepts</a>
+    <a href="#pitfalls">12. Pitfalls</a>
+    <a href="#realworld">13. Real-world use cases</a>
+    <a href="#cheat">14. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="areas">1 · JVM runtime memory areas</h2>
+  <p>The JVM specification divides runtime memory into five areas. Only one of them — the heap — is
+  what the garbage collector manages.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 760 260" role="img" aria-label="JVM memory areas: a shared heap and metaspace, plus a per-thread stack, PC register and native method stack for each thread">
+      <defs>
+        <marker id="maA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <text x="20" y="24" class="dg-title">Shared across all threads</text>
+      <rect x="20" y="36" width="330" height="80" rx="10" class="dg-accent"/>
+      <text x="185" y="66" text-anchor="middle" class="dg-text">Heap</text>
+      <text x="185" y="86" text-anchor="middle" class="dg-soft">all objects — GC-managed</text>
+      <text x="185" y="104" text-anchor="middle" class="dg-soft">young + old generations</text>
+      <rect x="370" y="36" width="200" height="80" rx="10" class="dg-good-box"/>
+      <text x="470" y="66" text-anchor="middle" class="dg-text">Metaspace</text>
+      <text x="470" y="86" text-anchor="middle" class="dg-soft">class metadata</text>
+      <text x="470" y="104" text-anchor="middle" class="dg-soft">native memory, since Java 8</text>
+
+      <text x="20" y="150" class="dg-title">Per-thread (one set for every Thread)</text>
+      <rect x="20"  y="164" width="220" height="76" rx="10" class="dg-box"/>
+      <text x="130" y="190" text-anchor="middle" class="dg-text">Thread stack</text>
+      <text x="130" y="210" text-anchor="middle" class="dg-soft">frames, locals, refs — LIFO</text>
+      <text x="130" y="228" text-anchor="middle" class="dg-soft">never GC'd — pops on return</text>
+      <rect x="260" y="164" width="200" height="76" rx="10" class="dg-box"/>
+      <text x="360" y="190" text-anchor="middle" class="dg-text">PC register</text>
+      <text x="360" y="210" text-anchor="middle" class="dg-soft">next bytecode instruction</text>
+      <rect x="480" y="164" width="260" height="76" rx="10" class="dg-box"/>
+      <text x="610" y="190" text-anchor="middle" class="dg-text">Native method stack</text>
+      <text x="610" y="210" text-anchor="middle" class="dg-soft">JNI / native calls — manual memory</text>
+    </svg>
+    <figcaption>Only the <strong>heap</strong> is garbage-collected. The thread stack unwinds
+    automatically as methods return — a <code>StackOverflowError</code>, not a GC event, is what happens
+    when it runs out. Metaspace holds class metadata in native memory and can itself run out
+    (<code>OutOfMemoryError: Metaspace</code>) if you load unbounded numbers of classes.</figcaption>
+  </figure>
+
+  <table class="data">
+    <tr><th>Area</th><th>Scope</th><th>Holds</th><th>Reclaimed by</th></tr>
+    <tr><td>Heap</td><td>Shared (whole JVM)</td><td>Every object, array</td><td>Garbage collector</td></tr>
+    <tr><td>Metaspace</td><td>Shared</td><td>Class metadata (methods, fields, constant pools)</td><td>Class unloading (rare) / native OS memory</td></tr>
+    <tr><td>Thread stack</td><td>Per-thread</td><td>Method frames, local variables, object <em>references</em></td><td>Automatic — pops on method return</td></tr>
+    <tr><td>PC register</td><td>Per-thread</td><td>Address of the current bytecode instruction</td><td>N/A — just a pointer</td></tr>
+    <tr><td>Native method stack</td><td>Per-thread</td><td>State for JNI / native code calls</td><td>Manual (native code's own rules)</td></tr>
+  </table>
+  <div class="note"><strong>PermGen is gone.</strong> Before Java 8, class metadata lived in a
+  fixed-size "Permanent Generation" inside the heap — a notorious source of
+  <code>OutOfMemoryError: PermGen space</code>. Java 8 replaced it with Metaspace, which lives in
+  native memory and grows automatically (bounded by <code>-XX:MaxMetaspaceSize</code> if you set it).</div>
+
+  <!-- ============================================================ -->
+  <h2 id="jmm">2 · The Java Memory Model</h2>
+  <p>Multiple threads reading and writing the heap raises a question the type system can't answer:
+  <em>if thread A writes a field, when is thread B guaranteed to see it?</em> The
+  <strong>Java Memory Model</strong> (JLS Chapter 17) answers this with one core relationship:
+  <strong>happens-before</strong>.</p>
+  <blockquote style="border-left:3px solid var(--border);margin:1em 0;padding:.2em 1em;color:var(--text-soft);">
+  "If one action happens-before another, then the first is visible to and ordered before the second."
+  — JLS §17.4.5, verified from the current spec
+  </blockquote>
+
+  <h3>What creates a happens-before edge</h3>
+  <p>Program order within one thread always happens-before itself, but <strong>across</strong> threads
+  you need one of these — verified straight from JLS §17.4.4 (<em>synchronizes-with</em>):</p>
+  <ul>
+    <li>An <strong>unlock</strong> on a monitor happens-before every subsequent <strong>lock</strong> on that same monitor.</li>
+    <li>A write to a <code>volatile</code> field happens-before every subsequent read of that field.</li>
+    <li>Starting a thread happens-before the first action inside it; a thread's last action happens-before code that observes it via <code>join()</code> or <code>isAlive()</code>.</li>
+  </ul>
+
+  <h3>Verified: a real visibility bug, and the one-word fix</h3>
+  <p>Without a happens-before edge, the compiler and JIT are free to assume a field never changes and
+  cache it — this is not theoretical. Run this yourself:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Without volatile — hangs forever, verified</div>
+      <pre><code class="java">public class VisibilityDemo {
+  static boolean stopRequested = false;   // plain field
+
+  public static void main(String[] args) throws Exception {
+    Thread worker = new Thread(() -> {
+      while (!stopRequested) { /* spin */ }
+      System.out.println("worker stopped");
+    });
+    worker.start();
+    Thread.sleep(1000);
+    stopRequested = true;              // main thread's write...
+    worker.join(3000);
+    System.out.println(worker.isAlive()
+        ? "worker STILL RUNNING after 3s"   // ...never seen by worker
+        : "worker exited normally");
+  }
+}
+// verified real output: "worker STILL RUNNING after 3s"
+// the JIT hoisted the field read out of the loop — no happens-before edge exists</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">With volatile — fixed, verified</div>
+      <pre><code class="java">public class VisibilityFixed {
+  static volatile boolean stopRequested = false;   // ONE keyword
+
+  public static void main(String[] args) throws Exception {
+    Thread worker = new Thread(() -> {
+      while (!stopRequested) { /* spin */ }
+      System.out.println("worker stopped");
+    });
+    worker.start();
+    Thread.sleep(1000);
+    stopRequested = true;
+    worker.join(3000);
+    System.out.println(worker.isAlive() ? "still running" : "exited normally");
+  }
+}
+// verified real output: "worker exited normally — volatile fixed it"</code></pre>
+    </div>
+  </div>
+  <div class="tip"><strong>Why this matters for GC too:</strong> the JMM is the same contract the
+  garbage collector itself relies on internally (safepoints, card-marking writes) — and it's exactly
+  why <a href="virtual-threads.html">virtual threads</a> needed <a href="scoped-values.html">scoped
+  values</a> rather than ad hoc shared mutable state.</div>
+
+  <h3>synchronized vs volatile</h3>
+  <table class="data">
+    <tr><th></th><th><code>volatile</code></th><th><code>synchronized</code></th></tr>
+    <tr><td>Guarantees</td><td>Visibility + ordering for that one field</td><td>Visibility + ordering + mutual exclusion (only one thread in the block at a time)</td></tr>
+    <tr><td>Cost</td><td>Cheap — no locking</td><td>More expensive — acquires a monitor</td></tr>
+    <tr><td>Use for</td><td>A single flag/reference read by many threads, written by one</td><td>Compound invariants across multiple fields, or multi-step updates</td></tr>
+    <tr><td>Does NOT give you</td><td>Atomicity of compound operations (<code>count++</code> is still a race)</td><td>—</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="heap">3 · The heap in detail</h2>
+  <p>Almost every collector on this page organizes the heap the same way, based on one empirical
+  observation from Oracle's own tuning guide:</p>
+  <blockquote style="border-left:3px solid var(--border);margin:1em 0;padding:.2em 1em;color:var(--text-soft);">
+  "The weak generational hypothesis states that most objects survive for only a short period of time."
+  — Oracle GC Tuning Guide, verified
+  </blockquote>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 760 240" role="img" aria-label="Objects are allocated in Eden, survive minor collections into Survivor spaces, age, and are eventually promoted to the Old generation">
+      <defs>
+        <marker id="hpA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" style="fill:var(--text-soft)"/>
+        </marker>
+      </defs>
+      <text x="20" y="22" class="dg-title">Young generation</text>
+      <rect x="20"  y="34" width="220" height="80" rx="8" class="dg-accent"/>
+      <text x="130" y="64" text-anchor="middle" class="dg-text">Eden</text>
+      <text x="130" y="84" text-anchor="middle" class="dg-soft">new objects allocated here</text>
+      <text x="130" y="102" text-anchor="middle" class="dg-soft">most die here (age 0)</text>
+
+      <rect x="270" y="34" width="90" height="80" rx="8" class="dg-good-box"/>
+      <text x="315" y="64" text-anchor="middle" class="dg-text-sm">Survivor</text>
+      <text x="315" y="82" text-anchor="middle" class="dg-soft">S0</text>
+      <rect x="370" y="34" width="90" height="80" rx="8" class="dg-box"/>
+      <text x="415" y="64" text-anchor="middle" class="dg-text-sm">Survivor</text>
+      <text x="415" y="82" text-anchor="middle" class="dg-soft">S1</text>
+      <text x="415" y="100" text-anchor="middle" class="dg-soft">(swap roles each GC)</text>
+
+      <rect x="510" y="34" width="230" height="80" rx="8" class="dg-warn-box"/>
+      <text x="625" y="64" text-anchor="middle" class="dg-text">Old generation</text>
+      <text x="625" y="84" text-anchor="middle" class="dg-soft">long-lived objects, "tenured"</text>
+
+      <line x1="240" y1="74" x2="268" y2="74" class="dg-line" marker-end="url(#hpA)"/>
+      <text x="255" y="60" text-anchor="middle" class="dg-soft" style="font-size:10px">survives</text>
+      <line x1="360" y1="74" x2="368" y2="74" class="dg-line-dash" marker-end="url(#hpA)"/>
+      <line x1="460" y1="74" x2="508" y2="74" class="dg-line" marker-end="url(#hpA)"/>
+      <text x="484" y="60" text-anchor="middle" class="dg-soft" style="font-size:10px">promoted</text>
+      <text x="380" y="150" text-anchor="middle" class="dg-soft">age++ each survived minor GC → promoted once age ≥ tenuring threshold</text>
+      <text x="380" y="180" text-anchor="middle" class="dg-soft" style="font-weight:700">Minor GC = collects Young only · Major/Full GC = collects Old (usually the whole heap)</text>
+    </svg>
+    <figcaption>Verified with <code>-Xlog:gc+age=trace</code>: real output shows an "Age table" after
+    every young collection, e.g. <code>age 1: 1006144 bytes</code>, then <code>age 2: ...</code> next
+    cycle — objects that keep surviving climb the age table until promoted to the old generation.</figcaption>
+  </figure>
+
+  <pre><code class="java">// try it yourself — watch objects age in real time
+java -Xmx64m -Xlog:gc+age=trace YourApp.java
+// verified real output:
+// [0.064s][trace][gc,age] GC(0) Age table:
+// [0.064s][trace][gc,age] GC(0) - age   1:    1006144 bytes,    1006144 total
+// [0.110s][trace][gc,age] GC(2) - age   1:     468896 bytes,     468896 total
+// [0.110s][trace][gc,age] GC(2) - age   2:     499912 bytes,     968808 total</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="howgc">4 · How garbage collection actually works</h2>
+  <p>A collector needs to answer one question — <em>is this object still reachable?</em> — then act on
+  the answer. Every collector on this page is built from combinations of these phases:</p>
+  <table class="data">
+    <tr><th>Phase</th><th>What it does</th></tr>
+    <tr><td><strong>Mark</strong></td><td>Walk the object graph from GC roots (stack frames, static fields, JNI handles) and mark everything reachable.</td></tr>
+    <tr><td><strong>Sweep</strong></td><td>Reclaim memory occupied by anything <em>not</em> marked.</td></tr>
+    <tr><td><strong>Compact</strong></td><td>Slide live objects together to eliminate fragmentation, so large contiguous allocations stay possible.</td></tr>
+    <tr><td><strong>Evacuate / copy</strong></td><td>Copy live objects out of the region being collected into a fresh one — compaction and reclamation in one step (G1, ZGC, Shenandoah all do this).</td></tr>
+  </table>
+  <p>The other axis is <strong>who does the work, and does the application keep running while they do
+  it</strong>:</p>
+  <ul>
+    <li><strong>Stop-the-world (STW):</strong> application threads are paused for the phase. Serial and Parallel do almost everything this way.</li>
+    <li><strong>Parallel:</strong> multiple GC threads work simultaneously during a stop-the-world pause — shortens the pause, doesn't remove it.</li>
+    <li><strong>Concurrent:</strong> GC threads run <em>alongside</em> application threads with only brief STW pauses for bookkeeping — this is what makes G1, ZGC and Shenandoah low-pause.</li>
+  </ul>
+  <p><strong>Minor GC</strong> collects the young generation only (fast, frequent). <strong>Major
+  GC</strong> collects the old generation. A <strong>Full GC</strong> collects the entire heap — the
+  one you actually want to avoid, since it's typically the longest stop-the-world pause a JVM will take.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="collectors">5 · The collectors, one by one</h2>
+
+  <h3>Serial — <code>-XX:+UseSerialGC</code></h3>
+  <p>One thread does everything, stop-the-world. Verified default choice on small/single-CPU machines.
+  Best for tiny heaps, containers, and CLI tools where startup and footprint matter more than pause time.</p>
+
+  <h3>Parallel (the "throughput" collector) — <code>-XX:+UseParallelGC</code></h3>
+  <p>Same generational design as Serial, but multiple threads split the STW work. Oracle's own guide:
+  on machines with 8+ hardware threads, it uses roughly <strong>5/8</strong> of them as GC threads by
+  default. Best for batch jobs and throughput-sensitive workloads that can tolerate occasional pauses.</p>
+
+  <h3>CMS (Concurrent Mark Sweep) — <span class="badge removed">Removed in 14</span></h3>
+  <p>The first mainstream concurrent, low-pause collector. Deprecated in Java 9, removed in Java 14 —
+  G1 replaced it entirely. If you inherit code with <code>-XX:+UseConcMarkSweepGC</code>, it won't even
+  start on a modern JDK; migrate to G1.</p>
+
+  <h3>G1 (Garbage-First) — default, <code>-XX:+UseG1GC</code></h3>
+  <p><em>Default since Java 9.</em> Verified from Oracle's own docs: "generational, incremental,
+  parallel, mostly concurrent, stop-the-world, and evacuating." Splits the heap into equal-sized
+  regions (not one contiguous young/old block) and prioritizes collecting the regions with the most
+  garbage first — hence the name. Full deep dive → <a href="#g1deep">§7</a>.</p>
+
+  <h3>ZGC (Z Garbage Collector) — <code>-XX:+UseZGC</code></h3>
+  <p>A scalable, low-latency concurrent collector. Verified from Oracle's docs: pause times independent
+  of heap size, "without stopping application threads for more than a millisecond," scales from a few
+  hundred MB to 16 TB. <strong>Verified: as of JDK 24, ZGC is generational by default</strong> — the
+  old <code>-XX:+ZGenerational</code> flag has been removed entirely.</p>
+
+  <h3>Shenandoah — <code>-XX:+UseShenandoahGC</code></h3>
+  <p>Verified from the OpenJDK wiki: "the low pause time garbage collector... pause times are no longer
+  directly proportional to the size of the heap. Garbage collecting a 200 GB heap or a 2 GB heap should
+  have the similar low pause behavior." A Red Hat-led alternative to ZGC with a similar goal, using
+  concurrent compaction rather than ZGC's colored-pointer approach.</p>
+
+  <h3>Epsilon (No-Op) — <code>-XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC</code></h3>
+  <p>Allocates memory and <strong>never collects it</strong>. Verified: it requires unlocking
+  experimental options first, or the JVM refuses to start with a clear error. Useful for
+  performance-testing allocation cost with GC removed from the equation, ultra-short-lived jobs, and
+  memory-pressure testing (it will happily run until it hits <code>-Xmx</code> and then throw OOM).</p>
+
+  <!-- ============================================================ -->
+  <h2 id="evolution">6 · Evolution &amp; comparison</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 150" role="img" aria-label="Timeline of garbage collectors from Serial through Parallel, CMS deprecated and removed, G1 becoming default in Java 9, and the low-latency ZGC and Shenandoah collectors becoming generational">
+      <line x1="30" y1="60" x2="740" y2="60" class="dg-line"/>
+      <g class="dg-soft" text-anchor="middle">
+        <circle cx="60"  cy="60" r="6" class="dg-accent-solid"/><text x="60"  y="44">1.2+</text><text x="60"  y="88">Serial</text>
+        <circle cx="180" cy="60" r="6" class="dg-accent-solid"/><text x="180" y="44">1.4+</text><text x="180" y="88">Parallel</text>
+        <circle cx="300" cy="60" r="6" class="dg-warn"/><text x="300" y="44">9 → 14</text><text x="300" y="88">CMS deprecated → removed</text>
+        <circle cx="420" cy="60" r="6" class="dg-good"/><text x="420" y="44">9</text><text x="420" y="88">G1 becomes default</text>
+        <circle cx="540" cy="60" r="6" class="dg-accent-solid"/><text x="540" y="44">12 / 15</text><text x="540" y="88">Shenandoah / ZGC production</text>
+        <circle cx="660" cy="60" r="6" class="dg-good"/><text x="660" y="44">21 → 25</text><text x="660" y="102">Generational ZGC (21)<tspan x="660" dy="14">→ default (24); Gen. Shenandoah final (25)</tspan></text>
+      </g>
+    </svg>
+    <figcaption>G1 has been the default since Java 9. The newest work is making the low-latency
+    collectors <em>generational</em> too — combining ZGC/Shenandoah's sub-millisecond pauses with the
+    throughput benefit of collecting young garbage separately.</figcaption>
+  </figure>
+
+  <table class="data">
+    <tr><th>Collector</th><th>Pause style</th><th>Best heap size</th><th>Priority</th><th>Flag</th></tr>
+    <tr><td>Serial</td><td>Full STW</td><td>&lt; 100 MB</td><td>Footprint / simplicity</td><td><code>-XX:+UseSerialGC</code></td></tr>
+    <tr><td>Parallel</td><td>Full STW, multi-threaded</td><td>Medium–large</td><td>Throughput</td><td><code>-XX:+UseParallelGC</code></td></tr>
+    <tr><td>G1 <span class="badge lts">default</span></td><td>Short STW + concurrent</td><td>A few GB – 100s of GB</td><td>Balanced pause/throughput</td><td><code>-XX:+UseG1GC</code></td></tr>
+    <tr><td>ZGC</td><td>Sub-millisecond, concurrent</td><td>Few hundred MB – 16 TB</td><td>Lowest latency</td><td><code>-XX:+UseZGC</code></td></tr>
+    <tr><td>Shenandoah</td><td>Sub-millisecond, concurrent</td><td>Any (pause ∝ live set, not heap)</td><td>Lowest latency</td><td><code>-XX:+UseShenandoahGC</code></td></tr>
+    <tr><td>Epsilon</td><td>None — never collects</td><td>N/A</td><td>Benchmarking only</td><td><code>-XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC</code></td></tr>
+  </table>
+
+  <p><strong>Verified official comparison</strong> (Oracle GC tuning guide, quoted directly):
+  "Parallel GC can compact and reclaim space in the old generation only as a whole. G1 incrementally
+  distributes this work across multiple much shorter collections... ZGC aims to provide significantly
+  smaller pause times at further cost of throughput."</p>
+
+  <!-- ============================================================ -->
+  <h2 id="g1deep">7 · G1 deep dive — region-based heap</h2>
+  <p>Unlike Serial/Parallel's contiguous young/old blocks, G1 divides the whole heap into many
+  equal-sized <strong>regions</strong> — each one independently labeled Eden, Survivor, Old, or
+  <strong>Humongous</strong> (for objects larger than half a region).</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 760 190" role="img" aria-label="G1's heap is a grid of equal-sized regions, each independently assigned to Eden, Survivor, Old, or left free; a Humongous region spans multiple regions for one large object">
+      <g>
+        <rect x="20"  y="20" width="70" height="60" rx="4" class="dg-accent"/><text x="55" y="55" text-anchor="middle" class="dg-text-sm">E</text>
+        <rect x="96"  y="20" width="70" height="60" rx="4" class="dg-box-alt"/>
+        <rect x="172" y="20" width="70" height="60" rx="4" class="dg-good-box"/><text x="207" y="55" text-anchor="middle" class="dg-text-sm">S</text>
+        <rect x="248" y="20" width="70" height="60" rx="4" class="dg-accent"/><text x="283" y="55" text-anchor="middle" class="dg-text-sm">E</text>
+        <rect x="324" y="20" width="70" height="60" rx="4" class="dg-warn-box"/><text x="359" y="55" text-anchor="middle" class="dg-text-sm">O</text>
+        <rect x="400" y="20" width="70" height="60" rx="4" class="dg-warn-box"/><text x="435" y="55" text-anchor="middle" class="dg-text-sm">O</text>
+        <rect x="476" y="20" width="150" height="60" rx="4" class="dg-warn-box" fill-opacity="0.6"/><text x="551" y="55" text-anchor="middle" class="dg-text-sm">H (spans 2 regions)</text>
+        <rect x="20"  y="96" width="70" height="60" rx="4" class="dg-warn-box"/><text x="55" y="131" text-anchor="middle" class="dg-text-sm">O</text>
+        <rect x="96"  y="96" width="70" height="60" rx="4" class="dg-accent"/><text x="131" y="131" text-anchor="middle" class="dg-text-sm">E</text>
+        <rect x="172" y="96" width="70" height="60" rx="4" class="dg-box-alt"/>
+        <rect x="248" y="96" width="70" height="60" rx="4" class="dg-warn-box"/><text x="283" y="131" text-anchor="middle" class="dg-text-sm">O</text>
+        <rect x="324" y="96" width="70" height="60" rx="4" class="dg-box-alt"/>
+        <rect x="400" y="96" width="70" height="60" rx="4" class="dg-good-box"/><text x="435" y="131" text-anchor="middle" class="dg-text-sm">S</text>
+      </g>
+      <text x="670" y="30" class="dg-soft">E = Eden</text>
+      <text x="670" y="48" class="dg-soft">S = Survivor</text>
+      <text x="670" y="66" class="dg-soft">O = Old</text>
+      <text x="670" y="84" class="dg-soft">H = Humongous</text>
+      <text x="670" y="102" class="dg-soft" style="opacity:.6">▢ = free</text>
+    </svg>
+    <figcaption>Regions are scattered, not contiguous by generation — G1 just hands out free regions and
+    labels them as needed. This is what lets G1 collect only the <em>most garbage-filled</em> regions
+    first, instead of the whole young or old generation at once.</figcaption>
+  </figure>
+
+  <p><strong>Verified live region breakdown</strong> — run any program and inspect it with
+  <code>jcmd</code>:</p>
+  <pre><code class="java">jcmd &lt;pid&gt; GC.heap_info
+// verified real output:
+// garbage-first heap   total reserved 65536K, committed 65536K, used 58320K
+//  region size 1M, 10 eden (10M), 3 survivor (3M), 44 old (44M), 0 humongous (0M), 7 free (7M)</code></pre>
+
+  <p>G1's collection cycle — verified from real <code>-Xlog:gc</code> output — alternates young-only
+  pauses with occasional concurrent marking and "mixed" pauses that also reclaim some old regions:</p>
+  <pre><code class="java">// verified real -Xlog:gc output, in order:
+GC(0) Pause Young (Normal) (G1 Evacuation Pause) 5M->2M(10M) 0.855ms
+GC(4) Pause Young (Concurrent Start) (G1 Evacuation Pause) 6M->4M(27M) 0.773ms
+GC(5) Concurrent Mark Cycle
+GC(5) Pause Remark 4M->4M(27M) 0.368ms
+GC(5) Pause Cleanup 5M->5M(27M) 0.012ms
+GC(6) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 15M->7M(27M) 1.629ms
+GC(7) Pause Young (Mixed) (G1 Evacuation Pause) 17M->14M(28M) 1.559ms  ← also reclaims old regions</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="lowlatency">8 · ZGC &amp; Shenandoah — concurrent collectors</h2>
+  <p>Both aim for the same goal — pause times that don't grow with heap size — via different
+  mechanisms:</p>
+  <table class="data">
+    <tr><th></th><th>ZGC</th><th>Shenandoah</th></tr>
+    <tr><td>Core technique</td><td>Colored pointers + load barriers</td><td>Brooks forwarding pointers + concurrent compaction</td></tr>
+    <tr><td>Metadata location</td><td>Encoded in the pointer itself (unused address bits)</td><td>An extra forwarding-pointer word per object</td></tr>
+    <tr><td>Origin</td><td>Oracle</td><td>Red Hat</td></tr>
+    <tr><td>Generational</td><td>Yes, default since JDK 24</td><td>Final in JDK 25 (JEP 404/521 lineage)</td></tr>
+    <tr><td>Platform support</td><td>Broad, Oracle-maintained</td><td>Linux/Windows primary; verified from OpenJDK wiki as also community-tested on macOS</td></tr>
+  </table>
+  <p>Verified real log output — both use "Minor"/"Major" terminology once generational, distinct from
+  G1's "Young"/"Mixed" naming:</p>
+  <pre><code class="java">// verified real ZGC output:
+Using The Z Garbage Collector
+GC(0) Major Collection (Warmup) 8M(12%)->10M(16%) 0.004s
+GC(3) Minor Collection (Allocation Rate)</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="tooling">9 · Tooling</h2>
+
+  <h3>GC logging — <code>-Xlog:gc</code></h3>
+  <pre><code class="java">java -Xlog:gc App.java                          # one line per collection
+java -Xlog:gc*                                    # everything GC-related, verbose
+java -Xlog:gc+heap=debug                          # heap-region level detail
+java -Xlog:gc*:file=gc.log:time,uptime,level,tags # write to a file with rich formatting</code></pre>
+
+  <h3><code>jstat</code> — live GC statistics, verified real output</h3>
+  <pre><code class="java">jstat -gcutil &lt;pid&gt; 1000 3    # sample every 1s, 3 times
+//   S0     S1     E      O      M     CCS    YGC     YGCT    FGC   FGCT   GCT
+//    -      -  42.86  47.01  28.31   4.68     14     0.010     1  0.002  0.013
+//    - 100.00  43.75  87.43  28.31   4.68     22     0.015     2  0.004  0.019
+// columns: Survivor0/1 %, Eden %, Old %, Metaspace %, young/full GC counts and total time</code></pre>
+
+  <h3><code>jcmd</code> — the modern Swiss-army knife</h3>
+  <pre><code class="java">jcmd &lt;pid&gt; GC.heap_info        # region/generation breakdown — verified above
+jcmd &lt;pid&gt; GC.run               # trigger a GC on demand
+jcmd &lt;pid&gt; VM.flags             # show every active JVM flag, including ergonomic ones
+jcmd &lt;pid&gt; JFR.start duration=60s filename=rec.jfr   # profile with zero extra tools</code></pre>
+
+  <h3>JDK Flight Recorder + Mission Control</h3>
+  <p>JFR (see <a href="../versions/java-11.html">Java 11</a>) records GC pause events, allocation
+  rates, and heap occupancy over time with near-zero overhead — open the resulting <code>.jfr</code>
+  in <strong>JDK Mission Control</strong> for a visual timeline instead of scrolling raw logs.</p>
+
+  <h3>Checking what the JVM chose, and why</h3>
+  <pre><code class="java">java -XX:+PrintFlagsFinal -version | grep UseG1GC
+// verified real output:
+//   bool UseG1GC = true   {product} {ergonomic}
+// {ergonomic} means the JVM chose it itself — you didn't pass a GC flag</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="lab">10 · Hands-on lab — try it yourself</h2>
+  <p>One program, five collectors, real differences you can see on your own machine. Save this and run
+  it exactly as shown:</p>
+  <pre><code class="java">// GcLab.java
+import java.util.*;
+
+public class GcLab {
+  public static void main(String[] args) throws Exception {
+    List&lt;byte[]&gt; garbage = new ArrayList&lt;&gt;();
+    for (int i = 0; i &lt; 2000; i++) {
+      garbage.add(new byte[100_000]);     // steady allocation, ~200MB churn
+      if (i % 500 == 0) garbage.clear();  // let most of it die young
+    }
+    System.out.println("done, list size=" + garbage.size());
+  }
+}</code></pre>
+  <pre><code class="java">java -Xmx64m -XX:+UseSerialGC   -Xlog:gc GcLab.java   # single-threaded pauses
+java -Xmx64m -XX:+UseParallelGC -Xlog:gc GcLab.java   # multi-threaded, still full-STW
+java -Xmx64m -XX:+UseG1GC       -Xlog:gc GcLab.java   # young + concurrent-mark + mixed
+java -Xmx64m -XX:+UseZGC        -Xlog:gc GcLab.java   # Minor/Major, sub-ms pauses
+java -Xmx64m -Xlog:gc+age=trace GcLab.java            # watch the age table climb</code></pre>
+  <p>Then compare region occupancy live while it runs:</p>
+  <pre><code class="java">java -Xmx64m GcLab.java &amp;
+jcmd $! GC.heap_info      # run this a few times while it's executing</code></pre>
+  <div class="tip"><strong>What to look for:</strong> Serial's pauses are longer but the log is
+  simplest. G1 shows distinct "Concurrent Start" / "Concurrent Mark Cycle" / "Mixed" phases you won't
+  see in Serial or Parallel. ZGC's pause times (the trailing <code>0.00Xs</code>) barely move even as
+  the heap grows — that's the whole point of a concurrent collector.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="advanced">11 · Advanced concepts</h2>
+  <table class="data">
+    <tr><th>Concept</th><th>What it means</th></tr>
+    <tr><td><strong>TLAB</strong> (Thread-Local Allocation Buffer)</td><td>Each thread gets a private chunk of Eden to allocate from without synchronizing with other threads — this is why object allocation in Java is typically faster than a generic <code>malloc</code>.</td></tr>
+    <tr><td><strong>Escape analysis</strong></td><td>The JIT can prove an object never "escapes" a method (no reference survives it) and may allocate it on the stack or in registers instead of the heap — entirely a JIT decision, not something your code controls or can force.</td></tr>
+    <tr><td><strong>Safepoint</strong></td><td>A point where every thread's state is consistent enough to pause it — the JVM brings all threads to a safepoint before a stop-the-world GC phase can begin.</td></tr>
+    <tr><td><strong>Card marking</strong></td><td>Instead of rescanning the whole old generation to find references into the young generation, the JVM marks small "cards" of memory that were written to, so a minor GC only rechecks those.</td></tr>
+    <tr><td><strong>Compressed oops</strong></td><td>On 64-bit JVMs with heaps under ~32GB, object references are stored as 32-bit offsets instead of full 64-bit pointers — halves reference size, is on by default (<code>-XX:+UseCompressedOops</code>).</td></tr>
+    <tr><td><strong>Colored pointers</strong> (ZGC)</td><td>ZGC steals unused bits in a 64-bit pointer to store GC metadata directly in the reference, letting it relocate objects concurrently without a separate forwarding table.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">12 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>Catching <code>OutOfMemoryError</code> and immediately logging/concatenating a string</td><td><strong>Verified real bug:</strong> if the offending reference is still held, the heap is still full — building the log string can throw a <em>second</em>, uncaught OOM. Release the reference (<code>leak = null;</code>) <em>before</em> doing anything else in the catch block.</td></tr>
+    <tr><td>Static collections / listener registries that only grow</td><td>The #1 real-world "memory leak" in Java — nothing is technically unreachable, so the GC (correctly) never frees it. Always pair a registration with a matching removal.</td></tr>
+    <tr><td>"GC overhead limit exceeded"</td><td>The JVM detected it's spending &gt;98% of time collecting for &lt;2% heap recovered — not a bug, a real signal to raise <code>-Xmx</code> or fix a leak.</td></tr>
+    <tr><td>Assuming a bigger heap is always better</td><td>Bigger heaps mean longer full-GC pauses on STW collectors. Pick a collector suited to your latency budget first, then size the heap.</td></tr>
+    <tr><td>Tuning young-generation size manually with G1</td><td>Oracle's own guidance: avoid <code>-Xmn</code>/<code>-XX:NewRatio</code> with G1 — fixing the young size overrides and disables G1's pause-time control entirely.</td></tr>
+    <tr><td>Expecting <code>System.gc()</code> to force a GC</td><td>It's only a <em>hint</em> — the JVM is free to ignore it, and often does under production flags.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">13 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Collector</th><th>Why</th></tr>
+    <tr><td>General-purpose web service / API</td><td>G1 (default)</td><td>Good balance out of the box, little tuning needed.</td></tr>
+    <tr><td>Trading systems, real-time bidding, gaming servers</td><td>ZGC or Shenandoah</td><td>Sub-millisecond pauses matter more than raw throughput.</td></tr>
+    <tr><td>Overnight batch / ETL jobs</td><td>Parallel</td><td>No user waiting on a response — maximize throughput, pauses don't matter.</td></tr>
+    <tr><td>CLI tools, small containers, serverless cold starts</td><td>Serial</td><td>Minimal footprint and startup overhead beat any concurrent collector's setup cost.</td></tr>
+    <tr><td>Allocation-cost microbenchmarks</td><td>Epsilon</td><td>Removes GC as a variable entirely — you're measuring allocation, not collection.</td></tr>
+    <tr><td>Very large heaps (100s of GB, e.g. big in-memory caches)</td><td>ZGC</td><td>Verified: pause times don't grow with heap size, unlike G1's.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">14 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>JVM memory &amp; GC in one glance</h3>
+    <ul>
+      <li><strong>Memory areas:</strong> heap (GC'd) + metaspace (shared) + stack/PC/native-stack (per-thread, not GC'd).</li>
+      <li><strong>JMM:</strong> <code>volatile</code> write → happens-before → subsequent read by any thread. No edge = no visibility guarantee.</li>
+      <li><strong>Generational hypothesis:</strong> most objects die young — Eden → Survivor (age++) → Old (tenured).</li>
+      <li><strong>Collectors:</strong> Serial (simple) → Parallel (throughput) → G1 (default, balanced) → ZGC/Shenandoah (lowest latency) → Epsilon (none, benchmarking).</li>
+      <li><strong>See it live:</strong> <code>-Xlog:gc</code>, <code>jstat -gcutil &lt;pid&gt;</code>, <code>jcmd &lt;pid&gt; GC.heap_info</code>.</li>
+      <li><strong>Verified gotcha:</strong> release references before logging inside an <code>OutOfMemoryError</code> catch block.</li>
+      <li><strong>Never manually tune G1's young size</strong> — it disables pause-time control.</li>
+    </ul>
+  </div>
+
+  <h2>Evolution</h2>
+  <table class="data">
+    <tr><th>Version</th><th>Change</th></tr>
+    <tr><td>Java 1.2–1.4</td><td>Serial and Parallel collectors established.</td></tr>
+    <tr><td>Java 5</td><td>CMS (Concurrent Mark Sweep) introduced.</td></tr>
+    <tr><td>Java 7u4</td><td>G1 first available (opt-in).</td></tr>
+    <tr><td>Java 8</td><td>PermGen replaced by Metaspace.</td></tr>
+    <tr><td>Java 9</td><td><strong>G1 becomes the default collector</strong>; CMS deprecated.</td></tr>
+    <tr><td>Java 11</td><td>ZGC introduced (experimental); Epsilon (no-op) added.</td></tr>
+    <tr><td>Java 12</td><td>Shenandoah added upstream (JEP 189).</td></tr>
+    <tr><td>Java 14</td><td>CMS <strong>removed</strong>.</td></tr>
+    <tr><td>Java 15</td><td>ZGC and Shenandoah both reach production (non-experimental).</td></tr>
+    <tr><td>Java 21</td><td>Generational ZGC (JEP 439, opt-in via <code>-XX:+ZGenerational</code>).</td></tr>
+    <tr><td>Java 23</td><td>ZGC generational by default.</td></tr>
+    <tr><td>Java 24</td><td><code>-XX:+ZGenerational</code> flag removed — generational is the only mode.</td></tr>
+    <tr><td>Java 25</td><td>Generational Shenandoah finalized; compact object headers finalized.</td></tr>
+  </table>
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

@@ -22,7 +22,7 @@ PAGES = [
     "topics/pattern-matching-switch.html", "topics/text-blocks-strings.html",
     "topics/modules-jpms.html", "topics/stream-api.html", "topics/virtual-threads.html",
     "topics/structured-concurrency.html", "topics/scoped-values.html",
-    "topics/streams-gatherers.html", "topics/ffm-api.html",
+    "topics/streams-gatherers.html", "topics/ffm-api.html", "topics/jvm-memory-gc.html",
 ]
 
 PAGE_SET = set(PAGES)
