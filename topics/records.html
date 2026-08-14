@@ -38,12 +38,13 @@
     <a href="#generated">2. What the compiler generates</a>
     <a href="#customise">3. Customising records</a>
     <a href="#immutable">4. Immutability &amp; defensive copies</a>
-    <a href="#patterns">5. Records + pattern matching</a>
-    <a href="#vs">6. Records vs class / enum / Lombok</a>
-    <a href="#serialization">7. Serialization</a>
-    <a href="#pitfalls">8. Pitfalls</a>
-    <a href="#realworld">9. Real-world use cases</a>
-    <a href="#cheat">10. Cheat sheet</a>
+    <a href="#comparing">5. Comparing two records</a>
+    <a href="#patterns">6. Records + pattern matching</a>
+    <a href="#vs">7. Records vs class / enum / Lombok</a>
+    <a href="#serialization">8. Serialization</a>
+    <a href="#pitfalls">9. Pitfalls</a>
+    <a href="#realworld">10. Real-world use cases</a>
+    <a href="#cheat">11. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -193,7 +194,117 @@ list.add("Bob");             // 😱 mutates the record's list too</code></pre>
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="patterns">5 · Records + pattern matching</h2>
+  <h2 id="comparing">5 · Comparing two records</h2>
+  <p>Because the compiler generates <code>equals</code> from the components (§2), comparing two
+  records is usually just <code>.equals()</code> — but there are a few things worth knowing exactly.</p>
+
+  <h3><code>==</code> vs <code>.equals()</code> — verified</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label"><code>==</code> — are they the same object?</div>
+      <pre><code class="java">var p1 = new Point(1, 2);
+var p2 = new Point(1, 2);          // a SEPARATE instance, same data
+System.out.println(p1 == p2);      // verified: false</code></pre>
+    </div>
+    <div class="after"><div class="ba-label"><code>.equals()</code> — do they hold the same data?</div>
+      <pre><code class="java">System.out.println(p1.equals(p2)); // verified: true
+// this is exactly why records exist: two different instances with the
+// same component values are equal, with zero hand-written code</code></pre>
+    </div>
+  </div>
+  <div class="warn"><strong>Always use <code>.equals()</code> for records, never <code>==</code></strong>
+  (except deliberately checking object identity) — <code>==</code> compares references, so two records
+  built separately from identical data are <code>==</code>-unequal but <code>.equals()</code>-equal.</div>
+
+  <h3>Nested records — equality recurses correctly, verified</h3>
+  <pre><code class="java">record Point(int x, int y) {}
+record Line(Point start, Point end) {}   // a record made of records
+
+var l1 = new Line(new Point(0, 0), new Point(3, 4));
+var l2 = new Line(new Point(0, 0), new Point(3, 4));   // separately built, same values
+var l3 = new Line(new Point(0, 0), new Point(3, 5));   // one coordinate differs
+
+System.out.println(l1.equals(l2));   // verified: true  — compares Point-by-Point
+System.out.println(l1.equals(l3));   // verified: false — the nested difference is detected</code></pre>
+  <p><code>Line</code>'s generated <code>equals</code> calls <code>Point</code>'s generated
+  <code>equals</code> on each component — no extra work needed, it composes automatically.</p>
+  <div class="note"><strong>The one exception:</strong> if a component is an <strong>array</strong>
+  rather than another record, equality does <em>not</em> recurse the way you'd expect — see the
+  verified array-component gotcha in <a href="#pitfalls">§9 Pitfalls</a>, and the two working fixes
+  right below.</div>
+
+  <h3>If a record contains an array — two working fixes, verified</h3>
+  <p>The generated <code>equals</code>/<code>hashCode</code>/<code>toString</code> treat an array
+  component by <strong>identity</strong>, exactly like <code>Object[]</code> would — because arrays
+  themselves never overrode those methods to compare contents. There are two real fixes.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Broken — verified</div>
+      <pre><code class="java">record BytesDefault(byte[] data) {}
+
+var d1 = new BytesDefault(new byte[]{1, 2, 3});
+var d2 = new BytesDefault(new byte[]{1, 2, 3});   // same content, different array object
+
+d1.equals(d2);   // verified: false
+d1.toString();   // verified: "BytesDefault[data=[B@6356695f]" — identity hash, not content</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Fix 1 — override with Arrays.equals/hashCode</div>
+      <pre><code class="java">record BytesFixed(byte[] data) {
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof BytesFixed other)) return false;
+    return Arrays.equals(data, other.data);
+  }
+  @Override
+  public int hashCode() { return Arrays.hashCode(data); }
+  @Override
+  public String toString() { return "BytesFixed[data=" + Arrays.toString(data) + "]"; }
+}
+
+var f1 = new BytesFixed(new byte[]{1, 2, 3});
+var f2 = new BytesFixed(new byte[]{1, 2, 3});
+f1.equals(f2);   // verified: true
+f1.toString();   // verified: "BytesFixed[data=[1, 2, 3]]"</code></pre>
+    </div>
+  </div>
+  <p><strong>Fix 2 — the simpler option: don't use an array at all.</strong> A <code>List</code>
+  already compares by content, so switching the component type sidesteps the whole problem:</p>
+  <pre><code class="java">record BytesAsList(List&lt;Byte&gt; data) {}
+
+var l1 = new BytesAsList(List.of((byte) 1, (byte) 2, (byte) 3));
+var l2 = new BytesAsList(List.of((byte) 1, (byte) 2, (byte) 3));
+l1.equals(l2);   // verified: true — no overrides needed
+l1.toString();   // verified: "BytesAsList[data=[1, 2, 3]]"</code></pre>
+  <div class="tip"><strong>Prefer Fix 2 when you can.</strong> It's less code, and you get correct
+  <code>equals</code>/<code>hashCode</code>/<code>toString</code> for free, the same way every other
+  record component does. Reach for Fix 1 (manual <code>Arrays.equals</code>) only when you're
+  specifically constrained to an array type — e.g. matching an existing array-based API, or avoiding
+  boxing overhead for a primitive array in a performance-sensitive path.</div>
+
+  <h3>Sorting records — they have no natural order by default</h3>
+  <p>A record does <em>not</em> automatically implement <code>Comparable</code> — <code>equals</code>
+  is generated, but ordering is something only you can define, since the compiler doesn't know which
+  component (if any) should drive the sort. Use <code>Comparator.comparing</code>:</p>
+  <pre><code class="java">List&lt;Point&gt; points = new ArrayList&lt;&gt;(List.of(
+    new Point(3, 1), new Point(1, 9), new Point(2, 5)));
+
+points.sort(Comparator.comparingInt(Point::x));
+// verified: [Point[x=1, y=9], Point[x=2, y=5], Point[x=3, y=1]]
+
+// multi-key sort: age ascending, ties broken by name
+record Person(String name, int age) {}
+List&lt;Person&gt; people = new ArrayList&lt;&gt;(List.of(
+    new Person("Bob", 30), new Person("Ada", 30), new Person("Cy", 25)));
+
+people.sort(Comparator.comparingInt(Person::age).thenComparing(Person::name));
+// verified: [Person[name=Cy, age=25], Person[name=Ada, age=30], Person[name=Bob, age=30]]</code></pre>
+  <p>If a record genuinely has one obvious natural order, you can make it explicit by implementing
+  <code>Comparable</code> yourself — records can implement interfaces (§3):</p>
+  <pre><code class="java">record Money(long cents) implements Comparable&lt;Money&gt; {
+  public int compareTo(Money other) { return Long.compare(cents, other.cents); }
+}</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="patterns">6 · Records + pattern matching</h2>
   <p>Records were co-designed with pattern matching: because their shape is transparent, they can be
   <strong>destructured</strong> directly (record patterns, Java 21).</p>
   <div class="ba">
@@ -225,7 +336,7 @@ int eval(Expr e) {
   <p>See <a href="pattern-matching-switch.html">Pattern matching</a> and <a href="sealed-classes.html">Sealed classes</a>.</p>
 
   <!-- ============================================================ -->
-  <h2 id="vs">6 · Records vs class / enum / Lombok</h2>
+  <h2 id="vs">7 · Records vs class / enum / Lombok</h2>
   <table class="data">
     <tr><th></th><th>Record</th><th>Enum</th><th>Regular class</th><th>Lombok <code>@Value</code></th></tr>
     <tr><td>Boilerplate</td><td>None (compiler)</td><td>Minimal (compiler)</td><td>All manual</td><td>None (annotation processor)</td></tr>
@@ -248,7 +359,7 @@ int eval(Expr e) {
   Lombok's <code>@Value</code>/<code>@Data</code> on Java 16+.</div>
 
   <!-- ============================================================ -->
-  <h2 id="serialization">7 · Serialization</h2>
+  <h2 id="serialization">8 · Serialization</h2>
   <p>Records serialize based on their <strong>components</strong>, and deserialization goes through the
   <strong>canonical constructor</strong> — so your validation runs on the way in. That's a real safety
   improvement over normal serialization, which bypasses constructors.</p>
@@ -259,7 +370,7 @@ int eval(Expr e) {
 }</code></pre>
 
   <!-- ============================================================ -->
-  <h2 id="pitfalls">8 · Pitfalls</h2>
+  <h2 id="pitfalls">9 · Pitfalls</h2>
   <table class="data">
     <tr><th>Pitfall</th><th>Reality</th></tr>
     <tr><td>"Records are fully immutable"</td><td>Only shallowly — defensively copy mutable components.</td></tr>
@@ -271,7 +382,7 @@ int eval(Expr e) {
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="realworld">9 · Real-world use cases</h2>
+  <h2 id="realworld">10 · Real-world use cases</h2>
   <table class="data">
     <tr><th>Scenario</th><th>Why records fit</th></tr>
     <tr><td>REST request/response DTOs</td><td>Immutable, concise, map cleanly to JSON (Jackson supports records).</td></tr>
@@ -308,7 +419,7 @@ int lo = mm.min(), hi = mm.max();       // no casts, clear names</code></pre>
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">10 · Cheat sheet</h2>
+  <h2 id="cheat">11 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Records in one glance</h3>
     <ul>
@@ -316,6 +427,8 @@ int lo = mm.min(), hi = mm.max();       // no casts, clear names</code></pre>
       <li>Immutable &amp; <code>final</code>; extends <code>Record</code>; can implement interfaces, not extend classes.</li>
       <li>Validate/normalise in the <strong>compact constructor</strong>; <strong>defensively copy</strong> mutable components.</li>
       <li>Accessors have <strong>no <code>get</code></strong> prefix.</li>
+      <li>Compare with <code>.equals()</code>, never <code>==</code>; nested records compare recursively, but array components don't.</li>
+      <li>No natural order by default — sort with <code>Comparator.comparing(...)</code>, or implement <code>Comparable</code> yourself.</li>
       <li>Destructure with <strong>record patterns</strong>; pair with <strong>sealed</strong> types for ADTs.</li>
       <li>Use for DTOs / value objects / multiple returns — not JPA entities.</li>
     </ul>
