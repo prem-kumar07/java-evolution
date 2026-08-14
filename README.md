@@ -34,7 +34,7 @@ versions/             One page per stepping-stone release (5 sections + before/a
 topics/               Deep-dive pages
   var, records, sealed-classes, pattern-matching-switch, text-blocks-strings, modules-jpms,
   stream-api, virtual-threads, structured-concurrency, scoped-values, streams-gatherers,
-  ffm-api, jvm-memory-gc, reflection, generics, annotations
+  ffm-api, jvm-memory-gc, reflection, generics, annotations, aot-cache
 
 assets/
   style.css           Light/dark theme, responsive layout
