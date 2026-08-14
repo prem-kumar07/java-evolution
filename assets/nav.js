@@ -343,17 +343,25 @@
     toTop.style.display = y > 400 ? "block" : "none";
   }, { passive: true });
 
-  /* prev / next footer navigation */
+  /* prev / next footer navigation — two cards, matching the site's .card look */
   var flat = [];
   SITEMAP.forEach(function (g) { g.items.forEach(function (it) { flat.push(it); }); });
   var idx = flat.findIndex(function (it) { return it.href === page; });
   if (idx >= 0 && main) {
     var footer = document.createElement("div");
-    footer.style.cssText = "display:flex;justify-content:space-between;gap:12px;margin-top:48px;border-top:1px solid var(--border);padding-top:20px;";
+    footer.className = "page-nav";
     var prev = flat[idx - 1], next = flat[idx + 1];
-    footer.innerHTML =
-      (prev ? '<a href="' + root + prev.href + '">← ' + prev.label + '</a>' : '<span></span>') +
-      (next ? '<a href="' + root + next.href + '" style="text-align:right">' + next.label + ' →</a>' : '<span></span>');
+    var prevHtml = prev
+      ? '<a class="page-nav-link page-nav-prev" href="' + root + prev.href + '">' +
+          '<span class="page-nav-label">← Previous</span>' +
+          '<span class="page-nav-title">' + prev.label + '</span></a>'
+      : '<span class="page-nav-spacer"></span>';
+    var nextHtml = next
+      ? '<a class="page-nav-link page-nav-next" href="' + root + next.href + '">' +
+          '<span class="page-nav-label">Next →</span>' +
+          '<span class="page-nav-title">' + next.label + '</span></a>'
+      : '<span class="page-nav-spacer"></span>';
+    footer.innerHTML = prevHtml + nextHtml;
     main.appendChild(footer);
   }
 })();
