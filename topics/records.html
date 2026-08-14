@@ -227,14 +227,22 @@ int eval(Expr e) {
   <!-- ============================================================ -->
   <h2 id="vs">6 · Records vs class / enum / Lombok</h2>
   <table class="data">
-    <tr><th></th><th>Record</th><th>Regular class</th><th>Lombok <code>@Value</code></th></tr>
-    <tr><td>Boilerplate</td><td>None (compiler)</td><td>All manual</td><td>None (annotation processor)</td></tr>
-    <tr><td>Immutable</td><td>Always</td><td>Your choice</td><td>Yes</td></tr>
-    <tr><td>Extra tooling</td><td>None — standard Java</td><td>None</td><td>External dependency + IDE plugin</td></tr>
-    <tr><td>Inheritance</td><td>Can't extend a class</td><td>Free</td><td>Limited</td></tr>
-    <tr><td>Pattern destructuring</td><td>Yes</td><td>No</td><td>No</td></tr>
-    <tr><td>Best for</td><td>Immutable data carriers</td><td>Behaviour-rich / mutable types</td><td>Pre-16 codebases</td></tr>
+    <tr><th></th><th>Record</th><th>Enum</th><th>Regular class</th><th>Lombok <code>@Value</code></th></tr>
+    <tr><td>Boilerplate</td><td>None (compiler)</td><td>Minimal (compiler)</td><td>All manual</td><td>None (annotation processor)</td></tr>
+    <tr><td>Number of instances</td><td>Unlimited — <code>new Point(1,2)</code>, <code>new Point(3,4)</code>, ...</td><td>Fixed, closed set — declared once, no <code>new</code></td><td>Unlimited</td><td>Unlimited</td></tr>
+    <tr><td>Data per instance</td><td>Different data per instance (the components)</td><td>Same shape for every constant, if any</td><td>Whatever you write</td><td>Different data per instance</td></tr>
+    <tr><td>Immutable</td><td>Always</td><td>Always (each constant is a singleton)</td><td>Your choice</td><td>Yes</td></tr>
+    <tr><td>Extra tooling</td><td>None — standard Java</td><td>None — standard Java</td><td>None</td><td>External dependency + IDE plugin</td></tr>
+    <tr><td>Inheritance</td><td>Can't extend a class</td><td>Can't extend a class (implicitly extends <code>Enum</code>)</td><td>Free</td><td>Limited</td></tr>
+    <tr><td>Pattern destructuring</td><td>Yes (record patterns)</td><td>No — matched by identity/name only</td><td>No</td><td>No</td></tr>
+    <tr><td>Best for</td><td>Immutable data carriers, one shape, many values</td><td>A small, fixed set of named constants</td><td>Behaviour-rich / mutable types</td><td>Pre-16 codebases</td></tr>
   </table>
+  <div class="tip">The record-vs-enum choice comes down to one question: <strong>is the set of values
+  fixed and known at compile time?</strong> Days of the week, HTTP methods, and status codes are enums
+  — there will only ever be exactly those constants. A <code>Point</code>, a <code>Money</code>
+  amount, or a row from a database has unlimited possible values with the same shape — that's a
+  record. (Enums <em>can</em> carry fields too — <code>MONDAY(1), TUESDAY(2)</code> — but every
+  constant is still one specific, pre-declared singleton, never a fresh instance built from runtime data.)</div>
   <div class="tip">If a type is <em>mostly data</em> and immutable, reach for a record. If it needs
   mutability, inheritance, or lots of behaviour, use a class. Records largely remove the need for
   Lombok's <code>@Value</code>/<code>@Data</code> on Java 16+.</div>

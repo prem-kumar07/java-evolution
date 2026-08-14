@@ -196,6 +196,8 @@ java -XX:AOTCacheOutput=app.aot -XX:+UseZGC -jar app.jar --record-run
 
 // production run — reuses the cache, works with the GC you actually want
 java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
+  <p>Full lineage (CDS → AppCDS → AOT Cache), verified GC-mismatch behavior, and measured startup-time
+  numbers → <a href="../topics/aot-cache.html">AOT Cache deep-dive</a>.</p>
 
   <h2>4 · JVM / performance / other</h2>
   <ul>

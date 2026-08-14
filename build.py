@@ -25,6 +25,7 @@ PAGES = [
     "topics/modules-jpms.html", "topics/stream-api.html", "topics/virtual-threads.html",
     "topics/structured-concurrency.html", "topics/scoped-values.html",
     "topics/streams-gatherers.html", "topics/ffm-api.html", "topics/jvm-memory-gc.html",
+    "topics/aot-cache.html",
 ]
 
 PAGE_SET = set(PAGES)

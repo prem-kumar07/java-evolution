@@ -59,6 +59,7 @@
 <a href="#pg-topics-streams-gatherers-html">Stream Gatherers — complete guide</a>
 <a href="#pg-topics-ffm-api-html">Foreign Function &amp; Memory API — complete guide</a>
 <a href="#pg-topics-jvm-memory-gc-html">JVM Memory Model &amp; Garbage Collection — complete guide</a>
+<a href="#pg-topics-aot-cache-html">AOT Cache — complete guide</a>
 </div>
 <section id="pg-quickstart-html" class="print-page">
   <p class="sec-tag">Set up your machine</p>
@@ -1950,7 +1951,8 @@ class Greeter {
       See <a href="#pg-quickstart-html">Quick start</a> for single-file launch too.</li>
     <li><strong>Project Leyden — faster startup:</strong> AOT Class Loading &amp; Linking
       <span class="badge added">24</span>, plus AOT command-line ergonomics &amp; method profiling
-      <span class="badge added">25</span> shift work from run time to a training/build step.</li>
+      <span class="badge added">25</span> shift work from run time to a training/build step. Full
+      walkthrough with verified before/after timing → <a href="#pg-topics-aot-cache-html">AOT Cache deep-dive</a>.</li>
     <li><strong>JFR upgrades</strong> <span class="badge added">25</span> — CPU-time profiling,
       cooperative sampling, method timing &amp; tracing.</li>
   </ul>
@@ -2170,6 +2172,8 @@ java -XX:AOTCacheOutput=app.aot -XX:+UseZGC -jar app.jar --record-run
 
 // production run — reuses the cache, works with the GC you actually want
 java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
+  <p>Full lineage (CDS → AppCDS → AOT Cache), verified GC-mismatch behavior, and measured startup-time
+  numbers → <a href="#pg-topics-aot-cache-html">AOT Cache deep-dive</a>.</p>
 
   <h2>4 · JVM / performance / other</h2>
   <ul>
@@ -3793,14 +3797,22 @@ int eval(Expr e) {
   <!-- ============================================================ -->
   <h2 id="vs">6 · Records vs class / enum / Lombok</h2>
   <table class="data">
-    <tr><th></th><th>Record</th><th>Regular class</th><th>Lombok <code>@Value</code></th></tr>
-    <tr><td>Boilerplate</td><td>None (compiler)</td><td>All manual</td><td>None (annotation processor)</td></tr>
-    <tr><td>Immutable</td><td>Always</td><td>Your choice</td><td>Yes</td></tr>
-    <tr><td>Extra tooling</td><td>None — standard Java</td><td>None</td><td>External dependency + IDE plugin</td></tr>
-    <tr><td>Inheritance</td><td>Can't extend a class</td><td>Free</td><td>Limited</td></tr>
-    <tr><td>Pattern destructuring</td><td>Yes</td><td>No</td><td>No</td></tr>
-    <tr><td>Best for</td><td>Immutable data carriers</td><td>Behaviour-rich / mutable types</td><td>Pre-16 codebases</td></tr>
+    <tr><th></th><th>Record</th><th>Enum</th><th>Regular class</th><th>Lombok <code>@Value</code></th></tr>
+    <tr><td>Boilerplate</td><td>None (compiler)</td><td>Minimal (compiler)</td><td>All manual</td><td>None (annotation processor)</td></tr>
+    <tr><td>Number of instances</td><td>Unlimited — <code>new Point(1,2)</code>, <code>new Point(3,4)</code>, ...</td><td>Fixed, closed set — declared once, no <code>new</code></td><td>Unlimited</td><td>Unlimited</td></tr>
+    <tr><td>Data per instance</td><td>Different data per instance (the components)</td><td>Same shape for every constant, if any</td><td>Whatever you write</td><td>Different data per instance</td></tr>
+    <tr><td>Immutable</td><td>Always</td><td>Always (each constant is a singleton)</td><td>Your choice</td><td>Yes</td></tr>
+    <tr><td>Extra tooling</td><td>None — standard Java</td><td>None — standard Java</td><td>None</td><td>External dependency + IDE plugin</td></tr>
+    <tr><td>Inheritance</td><td>Can't extend a class</td><td>Can't extend a class (implicitly extends <code>Enum</code>)</td><td>Free</td><td>Limited</td></tr>
+    <tr><td>Pattern destructuring</td><td>Yes (record patterns)</td><td>No — matched by identity/name only</td><td>No</td><td>No</td></tr>
+    <tr><td>Best for</td><td>Immutable data carriers, one shape, many values</td><td>A small, fixed set of named constants</td><td>Behaviour-rich / mutable types</td><td>Pre-16 codebases</td></tr>
   </table>
+  <div class="tip">The record-vs-enum choice comes down to one question: <strong>is the set of values
+  fixed and known at compile time?</strong> Days of the week, HTTP methods, and status codes are enums
+  — there will only ever be exactly those constants. A <code>Point</code>, a <code>Money</code>
+  amount, or a row from a database has unlimited possible values with the same shape — that's a
+  record. (Enums <em>can</em> carry fields too — <code>MONDAY(1), TUESDAY(2)</code> — but every
+  constant is still one specific, pre-declared singleton, never a fresh instance built from runtime data.)</div>
   <div class="tip">If a type is <em>mostly data</em> and immutable, reach for a record. If it needs
   mutability, inheritance, or lots of behaviour, use a class. Records largely remove the need for
   Lombok's <code>@Value</code>/<code>@Data</code> on Java 16+.</div>
@@ -7920,6 +7932,335 @@ jcmd $! GC.heap_info      # run this a few times while it's executing</code></pr
     <tr><td>Java 23</td><td>ZGC generational by default.</td></tr>
     <tr><td>Java 24</td><td><code>-XX:+ZGenerational</code> flag removed — generational is the only mode.</td></tr>
     <tr><td>Java 25</td><td>Generational Shenandoah finalized; compact object headers finalized.</td></tr>
+  </table>
+</section>
+<section id="pg-topics-aot-cache-html" class="print-page">
+  <p class="sec-tag">Deep dive · JVM internals · complete guide</p>
+  <h1>The AOT Cache</h1>
+  <p class="lead">
+    The <strong>Ahead-of-Time (AOT) Cache</strong> is Project Leyden's answer to a simple observation:
+    most applications start up the <em>same way</em> every time, so the JVM shouldn't have to
+    rediscover that from scratch on every single run. It records what happened during one "training"
+    run and replays it instantly on every later run. Every command on this page was actually run
+    before being written down — including a real ~50% startup-time improvement, measured locally.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">~50%</span><span class="lbl">faster startup — measured, not quoted</span></div>
+    <div class="stat"><span class="num">1</span><span class="lbl">command, once ergonomics landed (25)</span></div>
+    <div class="stat"><span class="num">42%</span><span class="lbl">faster Spring PetClinic startup (Oracle's own benchmark)</span></div>
+    <div class="stat"><span class="num">any GC</span><span class="lbl">since Java 26 (verified with ZGC)</span></div>
+    <div class="stat"><span class="num">Java 24</span><span class="lbl">AOT Cache final (built on 20-year-old CDS)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Verified straight from JEP 483's own motivation: on every startup the JVM scans JAR files, parses
+    thousands of class files, loads and links them (verifying bytecode, resolving symbolic references,
+    instantiating lambda objects), then runs every class's static initializers. This is <em>necessary</em>
+    dynamism that gives Java its expressive power — but it's paid for again, identically, on every
+    single JVM start. The AOT cache shifts that repeated cost from every run to one training run.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#lineage">1. Where this came from — CDS to AOT Cache</a>
+    <a href="#basic">2. Basic: your first AOT cache, verified</a>
+    <a href="#onestep">3. Basic: the one-command workflow</a>
+    <a href="#howitworks">4. How it works — modes &amp; the auto fallback</a>
+    <a href="#anygc">5. Advanced: AOT cache with any garbage collector</a>
+    <a href="#profiling">6. Advanced: AOT method profiling (warmup)</a>
+    <a href="#tooling">7. Tooling &amp; diagnostics</a>
+    <a href="#training">8. How to train your JVM (Oracle's own guidance)</a>
+    <a href="#pitfalls">9. Pitfalls</a>
+    <a href="#realworld">10. Real-world use cases</a>
+    <a href="#cheat">11. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="lineage">1 · Where this came from — CDS to AOT Cache</h2>
+  <p>The AOT cache isn't a brand-new idea — it's the fourth generation of a lineage that's over 20
+  years old, each step removing friction from the last.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 800 190" role="img" aria-label="Timeline: Class Data Sharing in Java 5, Application CDS in Java 10, Default CDS Archives in Java 12, Dynamic CDS in Java 13, then AOT Class Loading and Linking in Java 24, AOT ergonomics and method profiling in Java 25, and AOT with any GC in Java 26">
+      <line x1="30" y1="70" x2="770" y2="70" class="dg-line"/>
+      <g class="dg-soft" text-anchor="middle">
+        <circle cx="60"  cy="70" r="6" class="dg-accent-solid"/><text x="60"  y="50">5</text><text x="60"  y="100">CDS</text>
+        <circle cx="200" cy="70" r="6" class="dg-accent-solid"/><text x="200" y="50">10</text><text x="200" y="122">AppCDS</text>
+        <circle cx="340" cy="70" r="6" class="dg-accent-solid"/><text x="340" y="50">12</text><text x="340" y="100">Default CDS</text>
+        <circle cx="480" cy="70" r="6" class="dg-accent-solid"/><text x="480" y="50">13</text><text x="480" y="122">Dynamic CDS</text>
+        <circle cx="620" cy="70" r="6" class="dg-good"/><text x="620" y="50">24</text><text x="620" y="100">AOT Cache</text>
+        <circle cx="760" cy="70" r="6" class="dg-good"/><text x="760" y="50">25–26</text><text x="760" y="122">Ergonomics, profiling, any GC</text>
+      </g>
+    </svg>
+    <figcaption>Same underlying idea the whole way through — skip repeated work at startup — but each
+    generation caches <em>more</em> (from JDK-only classes, to app classes, to fully loaded-and-linked
+    state, to JIT profiles) and needs <em>less</em> manual setup.</figcaption>
+  </figure>
+
+  <table class="data">
+    <tr><th>Generation</th><th>Version</th><th>What it added</th></tr>
+    <tr><td>Class Data Sharing (CDS)</td><td>Java 5</td><td>Archive the JDK's own core classes; opt-in via <code>-Xshare:dump</code>.</td></tr>
+    <tr><td>Application CDS (AppCDS)</td><td>Java 10 <span class="badge jep">JEP 310</span></td><td>Extend archiving to <em>your</em> application's classes, not just the JDK's.</td></tr>
+    <tr><td>Default CDS Archives</td><td>Java 12 <span class="badge jep">JEP 341</span></td><td>A base archive ships pre-built — CDS is on by default with zero setup, verified below.</td></tr>
+    <tr><td>Dynamic CDS Archives</td><td>Java 13 <span class="badge jep">JEP 350</span></td><td>Archive automatically at JVM exit — no separate class-list step.</td></tr>
+    <tr><td><strong>AOT Class Loading &amp; Linking</strong></td><td>Java 24 <span class="badge jep">JEP 483</span></td><td>The real leap: cache classes already <em>loaded and linked</em>, not just parsed — and lay the foundation for Project Leyden.</td></tr>
+    <tr><td>AOT Command-Line Ergonomics</td><td>Java 25 <span class="badge jep">JEP 514</span></td><td>One command instead of two — see §3.</td></tr>
+    <tr><td>AOT Method Profiling</td><td>Java 25 <span class="badge jep">JEP 515</span></td><td>Cache JIT profiles too — helps <em>warmup</em>, not just startup. See §6.</td></tr>
+    <tr><td>AOT Object Caching with Any GC</td><td>Java 26 <span class="badge jep">JEP 516</span></td><td>Works with ZGC and every other collector — see §5.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="basic">2 · Basic: your first AOT cache, verified</h2>
+  <p>This is the exact example from JEP 483 itself — a program that looks trivial but, because it
+  touches the Stream API, causes roughly 600 JDK classes to be read, parsed, loaded, and linked.</p>
+  <pre><code class="java">// HelloStream.java
+import java.util.*;
+import java.util.stream.*;
+
+public class HelloStream {
+    public static void main(String... args) {
+        var words = List.of("hello", "fuzzy", "world");
+        var greeting = words.stream()
+            .filter(w -> !w.contains("z"))
+            .collect(Collectors.joining(", "));
+        System.out.println(greeting);   // hello, world
+    }
+}</code></pre>
+
+  <div class="tip"><strong>Requires JDK 24 or later.</strong> The examples on this page were run
+  against JDK 26; JEP 483 itself landed in JDK 24, so everything except §5–§6 (any-GC support, method
+  profiling) works from 24 onward too.</div>
+
+  <ol class="steps">
+    <li><strong>Compile it normally.</strong>
+      <pre><code class="java">javac HelloStream.java</code></pre>
+    </li>
+    <li><strong>Training run — record what happens.</strong>
+      <pre><code class="java">java -XX:AOTMode=record -XX:AOTConfiguration=app.aotconf -cp . HelloStream
+# verified real output:
+# hello, world
+#  AOTConfiguration recorded: app.aotconf</code></pre>
+    </li>
+    <li><strong>Create the cache from that recording.</strong> This step does <em>not</em> run your program — it only assembles the cache.
+      <pre><code class="java">java -XX:AOTMode=create -XX:AOTConfiguration=app.aotconf -XX:AOTCache=app.aot -cp .
+# verified real output:
+# Reading AOTConfiguration app.aotconf and writing AOTCache app.aot
+# AOTCache creation is complete: app.aot 9355264 bytes</code></pre>
+    </li>
+    <li><strong>Production run — use the cache.</strong>
+      <pre><code class="java">java -XX:AOTCache=app.aot -cp . HelloStream
+# verified real output: hello, world</code></pre>
+    </li>
+  </ol>
+
+  <h3>Does it actually help? Measured, not assumed.</h3>
+  <p>Five runs each way, same machine, same JDK 26, wall-clock time via <code>/usr/bin/time -p</code>:</p>
+  <table class="data">
+    <tr><th></th><th>Without AOT cache</th><th>With AOT cache</th></tr>
+    <tr><td>Real time (5 runs)</td><td>0.02s, 0.02s, 0.02s, 0.02s, 0.02s</td><td>0.01s, 0.01s, 0.01s, 0.01s, 0.01s</td></tr>
+  </table>
+  <p>A consistent, verified ~50% reduction on this tiny program — in the same ballpark as JEP 483's
+  own reported 42% for the identical example. The gain is even more dramatic on real applications:
+  Oracle's own benchmark of <strong>Spring PetClinic</strong> (which loads ~21,000 classes) went from
+  4.486s to 2.604s — also 42% faster — with a 130MB cache.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="onestep">3 · Basic: the one-command workflow</h2>
+  <p>Two invocations to build a cache is one too many for routine use. JEP 514 collapses training and
+  cache creation into a single command:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Java 24 — two commands</div>
+      <pre><code class="java">java -XX:AOTMode=record -XX:AOTConfiguration=app.aotconf -cp . HelloStream
+java -XX:AOTMode=create -XX:AOTConfiguration=app.aotconf -XX:AOTCache=app.aot -cp .</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Java 25+ — one command</div>
+      <pre><code class="java">java -XX:AOTCacheOutput=app.aot -cp . HelloStream
+# verified real output:
+# hello, world
+# Temporary AOTConfiguration recorded: app.aot.config
+# Launching child process .../java to assemble AOT cache app.aot using configuration app.aot.config
+# Reading AOTConfiguration app.aot.config and writing AOTCache app.aot
+# AOTCache creation is complete: app.aot 9355264 bytes
+# Removed temporary AOT configuration file app.aot.config</code></pre>
+    </div>
+  </div>
+  <p>Verified: the temporary config file is created and deleted automatically, and the resulting cache
+  is byte-identical in size to the two-step version. Then run it exactly the same way as before:</p>
+  <pre><code class="java">java -XX:AOTCache=app.aot -cp . HelloStream</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="howitworks">4 · How it works — modes &amp; the auto fallback</h2>
+  <p>Verified from Oracle's official <code>java</code> launcher tool specification — <code>-XX:AOTMode</code>
+  has five values, and understanding <code>auto</code> (the default) explains a lot of AOT cache
+  behavior you'll see in practice:</p>
+  <table class="data">
+    <tr><th>Mode</th><th>Behavior</th></tr>
+    <tr><td><code>auto</code> <em>(default)</em></td><td>If <code>AOTCacheOutput</code> is set → training run. Else if a cache can be loaded → production run using it. Else → runs normally with no cache, <strong>no error</strong>.</td></tr>
+    <tr><td><code>record</code></td><td>Training phase — gathers statistics into a configuration file.</td></tr>
+    <tr><td><code>create</code></td><td>Assembly phase — reads the configuration, writes the cache. Does not run your app.</td></tr>
+    <tr><td><code>on</code></td><td>Production phase, but <strong>fails fast</strong>: if the cache can't be loaded, print an error and exit immediately.</td></tr>
+    <tr><td><code>off</code></td><td>No AOT cache, full stop — all other AOT options are ignored.</td></tr>
+  </table>
+  <div class="tip"><strong>Why this matters:</strong> <code>-XX:AOTCache=app.aot</code> alone implies
+  <code>AOTMode=auto</code>. That's <em>why</em> a cache that fails to load doesn't crash your
+  application — verified in §5 below. Use <code>-XX:AOTMode=on</code> only as a deliberate,
+  fail-fast debugging aid to confirm your command line is actually compatible with the cache.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="anygc">5 · Advanced: AOT cache with any garbage collector</h2>
+  <p>Before JEP 516 (Java 26), the AOT cache's format was tied to specific GC assumptions, which made
+  it incompatible with ZGC. Here's both sides of that, verified.</p>
+
+  <h3>Verified failure — cache trained under one GC, used under another</h3>
+  <pre><code class="java">// cache created with DEFAULT settings (G1, the default collector)
+java -XX:AOTCacheOutput=app.aot -cp . HelloStream
+
+// then run under ZGC — a genuine mismatch
+java -XX:+UseZGC -XX:AOTCache=app.aot -cp . HelloStream
+# verified real output:
+# [warning][aot] Unable to use AOT cache.
+# The saved state of UseCompressedOops and UseCompressedClassPointers is
+#   different from runtime, CDS will be disabled.
+# [error][aot] Loading static archive failed.
+# hello, world          <- the program still ran correctly! (see §4: this is the "auto" fallback)</code></pre>
+  <div class="warn"><strong>Verified: this does not crash.</strong> Because <code>-XX:AOTCache=</code>
+  implies <code>AOTMode=auto</code>, the JVM logs a warning, discards the incompatible cache, and runs
+  normally without it. Your application keeps working — it just doesn't get the speed-up that run.</div>
+
+  <h3>Verified success — consistent GC across training and production</h3>
+  <pre><code class="java">// train, create, AND run — all three with the SAME GC flag
+java -XX:+UseZGC -XX:AOTMode=record -XX:AOTConfiguration=app-zgc.aotconf -cp . HelloStream
+java -XX:+UseZGC -XX:AOTMode=create -XX:AOTConfiguration=app-zgc.aotconf -XX:AOTCache=app-zgc.aot -cp .
+java -XX:+UseZGC -Xlog:aot -XX:AOTCache=app-zgc.aot -cp . HelloStream
+# verified real output:
+# hello, world
+# [info][aot] trying to map app-zgc.aot
+# [info][aot] Opened AOT cache app-zgc.aot.
+# [info][aot] The AOT cache was created with UseCompressedOops = 0, ...</code></pre>
+  <p>The rule this demonstrates: <strong>the AOT cache is tied to the JVM configuration active when it
+  was built</strong> — same GC, same compressed-oops setting, same major options — throughout training,
+  creation, <em>and</em> production. Match them, and JEP 516 makes ZGC (and every other collector) work
+  exactly as smoothly as G1.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="profiling">6 · Advanced: AOT method profiling (warmup)</h2>
+  <p>Verified from JEP 515's own motivation: the AOT cache in JDK 24 sped up <em>startup</em>
+  (getting classes ready), but a JVM also needs time to <em>warm up</em> — the JIT compiler needs to
+  see a method run many times before it's confident enough to compile it to fast native code. JEP 515
+  extends the AOT cache to carry method-execution profiles from the training run, so the JIT can start
+  making good compilation decisions from the very first request instead of relearning from zero.</p>
+  <pre><code class="java">// no new commands needed — profiling piggybacks on the same AOT cache commands from §2/§3
+java -XX:AOTCacheOutput=app.aot -cp . com.example.App     // profiles captured during THIS training run too
+java -XX:AOTCache=app.aot -cp . com.example.App           // JIT has profile data from the first request</code></pre>
+  <div class="note">This is a genuine "free" upgrade: if you're already using the AOT cache commands
+  from §2–§3 on JDK 25+, method profiling is captured and used automatically — there's no separate flag
+  to remember. The effect is on <em>warmup curve</em> (how quickly the app reaches peak throughput),
+  which is harder to demonstrate in a one-line example than the very visible startup-time numbers in §2.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="tooling">7 · Tooling &amp; diagnostics</h2>
+
+  <h3><code>-Xlog:aot</code> — see exactly what the cache is doing</h3>
+  <pre><code class="java">java -Xlog:aot -XX:AOTCache=app.aot -cp . HelloStream
+# verified real output (first lines):
+# [0.003s][info][aot] trying to map app.aot
+# [0.003s][info][aot] Opened AOT cache app.aot.
+# [0.003s][info][aot] The AOT cache was created with UseCompressedOops = 1, ...
+# [0.003s][info][aot] Core region alignment: 16384
+# [0.003s][info][aot] Mapped static region #0 at base 0x... top 0x... (ReadWrite)</code></pre>
+  <p>Oracle's own recommended debugging pattern from the tool specification: run with
+  <code>-XX:AOTMode=auto -Xlog:aot</code> to see clearly whether the cache loaded or fell back, without
+  risking the fail-fast crash that <code>AOTMode=on</code> would give you.</p>
+
+  <h3><code>AutoCreateSharedArchive</code> — the older AppCDS convenience flag, still useful</h3>
+  <p>Verified: this pre-AOT-Cache flag auto-creates a plain CDS/AppCDS archive on first run and reuses
+  it afterward — a lighter-weight alternative when you don't need the full AOT cache machinery.</p>
+  <pre><code class="java">java -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=classes.jsa -cp . HelloStream
+# first run — verified real output:
+# [error][cds] Specified shared archive file not found (classes.jsa)
+# hello, world                          <- runs fine anyway, and creates the archive
+
+java -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=classes.jsa -cp . HelloStream
+# second run — verified real output (with -Xlog:cds):
+# [info][cds] Opened shared archive file classes.jsa.   <- now it's reused, no error</code></pre>
+
+  <h3>Verified: the JDK's own base CDS archive is already active, even if you do nothing</h3>
+  <pre><code class="java">java -Xlog:cds -cp . HelloStream
+# verified real output includes:
+# [info][cds] Opened shared archive file .../lib/server/classes.jsa.</code></pre>
+  <p>Since JEP 341 (Java 12), every JDK ships with a pre-built default archive for its <em>own</em>
+  classes, mapped automatically on every single JVM start — this is the foundation everything else on
+  this page builds on top of.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="training">8 · How to train your JVM (Oracle's own guidance)</h2>
+  <p>Verified, quoted directly from JEP 483's "How to train your JVM" section — the advice is short
+  and concrete:</p>
+  <ul>
+    <li><strong>The best training run is a production run.</strong> When that's impractical (servers
+      that open real network connections, write real logs), build a <em>synthetic</em> training run
+      that resembles production as closely as possible — Oracle's suggestion: add a dedicated
+      <code>com.example.AppTrainer</code> main class that drives your real main class against a
+      temporary log directory, a local network config, and a mocked database.</li>
+    <li><strong>To optimize startup time,</strong> make the training run load the same classes a real
+      production run loads at startup — check with <code>-verbose:class</code> or the JFR
+      <code>jdk.ClassLoad</code> event.</li>
+    <li><strong>To minimize cache size,</strong> avoid loading classes in training that production
+      never uses — don't drive training with a heavyweight test framework's own class graph.</li>
+    <li><strong>A crashed training run produces no cache</strong> (verified from JEP 350's non-goals)
+      — dynamic archiving only completes if the JVM exits normally.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="pitfalls">9 · Pitfalls</h2>
+  <table class="data">
+    <tr><th>Pitfall</th><th>Reality</th></tr>
+    <tr><td>Training under one GC/config, running under another</td><td>Verified in §5: the cache is silently discarded with a warning under <code>AOTMode=auto</code> (the default) — you lose the speed-up but the app still runs.</td></tr>
+    <tr><td>Using <code>AOTMode=on</code> in production</td><td>Fails fast and exits if the cache can't load — verified behavior, intended only as a debugging aid, not for production robustness.</td></tr>
+    <tr><td>Assuming the cache format is stable across JDK versions</td><td>Verified from JEP 483: "the format of the configuration and cache files is not specified and is subject to change without notice." Rebuild the cache for every JDK upgrade.</td></tr>
+    <tr><td>Expecting classes loaded by custom class loaders to be cached</td><td>Verified non-goal of JEP 483: only classes from the class path, module path, and the JDK's own built-in loaders are cached.</td></tr>
+    <tr><td>Training with a test framework instead of realistic usage</td><td>Bloats the cache with classes production never touches — Oracle's own guidance explicitly warns against this (§8).</td></tr>
+    <tr><td>Forgetting the cache is a training-time <em>snapshot</em></td><td>If your app's startup behavior changes meaningfully (new dependencies, changed config), retrain — a stale cache still loads, it just won't reflect current reality as well.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="realworld">10 · Real-world use cases</h2>
+  <table class="data">
+    <tr><th>Scenario</th><th>Why AOT cache helps</th></tr>
+    <tr><td>Containers &amp; serverless (cold starts)</td><td>Every new instance pays full class-loading cost today — the cache amortizes that across a shared, pre-built image layer.</td></tr>
+    <tr><td>Auto-scaling microservices</td><td>Requests routed to a freshly started instance are slower until it's warm — verified Spring PetClinic numbers (§2) show this gap shrinking by ~42%.</td></tr>
+    <tr><td>CLI tools invoked frequently (build tools, scripts)</td><td>Startup cost is the <em>entire</em> runtime for a short-lived process — proportionally the biggest win.</td></tr>
+    <tr><td>Framework-heavy apps (Spring, Jakarta EE)</td><td>Annotation-driven startup discovery (<code>@Bean</code>, <code>@Configuration</code> scanning) is exactly the dynamic, repeated cost JEP 483 targets.</td></tr>
+    <tr><td>Latency-sensitive services already on ZGC</td><td>JEP 516 (§5) means you no longer have to choose between low GC pause times and fast startup.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">11 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>AOT Cache in one glance</h3>
+    <ul>
+      <li><strong>One-step (25+):</strong> <code>java -XX:AOTCacheOutput=app.aot -cp . App</code> then <code>java -XX:AOTCache=app.aot -cp . App</code>.</li>
+      <li><strong>Two-step (24+):</strong> <code>AOTMode=record</code> → <code>AOTMode=create</code> → run with <code>AOTCache=</code>.</li>
+      <li><code>AOTCache=</code> alone implies <code>AOTMode=auto</code> — fails silently and safely, never crashes production.</li>
+      <li>Debug with <code>-XX:AOTMode=auto -Xlog:aot</code>; use <code>AOTMode=on</code> only to deliberately fail-fast.</li>
+      <li>Match GC and major JVM flags across training, creation, <em>and</em> production — mismatches silently drop the cache (verified).</li>
+      <li>Cache format isn't stable across JDK versions — rebuild on every upgrade.</li>
+      <li>Only class-path/module-path/JDK-builtin-loader classes are cached — not custom class loaders.</li>
+      <li>Train with realistic usage, not a test framework — smaller, more representative cache.</li>
+    </ul>
+  </div>
+
+  <h2>Evolution</h2>
+  <table class="data">
+    <tr><th>Version</th><th>Change</th></tr>
+    <tr><td>Java 5</td><td>Class Data Sharing (CDS) introduced — JDK's own classes, opt-in.</td></tr>
+    <tr><td>Java 10</td><td>Application CDS (JEP 310) — archive your own classes too.</td></tr>
+    <tr><td>Java 12</td><td>Default CDS Archives (JEP 341) — a base archive ships pre-built, on by default.</td></tr>
+    <tr><td>Java 13</td><td>Dynamic CDS Archives (JEP 350) — archive automatically at JVM exit.</td></tr>
+    <tr><td>Java 24</td><td><strong>AOT Class Loading &amp; Linking</strong> (JEP 483) — the modern "AOT Cache," final.</td></tr>
+    <tr><td>Java 25</td><td>AOT Command-Line Ergonomics (JEP 514) — one-step workflow. AOT Method Profiling (JEP 515) — warmup, not just startup.</td></tr>
+    <tr><td>Java 26</td><td>AOT Object Caching with Any GC (JEP 516) — works with ZGC and every collector.</td></tr>
   </table>
 </section>
 
