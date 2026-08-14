@@ -206,16 +206,31 @@ opens com.myapp.model to com.fasterxml.jackson.databind;
   package-by-package <code>opens</code>).</p>
 
   <!-- ============================================================ -->
-  <h2 id="paths">6 · Classpath vs module path</h2>
+  <h2 id="paths">6 · Classpath vs module path &amp; legacy JARs</h2>
+  <p>The JPMS introduces the <strong>module path</strong> (<code>-p</code>), but the legacy <strong>classpath</strong> (<code>-cp</code>) still fully works. How the JVM treats a JAR depends entirely on <em>where you put it</em> and <em>whether it has a <code>module-info.class</code></em>.</p>
+  
   <table class="data">
-    <tr><th></th><th>Classpath (legacy)</th><th>Module path</th></tr>
-    <tr><td>Flag</td><td><code>-cp</code></td><td><code>-p</code> / <code>--module-path</code></td></tr>
-    <tr><td>Encapsulation</td><td>None — all public reachable</td><td>Only <code>exported</code> packages</td></tr>
-    <tr><td>A plain JAR becomes</td><td>Part of the "unnamed module"</td><td>An <em>automatic module</em> (name from JAR)</td></tr>
+    <tr><th>JAR Type</th><th>Placed on Classpath (<code>-cp</code>)</th><th>Placed on Module Path (<code>-p</code>)</th></tr>
+    <tr><td><strong>Legacy JAR</strong><br><small>(No module-info)</small></td><td>Becomes part of the <strong>Unnamed Module</strong>.<br>Reads everything, exports everything.</td><td>Becomes an <strong>Automatic Module</strong>.<br>Name derived from filename (e.g. <code>gson-2.8.jar</code> → <code>gson</code>). Reads everything, exports everything. Can be <code>required</code> by strict modules!</td></tr>
+    <tr><td><strong>Modular JAR</strong><br><small>(Has module-info)</small></td><td><code>module-info</code> is <strong>ignored</strong>! Treated exactly like a legacy JAR in the unnamed module.</td><td>Becomes a <strong>Named Module</strong>.<br>Strict encapsulation applies.</td></tr>
   </table>
-  <pre><code class="java">javac -d out --module-source-path src $(find src -name '*.java')
-java -p out -m com.myapp/com.myapp.Main      # run module/mainclass
-java --list-modules                           # what's available</code></pre>
+
+  <h3>How to run with legacy code</h3>
+  <div class="ba">
+    <div class="before"><div class="ba-label">1. Pure legacy (Java 8 style)</div>
+      <pre><code class="java"># Everything goes on the classpath. No modules exist.
+java -cp "my-app.jar:lib/*" com.myapp.Main</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">2. Mixing modules &amp; legacy</div>
+      <pre><code class="java"># Put strict modules on module path, legacy on classpath
+# Note: Named modules CANNOT require the unnamed module.
+java -p my-app.jar -cp "legacy-libs/*" -m com.myapp/com.myapp.Main
+
+# Better: Put legacy JARs on the module path!
+# They become "Automatic Modules" so your strict code can require them.
+java -p "my-app.jar:legacy-libs/*" -m com.myapp/com.myapp.Main</code></pre>
+    </div>
+  </div>
 
   <!-- ============================================================ -->
   <h2 id="services">7 · Services (ServiceLoader) — complete example</h2>
@@ -284,21 +299,36 @@ public class Main {
   </ul>
 
   <!-- ============================================================ -->
-  <h2 id="tooling">9 · Tooling: jlink &amp; jdeps</h2>
-  <div class="ba">
-    <div class="before"><div class="ba-label">Legacy — ship the whole JRE</div>
-      <pre><code class="java"># container image bundles a full ~200MB+ JRE
-FROM eclipse-temurin:25
-COPY app.jar /app.jar
-CMD ["java","-jar","/app.jar"]</code></pre>
-    </div>
-    <div class="after"><div class="ba-label">jlink — a minimal custom runtime</div>
-      <pre><code class="java">jlink --add-modules com.myapp,java.net.http \
-      --output myruntime --strip-debug --compress=2
-# myruntime/bin/java is a self-contained, much smaller runtime
-jdeps --jdk-internals app.jar   # find internal-API usage first</code></pre>
-    </div>
-  </div>
+  <h2 id="tooling">9 · Tooling: jdeps, jlink, and jpackage</h2>
+  <p>The module system enabled the creation of three powerful tools that completely change how Java apps are distributed: you no longer tell users to "install Java"; you just hand them an installer.</p>
+
+  <h3>1. <code>jdeps</code> (Dependency Analysis)</h3>
+  <p>Scans your JARs to find exactly which JDK modules your code actually requires, and flags any illegal usage of internal JDK APIs (like <code>sun.misc.Unsafe</code>).</p>
+  <pre><code class="java"># What JDK modules does my app need? (Output might be: java.base, java.desktop)
+jdeps --module-path libs -summary my-app.jar
+
+# Am I using any hidden/removed JDK internal APIs?
+jdeps --jdk-internals my-app.jar</code></pre>
+
+  <h3>2. <code>jlink</code> (Custom Runtime Generator)</h3>
+  <p>Why ship a 250MB JRE if your app only uses <code>java.base</code>? <code>jlink</code> strips away unused JDK modules (like Swing or CORBA) to build a minimal, custom JVM just for your app.</p>
+  <pre><code class="java"># Create a tiny custom JVM containing only your app's required modules
+jlink --module-path $JAVA_HOME/jmods:./libs \
+      --add-modules java.base,com.myapp \
+      --strip-debug --no-man-pages --no-header-files --compress=2 \
+      --output my-custom-jre
+# Result: my-custom-jre/bin/java is a fully functional, ~30MB runtime!</code></pre>
+
+  <h3>3. <code>jpackage</code> (Native Installer Builder) <span class="badge added">Java 16</span></h3>
+  <p>Takes your JARs and your custom <code>jlink</code> runtime, and wraps them into a native installer (<code>.exe</code>, <code>.dmg</code>, <code>.deb</code>). The user just double-clicks the installer — they don't even know it's a Java app.</p>
+  <pre><code class="java"># Build a Windows MSI installer (must be run on Windows)
+jpackage --type msi \
+         --name "MyApp" \
+         --input ./libs \
+         --main-jar my-app.jar \
+         --main-class com.myapp.Main \
+         --runtime-image ./my-custom-jre \
+         --win-shortcut --win-menu</code></pre>
 
   <!-- ============================================================ -->
   <h2 id="pitfalls">10 · Pitfalls</h2>
