@@ -88,6 +88,29 @@ module com.myapp {
   </table>
 
   <!-- ============================================================ -->
+  <h2 id="advanced-directives">3b · Advanced Directives: transitive and static</h2>
+  <p>Two modifiers on the <code>requires</code> directive give you fine-grained control over visibility and runtime footprint:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">requires transitive</div>
+      <pre><code class="java">module my.data.layer {
+  // Anyone who requires my.data.layer ALSO gets java.sql automatically.
+  // Use this when your public API exposes types from another module
+  // (e.g., your public methods return a java.sql.Connection).
+  requires transitive java.sql;
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">requires static</div>
+      <pre><code class="java">module my.utils {
+  // Compile-time only dependency. 
+  // Required to compile, but completely optional at runtime.
+  // Perfect for annotations like Lombok or JMH that aren't 
+  // needed by the JVM when actually running the app.
+  requires static lombok;
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
   <h2 id="graph">4 · A module graph</h2>
   <figure class="diagram">
     <svg viewBox="0 0 760 220" role="img" aria-label="com.myapp requires com.mylib and java.net.http; it exports its api package and opens its model package">
@@ -142,6 +165,13 @@ opens com.myapp.model to com.fasterxml.jackson.databind;
 // everyone else is still blocked</code></pre>
     </div>
   </div>
+  
+  <p><strong>The dreaded error:</strong> If you use a reflection-based library (like Gson, Jackson, or Spring) to inspect a class in a module that is <em>not</em> opened, Java will throw a strict exception at runtime instead of silently failing:</p>
+  <pre><code class="java">java.lang.reflect.InaccessibleObjectException: 
+  Unable to make field private java.lang.String com.myapp.model.User.name 
+  accessible: module com.myapp does not "opens com.myapp.model" to unnamed module...</code></pre>
+  <p>To fix this, you must either add an <code>opens</code> directive to your <code>module-info.java</code> or use the <code>--add-opens</code> command-line escape hatch.</p>
+
 
   <!-- ============================================================ -->
   <h2 id="openmodule">5b · <code>open module</code> — opening everything at once</h2>
@@ -188,24 +218,58 @@ java -p out -m com.myapp/com.myapp.Main      # run module/mainclass
 java --list-modules                           # what's available</code></pre>
 
   <!-- ============================================================ -->
-  <h2 id="services">7 · Services (ServiceLoader)</h2>
-  <p>Modules formalise the plugin pattern: a module <code>provides</code> an implementation, another
-  <code>uses</code> the interface, and <code>ServiceLoader</code> wires them.</p>
-  <div class="ba">
-    <div class="before"><div class="ba-label">Legacy — META-INF/services text files</div>
-      <pre><code class="java">// META-INF/services/com.myapp.spi.Plugin
-com.acme.FancyPlugin
-// loaded via ServiceLoader.load(Plugin.class) — no compile-time check</code></pre>
-    </div>
-    <div class="after"><div class="ba-label">Module declarations</div>
-      <pre><code class="java">// provider module
-module com.acme { provides com.myapp.spi.Plugin with com.acme.FancyPlugin; }
-// consumer module
-module com.myapp { uses com.myapp.spi.Plugin; }
-// checked by the compiler &amp; module system
-ServiceLoader.load(Plugin.class).forEach(Plugin::run);</code></pre>
-    </div>
-  </div>
+  <h2 id="services">7 · Services (ServiceLoader) — complete example</h2>
+  <p>Modules formalise the plugin pattern. Instead of hard-coding dependencies on implementation classes, a module <code>provides</code> an implementation, another <code>uses</code> the interface, and the JVM's <code>ServiceLoader</code> wires them together at runtime. This completely replaces the old <code>META-INF/services</code> text files.</p>
+  
+  <p><strong>Step 1: The API module</strong> (defines the contract)</p>
+  <pre><code class="java">// module-info.java
+module com.myapp.api {
+  exports com.myapp.spi;
+}
+
+// com/myapp/spi/Plugin.java
+package com.myapp.spi;
+public interface Plugin {
+    void run();
+}</code></pre>
+
+  <p><strong>Step 2: The Provider module</strong> (implements the contract)</p>
+  <pre><code class="java">// module-info.java
+module com.acme.impl {
+  requires com.myapp.api;
+  // We do NOT export the implementation package! It remains hidden.
+  provides com.myapp.spi.Plugin with com.acme.impl.FancyPlugin; 
+}
+
+// com/acme/impl/FancyPlugin.java
+package com.acme.impl;
+import com.myapp.spi.Plugin;
+public class FancyPlugin implements Plugin {
+    public void run() { System.out.println("Running fancy plugin!"); }
+}</code></pre>
+
+  <p><strong>Step 3: The Consumer module</strong> (uses the contract)</p>
+  <pre><code class="java">// module-info.java
+module com.myapp.app {
+  requires com.myapp.api;
+  uses com.myapp.spi.Plugin; // Declares intent to load this service
+}
+
+// com/myapp/app/Main.java
+package com.myapp.app;
+import com.myapp.spi.Plugin;
+import java.util.ServiceLoader;
+
+public class Main {
+    public static void main(String[] args) {
+        // The JVM automatically discovers FancyPlugin on the module path!
+        // Notice: we do NOT require com.acme.impl anywhere.
+        Iterable&lt;Plugin&gt; plugins = ServiceLoader.load(Plugin.class);
+        for (Plugin p : plugins) {
+            p.run(); 
+        }
+    }
+}</code></pre>
 
   <!-- ============================================================ -->
   <h2 id="migration">8 · Migration &amp; escape hatches</h2>
