@@ -246,6 +246,7 @@ try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
 
 // For comparison, an explicit platform thread:
 Thread p = Thread.ofPlatform().name("io").start(() -> doWork());</code></pre>
+  <p><code>Thread.ofVirtual().unstarted(task)</code> — creates but does not start the thread; useful when you need to configure additional properties (e.g., name, uncaught-exception handler) before starting.</p>
   <div class="note"><strong>Check at runtime:</strong> <code>Thread.currentThread().isVirtual()</code>
   returns <code>true</code> inside a virtual thread.</div>
 
@@ -328,7 +329,7 @@ try { return jdbc.query(sql); } finally { db.release(); }</code></pre>
     <li>Blocking inside a <code>synchronized</code> block or method.</li>
     <li>Calling a native method / foreign function while blocked.</li>
   </ol>
-  <p><strong>Java 24 (JEP 491) removed the <code>synchronized</code> cause entirely</strong> — the big
+  <p><strong>Java 24 <span class="badge jep">JEP 491</span> removed the <code>synchronized</code> cause entirely</strong> — the big
   one. Native-call pinning remains but is rare in application code.</p>
 
   <figure class="diagram">

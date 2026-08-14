@@ -368,6 +368,7 @@ int eval(Expr e) {
     if (cents &lt; 0) throw new IllegalArgumentException("negative");
   }
 }</code></pre>
+  <p><strong>Note:</strong> Records are <em>not</em> serializable by default. The class must explicitly declare <code>implements java.io.Serializable</code>. The guarantee that deserialization routes through the canonical constructor only applies when serialization is enabled.</p>
 
   <!-- ============================================================ -->
   <h2 id="pitfalls">9 · Pitfalls</h2>

@@ -130,6 +130,7 @@ Stream.of(1,2,3).gather(Gatherers.scan(() -> "", (acc, n) -> acc + n)).toList();
   the operation is inherently order-dependent (no combiner needed).</p>
   <pre><code class="java">Optional&lt;String&gt; result = Stream.of(1,2,3,4,5,6,7,8,9)
     .gather(Gatherers.fold(() -> "", (acc, n) -> acc + n))
+  <p><strong>fold vs reduce:</strong> <code>fold</code> emits <em>exactly one</em> final element after the entire stream is consumed, and supports an arbitrary accumulator type <code>R</code> that differs from the element type <code>T</code>. <code>Stream.reduce()</code> returns an <code>Optional</code> and requires the accumulated type to match the element type. Use <code>fold</code> when you need type transformation during accumulation.</p>
     .findFirst();
 // Optional["123456789"]</code></pre>
 
@@ -140,6 +141,7 @@ Stream.of(1,2,3).gather(Gatherers.scan(() -> "", (acc, n) -> acc + n)).toList();
   <pre><code class="java">var bodies = urls.stream()
     .gather(Gatherers.mapConcurrent(10, this::fetch))
     .toList();   // ≤10 in flight, order preserved</code></pre>
+  <p><strong>Implementation note:</strong> <code>mapConcurrent(n, fn)</code> internally runs tasks on virtual threads, bounded by a semaphore of size <code>n</code>. It reorders outputs to match input encounter order regardless of task completion order, making it safe and deterministic for I/O-bound operations.</p>
 
   <h3>Before &amp; after — replacing a manual windowing loop</h3>
   <div class="ba">

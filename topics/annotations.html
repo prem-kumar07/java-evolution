@@ -119,7 +119,7 @@ public class Widget { ... }</code></pre>
     <tr><td><code>@Override</code></td><td>Tells the compiler this must override a superclass method — a typo in the signature becomes a compile error instead of a silently-new method.</td></tr>
     <tr><td><code>@Deprecated</code></td><td>Warns on use. <code>@Deprecated(since="9", forRemoval=true)</code> (Java 9+) says exactly when and whether it's actually going away.</td></tr>
     <tr><td><code>@SuppressWarnings("...")</code></td><td>Silences specific compiler warning categories: <code>unchecked</code>, <code>deprecation</code>, <code>removal</code>, <code>preview</code>.</td></tr>
-    <tr><td><code>@SafeVarargs</code></td><td>Asserts a varargs method doesn't do anything unsafe with its varargs array — suppresses the unchecked-varargs warning.</td></tr>
+    <tr><td><code>@SafeVarargs</code></td><td>Asserts a varargs method doesn't do anything unsafe with its varargs array — suppresses the unchecked-varargs warning. <span class="badge jep">JEP 213 (Milling Project Coin, Java 9)</span> allowed this on private methods.</td></tr>
     <tr><td><code>@FunctionalInterface</code></td><td>Documents intent and gets the compiler to verify the interface really has exactly one abstract method.</td></tr>
   </table>
 
@@ -129,7 +129,7 @@ public class Widget { ... }</code></pre>
     <tr><th>Meta-annotation</th><th>Controls</th></tr>
     <tr><td><code>@Retention</code></td><td>How long the annotation survives: <code>SOURCE</code>, <code>CLASS</code>, or <code>RUNTIME</code> — see §6.</td></tr>
     <tr><td><code>@Target</code></td><td>Which kinds of declarations/uses it's legal on — see the full list below.</td></tr>
-    <tr><td><code>@Documented</code></td><td>Include it in generated Javadoc.</td></tr>
+    <tr><td><code>@Documented</code></td><td>Include it in generated Javadoc. <p><strong>Common pitfall:</strong> <code>@Documented</code> is <em>absent by default</em>. Custom annotations do not appear in generated Javadoc unless <code>@Documented</code> is explicitly added to the annotation declaration. This is a frequent oversight when writing annotation-based APIs.</p></td></tr>
     <tr><td><code>@Inherited</code></td><td>A subclass "sees" its superclass's annotation too — <strong>class declarations only</strong>, verified below.</td></tr>
     <tr><td><code>@Repeatable</code></td><td>Allows the same annotation to be applied more than once — see §8.</td></tr>
   </table>

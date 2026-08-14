@@ -356,6 +356,7 @@ String stats = "sum=" + sum + " count=" + count;</code></pre>
 // "sum=425000.0 count=5"</code></pre>
     </div>
   </div>
+  <p><strong>Key property:</strong> <code>teeing()</code> performs a <em>single pass</em> over the stream, branching each element into two independent sub-collectors simultaneously — not two sequential passes. This makes it efficient for combined aggregations like (sum + count) or (min + max) without iterating the source twice.</p>
 
   <!-- ============================================================ -->
   <h2 id="customcollector">6 · Writing a custom Collector</h2>

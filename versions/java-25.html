@@ -46,7 +46,7 @@
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 
-  <h3>Compact source files &amp; instance <code>main</code> <span class="badge added">Final in 25</span></h3>
+  <h3>Compact source files &amp; instance <code>main</code> <span class="badge added">Final in 25</span> <span class="badge jep">JEP 512</span></h3>
   <p><em>Why it matters:</em> a runnable program with no <code>class</code>, no <code>public
   static</code>, no explicit <code>java.base</code> imports, and a simple <code>IO</code> helper — much
   gentler for learners and scripts. The full ceremony is still available when you need it.</p>
@@ -66,7 +66,7 @@
     </div>
   </div>
 
-  <h3>Flexible constructor bodies <span class="badge added">Final in 25</span></h3>
+  <h3>Flexible constructor bodies <span class="badge added">Final in 25</span> <span class="badge jep">JEP 513</span></h3>
   <p><em>Why it matters:</em> validate or normalise arguments <em>before</em> calling
   <code>super(...)</code>/<code>this(...)</code> — previously impossible, forcing awkward workarounds.</p>
   <div class="ba">
@@ -88,7 +88,7 @@
     </div>
   </div>
 
-  <h3>Module import declarations <span class="badge added">Final in 25</span></h3>
+  <h3>Module import declarations <span class="badge added">Final in 25</span> <span class="badge jep">JEP 511</span></h3>
   <p><em>Why it matters:</em> import <em>every</em> package a module exports in one line — great for scripts and prototypes.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
@@ -117,7 +117,7 @@ if (p instanceof Point(int x, _)) use(x);   // ignore y</code></pre>
     </div>
   </div>
 
-  <h3>Scoped values <span class="badge added">Final in 25</span></h3>
+  <h3>Scoped values <span class="badge added">Final in 25</span> <span class="badge jep">JEP 506</span></h3>
   <p><em>Why it matters:</em> an immutable, auto-cleaning replacement for <code>ThreadLocal</code>,
   designed for virtual threads.</p>
   <div class="ba">
@@ -140,13 +140,15 @@ finally { CURRENT.remove(); }   // leak if forgotten</code></pre>
       <a href="../topics/structured-concurrency.html">deep-dive</a>.</li>
     <li><strong>Stable Values</strong> <span class="badge preview">Preview</span> — write-once, lazy, thread-safe constants:
       <pre><code class="java">StableValue&lt;Logger&gt; logger = StableValue.of();
-Logger l = logger.orElseSet(() -> createLogger());   // computed at most once</code></pre></li>
+Logger l = logger.orElseSet(() -> createLogger());   // computed at most once</code></pre>
+      <p class="note"><strong>Note (Java 26):</strong> <code>StableValue</code> was renamed to <code>LazyConstant</code> in Java 26 (second preview). Code targeting Java 25 preview uses <code>StableValue</code>; Java 26 uses <code>LazyConstant</code>.</p>
+    </li>
   </ul>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
-  <h3>Stream Gatherers <span class="badge added">Final in 24</span></h3>
+  <h3>Stream Gatherers <span class="badge added">Final in 24</span> <span class="badge jep">JEP 485</span></h3>
   <p><em>Why it matters:</em> custom <em>intermediate</em> operations — the missing counterpart to a custom <code>Collector</code>.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — manual windowing</div>
@@ -163,7 +165,7 @@ for (int i = 0; i + 3 &lt;= xs.size(); i++)
   </div>
   <p>Writing your own gatherer → <a href="../topics/streams-gatherers.html">Streams &amp; Gatherers deep-dive</a>.</p>
 
-  <h3>Foreign Function &amp; Memory API <span class="badge added">Final in 22</span></h3>
+  <h3>Foreign Function &amp; Memory API <span class="badge added">Final in 22</span> <span class="badge jep">JEP 454</span></h3>
   <p><em>Why it matters:</em> call native libraries and manage off-heap memory in pure Java — the
   safe, supported replacement for JNI.</p>
   <pre><code class="java">// call C's strlen() — no C glue code, no build step
@@ -180,6 +182,7 @@ try (Arena arena = Arena.ofConfined()) {
   <a href="../topics/ffm-api.html">FFM deep-dive</a>.</p>
 
   <h3>Cryptography</h3>
+  <!-- KDF API: JEP 510 (Java 25) -->
   <p><em>Why it matters:</em> the Key Derivation Function API gives HKDF (and future algorithms) a
   standard, uniform API — before 25, teams either hand-rolled HKDF from <code>javax.crypto.Mac</code>
   (easy to get subtly wrong) or pulled in a third-party crypto library just for this.</p>

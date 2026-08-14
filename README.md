@@ -25,7 +25,7 @@ print.html            All-in-one, print/PDF-friendly build (generated)
 versions/             One page per stepping-stone release (5 sections + before/after each)
   java-8.html   (LTS) lambdas, streams, default methods, Optional, java.time, CompletableFuture
   java-9.html         Modules, JShell, collection factories, Flow
-  java-11.html  (LTS) var (10), HttpClient, single-file launch, String/Files APIs
+  java-11.html  (LTS) var in lambda params (11; var for locals is Java 10), HttpClient, single-file launch, String/Files APIs
   java-17.html  (LTS) records, sealed, switch expressions, text blocks, patterns  (folds in 12–16)
   java-21.html  (LTS) virtual threads, switch patterns, record patterns, sequenced collections  (18–20)
   java-25.html  (LTS) scoped values, gatherers, FFM, compact source files, module imports  (22–24)
@@ -34,7 +34,7 @@ versions/             One page per stepping-stone release (5 sections + before/a
 topics/               Deep-dive pages
   var, records, sealed-classes, pattern-matching-switch, text-blocks-strings, modules-jpms,
   stream-api, virtual-threads, structured-concurrency, scoped-values, streams-gatherers,
-  ffm-api, jvm-memory-gc
+  ffm-api, jvm-memory-gc, reflection, generics, annotations
 
 assets/
   style.css           Light/dark theme, responsive layout

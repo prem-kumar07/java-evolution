@@ -224,6 +224,7 @@ void repo() {
     </ul>
   </div>
 
+  <p><strong>Package migration note:</strong> The Java 20 incubator (JEP 429) placed <code>ScopedValue</code> in <code>jdk.incubator.concurrent</code>. Starting from the Java 21 preview (JEP 446), it moved to <code>java.lang</code>. Any code written against the incubator package must be updated to use <code>java.lang.ScopedValue</code>.</p>
   <h2>Evolution</h2>
   <table class="data">
     <tr><th>Version</th><th>Change</th></tr>

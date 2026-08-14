@@ -114,9 +114,11 @@ String padded = """
 
   <!-- ============================================================ -->
   <h2 id="templating">4 · Templating &amp; interpolation</h2>
-  <p>Java's dedicated <em>string templates</em> feature was previewed (21–22) then <strong>withdrawn</strong>
-  for redesign, so there is no <code>STR."..."</code> in stable Java. The idiomatic approach is
-  <code>formatted</code> / <code>String.format</code> with a text block:</p>
+  <div class="gotcha">
+    <strong>⚠ String Templates permanently withdrawn.</strong>
+    Previewed as JEP 430 (Java 21) and JEP 459 (Java 22), then completely dropped — the <code>STR."..."</code> interpolation syntax will <em>never</em> ship in stable Java. Use <code>String.formatted()</code>, <code>MessageFormat</code>, or a logging framework instead.
+  </div>
+  <p>The idiomatic approach is <code>formatted</code> / <code>String.format</code> with a text block:</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Legacy</div>
       <pre><code class="java">String msg = "{\n" +
@@ -141,7 +143,7 @@ String padded = """
     <tr><td><code>strip() / stripLeading() / stripTrailing()</code></td><td>11</td><td>Unicode-aware trim (<code>trim()</code> is ASCII-only).</td></tr>
     <tr><td><code>repeat(n)</code></td><td>11</td><td>Repeat the string n times.</td></tr>
     <tr><td><code>lines()</code></td><td>11</td><td><code>Stream&lt;String&gt;</code> of lines.</td></tr>
-    <tr><td><code>indent(n)</code></td><td>12</td><td>Add/remove n spaces of indentation per line.</td></tr>
+    <tr><td><code>indent(n)</code></td><td>12</td><td>Add/remove n spaces of indentation per line. Negative <code>n</code> removes up to <code>|n|</code> leading whitespace characters (only whitespace is removed, never non-whitespace).</td></tr>
     <tr><td><code>transform(fn)</code></td><td>12</td><td>Apply a function to the whole string (fluent).</td></tr>
     <tr><td><code>formatted(args)</code></td><td>15</td><td>Instance form of <code>String.format</code>.</td></tr>
     <tr><td><code>stripIndent()</code></td><td>15</td><td>Apply text-block indentation stripping to any string.</td></tr>

@@ -143,6 +143,7 @@ String describe(Status s) {
   };
 }</code></pre></li>
   </ul>
+  <div class="note"><strong>Requires Java 21+</strong> — Record deconstruction patterns in <code>switch</code> (JEP 440, final in Java 21). Sealed classes themselves are available since Java 17 (JEP 409), but deconstruction syntax inside <code>switch</code> requires Java 21.</div>
   <div class="warn"><strong>Forget a modifier and the compiler tells you exactly what's missing —
   verified real error:</strong>
   <pre><code class="java">sealed interface Shape permits Circle {}

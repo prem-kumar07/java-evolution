@@ -127,6 +127,7 @@ void m(var p) { }      // ✗ method parameters cannot use var</code></pre>
       variables/methods named <code>var</code> still compile. You just can't name a <em>class</em> <code>var</code>.</li>
     <li><strong>No effect on generics inference elsewhere</strong> — it only names the local.</li>
   </ul>
+  <p><strong>Intersection-type trap:</strong> <code>var x = condition ? "hello" : 42;</code> infers an intersection type (<code>Serializable &amp; Comparable&lt;?&gt;</code>), not <code>Object</code>. This can surprise readers. Always annotate such variables with an explicit comment or use an explicit type when the inferred type is a non-obvious intersection.</p>
 
   <!-- ============================================================ -->
   <h2 id="vsobject">5 · var vs <code>Object</code></h2>

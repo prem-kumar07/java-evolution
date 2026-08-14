@@ -272,12 +272,12 @@ java -Xmx64m -Xlog:gc+age=trace YourApp.java
   on machines with 8+ hardware threads, it uses roughly <strong>5/8</strong> of them as GC threads by
   default. Best for batch jobs and throughput-sensitive workloads that can tolerate occasional pauses.</p>
 
-  <h3>CMS (Concurrent Mark Sweep) — <span class="badge removed">Removed in 14</span></h3>
+  <h3>CMS (Concurrent Mark Sweep) — <span class="badge removed">Removed in 14</span> <span class="badge jep">JEP 363</span></h3>
   <p>The first mainstream concurrent, low-pause collector. Deprecated in Java 9, removed in Java 14 —
   G1 replaced it entirely. If you inherit code with <code>-XX:+UseConcMarkSweepGC</code>, it won't even
   start on a modern JDK; migrate to G1.</p>
 
-  <h3>G1 (Garbage-First) — default, <code>-XX:+UseG1GC</code></h3>
+  <h3>G1 (Garbage-First) — default, <code>-XX:+UseG1GC</code> <span class="badge jep">JEP 248</span></h3>
   <p><em>Default since Java 9.</em> Verified from Oracle's own docs: "generational, incremental,
   parallel, mostly concurrent, stop-the-world, and evacuating." Splits the heap into equal-sized
   regions (not one contiguous young/old block) and prioritizes collecting the regions with the most
@@ -286,14 +286,15 @@ java -Xmx64m -Xlog:gc+age=trace YourApp.java
   <h3>ZGC (Z Garbage Collector) — <code>-XX:+UseZGC</code></h3>
   <p>A scalable, low-latency concurrent collector. Verified from Oracle's docs: pause times independent
   of heap size, "without stopping application threads for more than a millisecond," scales from a few
-  hundred MB to 16 TB. <strong>Verified: as of JDK 24, ZGC is generational by default</strong> — the
-  old <code>-XX:+ZGenerational</code> flag has been removed entirely.</p>
+  hundred MB to 16 TB. <strong>Verified: as of JDK 24, ZGC is generational by default</strong> <span class="badge jep">JEP 474</span> — the
+  old <code>-XX:+ZGenerational</code> and non-generational ZGC have been removed entirely <span class="badge jep">JEP 490</span>.</p>
 
   <h3>Shenandoah — <code>-XX:+UseShenandoahGC</code></h3>
   <p>Verified from the OpenJDK wiki: "the low pause time garbage collector... pause times are no longer
   directly proportional to the size of the heap. Garbage collecting a 200 GB heap or a 2 GB heap should
   have the similar low pause behavior." A Red Hat-led alternative to ZGC with a similar goal, using
   concurrent compaction rather than ZGC's colored-pointer approach.</p>
+  <p><strong>Oracle JDK note:</strong> JEP 189 was merged into OpenJDK 12, but <em>Oracle JDK</em> did not include Shenandoah until Java 17. If using Oracle-branded JDK builds (not OpenJDK), Shenandoah is available starting from Java 17.</p>
 
   <h3>Epsilon (No-Op) — <code>-XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC</code></h3>
   <p>Allocates memory and <strong>never collects it</strong>. Verified: it requires unlocking
@@ -525,7 +526,7 @@ jcmd $! GC.heap_info      # run this a few times while it's executing</code></pr
   <table class="data">
     <tr><th>Version</th><th>Change</th></tr>
     <tr><td>Java 1.2–1.4</td><td>Serial and Parallel collectors established.</td></tr>
-    <tr><td>Java 5</td><td>CMS (Concurrent Mark Sweep) introduced.</td></tr>
+    <tr><td>Java 5</td><td>CMS (Concurrent Mark Sweep) introduced (first available in Java 1.4.1; formally part of the JDK since Java 5).</td></tr>
     <tr><td>Java 7u4</td><td>G1 first available (opt-in).</td></tr>
     <tr><td>Java 8</td><td>PermGen replaced by Metaspace.</td></tr>
     <tr><td>Java 9</td><td><strong>G1 becomes the default collector</strong>; CMS deprecated.</td></tr>

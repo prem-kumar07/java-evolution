@@ -275,10 +275,16 @@ try {
   <table class="data">
     <tr><th>Version</th><th>Change</th></tr>
     <tr><td>Java 19–20</td><td>Incubator (<code>jdk.incubator.concurrent</code>).</td></tr>
-    <tr><td>Java 21–24</td><td>Preview; <code>ShutdownOnFailure</code>/<code>ShutdownOnSuccess</code> + <code>throwIfFailed()</code>.</td></tr>
-    <tr><td>Java 25</td><td>5th preview (JEP 505) — reworked <code>open(Joiner…)</code> API.</td></tr>
-    <tr><td>Java 26</td><td>6th preview (JEP 525) — refinements, approaching final.</td></tr>
+    <tr><td>Java 21</td><td>1st preview <span class="badge jep">JEP 453</span> — moved to <code>java.util.concurrent</code>.</td></tr>
+    <tr><td>Java 22</td><td>2nd preview <span class="badge jep">JEP 462</span> — minor refinements.</td></tr>
+    <tr><td>Java 23</td><td>3rd preview <span class="badge jep">JEP 480</span> — minor refinements.</td></tr>
+    <tr><td>Java 24</td><td>4th preview <span class="badge jep">JEP 499</span> — minor refinements.</td></tr>
+    <tr><td>Java 25</td><td>5th preview <span class="badge jep">JEP 505</span> — reworked <code>open(Joiner…)</code> API; <strong>breaking change from 21–24</strong>.</td></tr>
+    <tr><td>Java 26</td><td>6th preview <span class="badge jep">JEP 525</span> — refinements, approaching final.</td></tr>
   </table>
+  <div class="gotcha">
+    <strong>⚠ Breaking API change between Java 21–24 and Java 25+.</strong> The Java 21–24 preview used <code>new StructuredTaskScope.ShutdownOnFailure()</code> (subclass instantiation) with explicit <code>scope.throwIfFailed()</code>. Java 25+ replaces this with <code>StructuredTaskScope.open(Joiner.allSuccessfulOrThrow())</code> where <code>join()</code> itself throws. These APIs are <em>incompatible</em> — upgrading from Java 21–24 to Java 25 requires refactoring any code using the old subclass-based API.
+  </div>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>

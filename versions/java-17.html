@@ -37,7 +37,7 @@
         <code>--illegal-access=permit</code> escape hatch is gone. Reflective access to internals now
         fails; add explicit <code>--add-opens</code>/<code>--add-exports</code> only where needed.
         Older bytecode libraries (ASM, cglib, Mockito) may need upgrading.</li>
-      <li><strong>Security Manager deprecated for removal</strong>; <strong>RMI Activation removed</strong>;
+      <li><strong>Security Manager deprecated for removal</strong> <span class="badge jep">JEP 411</span>; <strong>RMI Activation removed</strong> <span class="badge jep">JEP 407</span>;
         experimental AOT/JIT (Graal) compiler removed.</li>
       <li><strong>Always-strict floating point</strong> restored — math may differ slightly from pre-17 non-<code>strictfp</code> results.</li>
     </ul>
@@ -46,7 +46,7 @@
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 
-  <h3>Switch expressions <span class="badge added">Final in 14</span></h3>
+  <h3>Switch expressions <span class="badge added">Final in 14</span> <span class="badge jep">JEP 361</span></h3>
   <p><em>Why it matters:</em> <code>switch</code> can return a value, uses arrow labels (no
   fall-through), and <code>yield</code> for blocks — eliminating a whole class of <code>break</code> bugs.</p>
   <div class="ba">
@@ -70,7 +70,7 @@ switch (month) {
     </div>
   </div>
 
-  <h3>Records <span class="badge added">Final in 16</span></h3>
+  <h3>Records <span class="badge added">Final in 16</span> <span class="badge jep">JEP 395</span></h3>
   <p><em>Why it matters:</em> immutable data carriers with generated constructor, accessors,
   <code>equals</code>/<code>hashCode</code>/<code>toString</code>.</p>
   <div class="ba">
@@ -90,7 +90,7 @@ switch (month) {
   </div>
   <p>Everything about records → <a href="../topics/records.html">Records deep-dive</a>.</p>
 
-  <h3>Sealed classes <span class="badge added">Final in 17</span></h3>
+  <h3>Sealed classes <span class="badge added">Final in 17</span> <span class="badge jep">JEP 409</span></h3>
   <p><em>Why it matters:</em> restrict which types may extend/implement yours, so the compiler knows the
   full set and can check <code>switch</code> exhaustiveness.</p>
   <pre><code class="java">public sealed interface Shape permits Circle, Square, Rectangle { }
@@ -99,7 +99,7 @@ public record Square(double side)           implements Shape { }
 public record Rectangle(double w, double h) implements Shape { }</code></pre>
   <p>Full rules → <a href="../topics/sealed-classes.html">Sealed classes deep-dive</a>.</p>
 
-  <h3>Pattern matching for <code>instanceof</code> <span class="badge added">Final in 16</span></h3>
+  <h3>Pattern matching for <code>instanceof</code> <span class="badge added">Final in 16</span> <span class="badge jep">JEP 394</span></h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">if (obj instanceof String) {
@@ -114,7 +114,7 @@ public record Rectangle(double w, double h) implements Shape { }</code></pre>
     </div>
   </div>
 
-  <h3>Text blocks <span class="badge added">Final in 15</span></h3>
+  <h3>Text blocks <span class="badge added">Final in 15</span> <span class="badge jep">JEP 378</span></h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">String json = "{\n" +
@@ -190,7 +190,7 @@ fmt.format(3_400_000);  // "3.4M"   (locale-aware!)</code></pre>
     </div>
   </div>
 
-  <h3>Unix-domain socket channels <span class="badge added">Added in 16</span></h3>
+  <h3>Unix-domain socket channels <span class="badge added">Added in 16</span> <span class="badge jep">JEP 380</span></h3>
   <p><em>Why it matters:</em> fast, secure local IPC (e.g. talking to Docker or a local DB) without TCP.</p>
   <pre><code class="java">var address = UnixDomainSocketAddress.of("/tmp/app.sock");
 try (var channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
@@ -198,7 +198,7 @@ try (var channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
   // ... read/write like any SocketChannel
 }</code></pre>
 
-  <h3>Enhanced pseudorandom generators <span class="badge added">Added in 17</span></h3>
+  <h3>Enhanced pseudorandom generators <span class="badge added">Added in 17</span> <span class="badge jep">JEP 356</span></h3>
   <p><em>Why it matters:</em> <code>java.util.Random</code> locked you into one algorithm forever.
   The new <code>RandomGenerator</code> interface lets you pick from 17 built-in algorithms
   (including modern, statistically stronger ones like Xoshiro/L128X) through one uniform API.</p>
@@ -252,7 +252,7 @@ name.transform(String::toUpperCase);</code></pre>
     </div>
   </div>
   <ul>
-    <li><strong>jpackage</strong> <span class="badge added">Added in 16</span> — build a native,
+    <li><strong>jpackage</strong> <span class="badge added">Added in 16</span> <span class="badge jep">JEP 392</span> — build a native,
       double-clickable installer from your app + a bundled JRE, so end users don't need Java installed:
       <pre><code class="java">jpackage --input target/ --name MyApp --main-jar myapp.jar \
     --main-class com.acme.Main --type dmg     # or: msi, exe, deb, rpm, pkg
@@ -280,11 +280,11 @@ Class.forName(hidden.getName()); // throws ClassNotFoundException — verified:
       This is what frameworks like Spring, Mockito and lambda metafactories now use internally instead
       of leaking throwaway classes into your classloader.</li>
     <li><strong>Strong encapsulation of JDK internals by default</strong>
-      <span class="badge added">16</span> <span class="badge jep">JEP 403 (17)</span> — run
+      <span class="badge added">16</span> <span class="badge jep">JEP 396 (Java 16 — warnings)</span> <span class="badge jep">JEP 403 (Java 17 — enforced)</span> — run
       <code>jdeps --jdk-internals</code> before upgrading.</li>
-    <li><strong>macOS/AArch64 (Apple Silicon) port</strong> and a new Metal-based
-      <strong>macOS rendering pipeline</strong> <span class="badge added">Added in 17</span>.</li>
-    <li><strong>EdDSA</strong> signatures <span class="badge added">15</span>; context-specific
+    <li><strong>macOS/AArch64 (Apple Silicon) port</strong> <span class="badge jep">JEP 391</span> and a new Metal-based
+      <strong>macOS rendering pipeline</strong> <span class="badge added">Added in 17</span> <span class="badge jep">JEP 382</span>. <strong>Applet API deprecated for removal</strong> <span class="badge jep">JEP 398</span>.</li>
+    <li><strong>EdDSA</strong> signatures <span class="badge added">15</span> <span class="badge jep">JEP 339</span>; context-specific
       deserialization filters <span class="badge added">17</span>.</li>
     <li><strong>Foreign Function &amp; Memory API</strong> begins incubating
       <span class="badge added">17</span> → <a href="../topics/ffm-api.html">FFM deep-dive</a>.</li>

@@ -37,17 +37,17 @@
         change behaviour. Set charsets explicitly.</li>
       <li><strong>Virtual-thread pinning:</strong> on 21–23, blocking inside <code>synchronized</code>
         pins the carrier and can starve the pool. Prefer <code>ReentrantLock</code> around blocking I/O
-        (fixed in 24).</li>
+        (fixed in 24 — <span class="badge jep">JEP 491</span>).</li>
       <li><strong>Dynamic loading of agents warns</strong>; <strong>finalization deprecated for
         removal</strong> <span class="badge added">18</span> — migrate to <code>Cleaner</code>.</li>
-      <li><strong>String templates</strong> tried in 21 previews were later withdrawn — don't depend on them.</li>
+      <li><strong>String templates (JEP 430) — permanently withdrawn ⚠</strong> previewed in Java 21–22 then completely dropped. The <code>STR."..."</code> interpolation syntax will <em>never</em> ship in stable Java. Use <code>String.formatted()</code> or <code>MessageFormat</code> instead.</li>
     </ul>
   </div>
 
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 
-  <h3>Virtual threads <span class="badge added">Final in 21</span></h3>
+  <h3>Virtual threads <span class="badge added">Final in 21</span> <span class="badge jep">JEP 444</span></h3>
   <p><em>Why it matters:</em> write simple blocking code that scales to millions of concurrent tasks —
   the runtime frees the OS thread while a virtual thread waits.</p>
   <div class="ba">
@@ -64,7 +64,7 @@ for (var task : tasks) pool.submit(task);
   </div>
   <p>Architecture, pinning, Spring Boot, migration → <a href="../topics/virtual-threads.html">Virtual threads deep-dive</a>.</p>
 
-  <h3>Pattern matching for <code>switch</code> <span class="badge added">Final in 21</span></h3>
+  <h3>Pattern matching for <code>switch</code> <span class="badge added">Final in 21</span> <span class="badge jep">JEP 441</span></h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — if/else chain of casts</div>
       <pre><code class="java">String s;
@@ -82,7 +82,7 @@ else                                s = "other";</code></pre>
     </div>
   </div>
 
-  <h3>Record patterns <span class="badge added">Final in 21</span></h3>
+  <h3>Record patterns <span class="badge added">Final in 21</span> <span class="badge jep">JEP 440</span></h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">if (obj instanceof Point p) {
@@ -116,7 +116,7 @@ for (var _ : items) count++;</code></pre></li>
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
-  <h3>Sequenced collections <span class="badge added">Added in 21</span></h3>
+  <h3>Sequenced collections <span class="badge added">Added in 21</span> <span class="badge jep">JEP 431</span></h3>
   <p><em>Why it matters:</em> before, every ordered collection expressed "first/last/reverse"
   differently — and <code>LinkedHashSet</code> had no clean "last" at all. New interfaces
   (<code>SequencedCollection</code>, <code>SequencedSet</code>, <code>SequencedMap</code>) give a uniform vocabulary.</p>
@@ -137,26 +137,30 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
     </div>
   </div>
 
-  <h3>Key Encapsulation Mechanism (KEM) API <span class="badge added">Added in 21</span></h3>
+  <h3>Key Encapsulation Mechanism (KEM) API <span class="badge added">Added in 21</span> <span class="badge jep">JEP 452</span></h3>
   <p><em>Why it matters:</em> a KEM lets two parties agree on a shared secret using only
   <em>public</em> keys — no separate key-exchange protocol needed. It's the standard building block
   behind post-quantum algorithms like <a href="../versions/java-25.html">ML-KEM</a> (final in 24).</p>
-  <pre><code class="java">// Receiver: generate a key pair, publish the public key
-KeyPairGenerator g = KeyPairGenerator.getInstance("ML-KEM");
+  <pre><code class="java">// Java 21 KEM API — uses classical DHKEM algorithms
+// (ML-KEM / CRYSTALS-Kyber requires Java 24+, JEP 496)
+// Receiver: generate a key pair, publish the public key
+KeyPairGenerator g = KeyPairGenerator.getInstance("EC");
+g.initialize(new ECGenParameterSpec("secp256r1"));
 KeyPair kp = g.generateKeyPair();
 
 // Sender: derive a shared secret using the receiver's public key
-KEM kemS = KEM.getInstance("ML-KEM");
+KEM kemS = KEM.getInstance("DHKEM(P-256, HKDF-SHA256)");
 KEM.Encapsulator enc = kemS.newEncapsulator(kp.getPublic());
 KEM.Encapsulated encapsulated = enc.encapsulate();
 SecretKey senderSecret = encapsulated.key();
 byte[] toSend = encapsulated.encapsulation();   // send this to the receiver
 
 // Receiver: recover the SAME shared secret from the encapsulation
-KEM kemR = KEM.getInstance("ML-KEM");
+KEM kemR = KEM.getInstance("DHKEM(P-256, HKDF-SHA256)");
 KEM.Decapsulator dec = kemR.newDecapsulator(kp.getPrivate());
 SecretKey receiverSecret = dec.decapsulate(toSend);
-// verified: senderSecret and receiverSecret are byte-for-byte identical</code></pre>
+// verified: senderSecret and receiverSecret are byte-for-byte identical
+// ⚠ For post-quantum ML-KEM (CRYSTALS-Kyber), use Java 24+ (JEP 496)</code></pre>
 
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>

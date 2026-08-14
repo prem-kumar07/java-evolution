@@ -268,6 +268,10 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
   The bridge method is what actually gets called, casts its argument to <code>Integer</code>, and
   <em>that cast</em> is where the <code>ClassCastException</code> is thrown — not inside your code at all.</div>
 
+  <div class="note">
+    <strong>Looking ahead — Project Valhalla:</strong> Valhalla aims to bring <em>primitive specialization for generics</em> to Java, enabling <code>List&lt;int&gt;</code> instead of <code>List&lt;Integer&gt;</code> without boxing overhead. This would fundamentally change the erasure model for specialized types and is expected to ship in a future Java LTS.
+  </div>
+
   <!-- ============================================================ -->
   <h2 id="restrictions">7 · What you cannot do with generics</h2>
   <p>All seven of these are direct, real consequences of erasure — verified against Oracle's own
@@ -279,7 +283,7 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
     <tr><td>Cannot declare static fields of a type parameter</td><td>A static field is shared by all instances, but each instantiation could have a different <code>T</code> — there's no single answer for what type it would be.</td></tr>
     <tr><td>Cannot use <code>instanceof</code> or cast against a parameterized type: <code>x instanceof List&lt;String&gt;</code></td><td>Erased at runtime — the JVM can't tell <code>List&lt;Integer&gt;</code> from <code>List&lt;String&gt;</code>. You can check <code>x instanceof List&lt;?&gt;</code> instead.</td></tr>
     <tr><td>Cannot create arrays of a parameterized type: <code>new List&lt;String&gt;[10]</code></td><td>Arrays check their element type at runtime (<code>ArrayStoreException</code>); erasure would silently defeat that safety check, so it's forbidden outright.</td></tr>
-    <tr><td>A generic class cannot extend <code>Throwable</code></td><td>Exception types must be resolvable at both compile and catch time — erasure would make <code>catch</code> clauses ambiguous.</td></tr>
+    <tr><td>A generic class cannot extend <code>Throwable</code></td><td>Exception types must be resolvable at both compile and catch time — erasure would make <code>catch</code> clauses ambiguous. <p><strong>Clarification:</strong> The restriction is that <em>type parameters</em> cannot be used in a catch clause (<code>catch (T e)</code> is a compile error). A class that extends a concrete exception supertype is allowed — e.g., <code>class MyException&lt;T&gt; extends RuntimeException</code> is legal. The error only occurs when the type parameter itself is the caught/thrown type.</p></td></tr>
     <tr><td>Cannot overload two methods that erase to the same signature</td><td><code>void m(List&lt;String&gt; x)</code> and <code>void m(List&lt;Integer&gt; x)</code> both erase to <code>m(List)</code> — a duplicate-method compile error.</td></tr>
   </table>
 

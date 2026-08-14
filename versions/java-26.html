@@ -61,7 +61,7 @@ f.setInt(obj, 999);      // mutates a final field — worked</code></pre>
     </div>
   </div>
 
-  <h3>Primitive types in patterns, <code>instanceof</code> &amp; <code>switch</code> <span class="badge preview">Preview (4th)</span></h3>
+  <h3>Primitive types in patterns, <code>instanceof</code> &amp; <code>switch</code> <span class="badge preview">Preview (4th)</span> <span class="badge jep">JEP 530</span></h3>
   <p><em>Why it matters:</em> extends pattern matching to primitives, so numeric type-narrowing no
   longer needs error-prone manual casts and range checks.</p>
   <div class="ba">
@@ -86,7 +86,7 @@ if (bigValue instanceof int i) { use(i); }  // only matches if it fits exactly</
     </div>
   </div>
 
-  <h3>Structured concurrency <span class="badge preview">Preview (6th)</span></h3>
+  <h3>Structured concurrency <span class="badge preview">Preview (6th)</span> <span class="badge jep">JEP 525</span></h3>
   <p><em>Why it matters:</em> approaching final after six previews — treats a group of concurrent
   subtasks as one unit, so a failure in one cancels the rest instead of leaking threads. See the
   <a href="../topics/structured-concurrency.html">structured concurrency deep-dive</a> for the full
@@ -115,7 +115,7 @@ HttpResponse&lt;String&gt; res = client.send(req, BodyHandlers.ofString());
     </div>
   </div>
 
-  <h3>Lazy Constants <span class="badge preview">Preview (2nd)</span></h3>
+  <h3>Lazy Constants <span class="badge preview">Preview (2nd)</span> <span class="badge jep">JEP 526</span></h3>
   <p><em>Why it matters:</em> the feature previewed as "Stable Values" in Java 25, now renamed. A safe
   primitive for compute-once, thread-safe lazy initialisation that the JIT can fold like a real
   constant — replacing the classic (and easy to get subtly wrong) double-checked-locking idiom.</p>
@@ -141,7 +141,7 @@ Config get() {
     </div>
   </div>
 
-  <h3>PEM encodings of cryptographic objects <span class="badge preview">Preview (2nd)</span></h3>
+  <h3>PEM encodings of cryptographic objects <span class="badge preview">Preview (2nd)</span> <span class="badge jep">JEP 524</span></h3>
   <p><em>Why it matters:</em> read/write keys &amp; certificates in the standard PEM text format
   (<code>-----BEGIN...-----</code>) directly — no hand-rolled Base64/DER parsing, no third-party library
   just to save a key to a <code>.pem</code> file.</p>
@@ -162,7 +162,7 @@ PrivateKey decoded = decoder.decode(pem, PrivateKey.class);
     </div>
   </div>
 
-  <h3>Vector API <span class="badge">11th incubator</span></h3>
+  <h3>Vector API <span class="badge">11th incubator</span> <span class="badge jep">JEP 529</span></h3>
   <p><em>Why it matters:</em> explicit SIMD (Single Instruction, Multiple Data) — process several
   array elements in one CPU instruction instead of one at a time. Still incubating pending Project
   Valhalla (value types), which will let it reach full native speed.</p>
@@ -204,7 +204,7 @@ java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
     <li><strong>G1: improved throughput by reducing synchronization</strong> <span class="badge jep">JEP 522</span> —
       less internal locking overhead in the default collector, meaning better throughput with no
       config changes for most apps.</li>
-    <li><strong>Applet API removed</strong> <span class="badge removed">Removed</span> — the last of the
+    <li><strong>Applet API removed</strong> <span class="badge removed">Removed</span> <span class="badge jep">JEP 504</span> — the last of the
       applet era is gone (deprecated back in Java 17). Any lingering <code>java.applet.*</code> usage
       now fails to compile.</li>
   </ul>
