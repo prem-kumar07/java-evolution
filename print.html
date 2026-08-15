@@ -751,7 +751,7 @@ int _ = 3;   // COMPILE ERROR: '_' is now reserved (for future language use)</co
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
-  <h3>Immutable collection factory methods</h3>
+  <h3>Immutable collection factory methods <span class="badge jep">JEP 269</span></h3>
   <p><em>Why it matters:</em> creating small immutable collections was verbose and error-prone.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
@@ -775,11 +775,11 @@ Map&lt;String,Integer&gt; m = Map.of("a", 1, "b", 2);
       <pre><code class="java">// "take the leading run &lt; 5" — no clean way
 list.stream()
     .filter(x -> x &lt; 5)   // keeps ALL &lt;5, not just the leading run
-    .collect(toList());</code></pre>
+    .collect(Collectors.toList());</code></pre>
     </div>
     <div class="after"><div class="ba-label">After (Java 9)</div>
-      <pre><code class="java">list.stream().takeWhile(x -> x &lt; 5).toList();   // leading run only
-list.stream().dropWhile(x -> x &lt; 5).toList();   // skip leading run
+      <pre><code class="java">list.stream().takeWhile(x -> x < 5).collect(Collectors.toList());   // leading run only (use .toList() on Java 16+)
+list.stream().dropWhile(x -> x < 5).collect(Collectors.toList());   // skip leading run   (use .toList() on Java 16+)
 Stream.ofNullable(maybeNull);                    // 0- or 1-element stream
 Stream.iterate(1, n -> n &lt; 100, n -> n * 2);     // for-style with predicate</code></pre>
     </div>
@@ -816,7 +816,7 @@ for (Optional&lt;User&gt; o : optionals)
       <pre><code class="java">opt.ifPresentOrElse(this::use, this::handleEmpty);
 Optional&lt;User&gt; u = primary.or(() -> fallbackLookup());   // lazy fallback
 List&lt;User&gt; users = optionals.stream()
-    .flatMap(Optional::stream).toList();                 // drop empties</code></pre>
+    .flatMap(Optional::stream).collect(Collectors.toList());   // drop empties (use .toList() on Java 16+)</code></pre>
     </div>
   </div>
 
@@ -855,13 +855,13 @@ String caller = st[1].getClassName();</code></pre>
     </div>
   </div>
 
-  <h3>Reactive Streams — <code>java.util.concurrent.Flow</code></h3>
+  <h3>Reactive Streams — <code>java.util.concurrent.Flow</code> <span class="badge jep">JEP 266</span></h3>
   <p><em>Why it matters:</em> before Java 9, "reactive" libraries (RxJava, Reactor, Akka Streams) each
   had their own incompatible <code>Publisher</code>/<code>Subscriber</code> interfaces — you couldn't
   connect one library's stream to another's. <code>Flow</code> standardises the four interfaces so any
   compliant library can interoperate, with built-in <strong>back-pressure</strong> (the subscriber
   controls how many items it's ready for, so a fast producer can't overwhelm a slow consumer).</p>
-  <pre><code class="java">try (var publisher = new SubmissionPublisher&lt;Integer&gt;()) {
+  <pre><code class="java">try (SubmissionPublisher<Integer> publisher = new SubmissionPublisher<>()) {  // Note: 'var' requires Java 10+
   publisher.subscribe(new Flow.Subscriber&lt;Integer&gt;() {
     private Flow.Subscription subscription;
     public void onSubscribe(Flow.Subscription s) {
@@ -889,9 +889,9 @@ ProcessHandle.allProcesses()
 
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>
-  <h3>JShell — the REPL</h3>
+  <h3>JShell — the REPL <span class="badge jep">JEP 222</span></h3>
   <p><em>Why it matters:</em> try an expression instantly without a class, <code>main</code>, or compile step.</p>
-  <pre><code class="java">jshell&gt; var xs = List.of(1, 2, 3)
+  <pre><code class="java">jshell&gt; List&lt;Integer&gt; xs = List.of(1, 2, 3)
 xs ==&gt; [1, 2, 3]
 jshell&gt; xs.stream().mapToInt(i -&gt; i).sum()
 $2 ==&gt; 6</code></pre>
@@ -919,7 +919,7 @@ $2 ==&gt; 6</code></pre>
     <li><strong>The Module System (JPMS)</strong> <span class="badge jep">JEP 261</span> — the headline
       change; the JDK is split into ~90 modules and you can declare your own with
       <code>module-info.java</code>. Full walkthrough → <a href="#pg-topics-modules-jpms-html">Modules deep-dive</a>.</li>
-    <li><strong>G1 is the default garbage collector</strong> (replacing Parallel GC), plus a pluggable
+    <li><strong>G1 is the default garbage collector</strong> <span class="badge jep">JEP 248</span> (replacing Parallel GC), plus a pluggable
       <strong>Garbage-Collector Interface</strong>.</li>
     <li><strong>Compact Strings</strong> — <code>String</code> stores Latin-1 in a <code>byte[]</code>
       instead of <code>char[]</code> when possible, cutting memory — invisible to your code.</li>
@@ -976,7 +976,7 @@ boolean swapped = vh.compareAndSet(10, 20);   // atomic CAS, no Unsafe needed
   <div class="gotcha">
     <strong>⚠ Migration watch-outs (8 → 11).</strong>
     <ul>
-      <li><strong>Java EE &amp; CORBA modules removed</strong> — <code>java.xml.bind</code> (JAXB),
+      <li><strong>Java EE &amp; CORBA modules removed</strong> <span class="badge jep">JEP 320</span> — <code>java.xml.bind</code> (JAXB),
         <code>java.xml.ws</code> (JAX-WS), <code>java.activation</code>, <code>java.corba</code> are
         gone. Add them as explicit Maven/Gradle dependencies. The #1 upgrade break from 8.</li>
       <li><strong>JavaFX is no longer bundled</strong> — use OpenJFX as a separate dependency.</li>
@@ -1004,7 +1004,7 @@ for (var e : scores.entrySet()) { }   // type inferred</code></pre>
   </div>
   <p>Full rules → <a href="#pg-topics-var-html"><code>var</code> deep-dive</a>.</p>
 
-  <h3><code>var</code> in lambda parameters <span class="badge added">Added in 11</span></h3>
+  <h3><code>var</code> in lambda parameters <span class="badge added">Added in 11</span> <span class="badge jep">JEP 323</span></h3>
   <p><em>Why it matters:</em> lets you put annotations/modifiers on inferred lambda parameters.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — no place for the annotation</div>
@@ -1016,7 +1016,7 @@ for (var e : scores.entrySet()) { }   // type inferred</code></pre>
     </div>
   </div>
 
-  <h3>Nest-based access control <span class="badge added">Added in 11</span></h3>
+  <h3>Nest-based access control <span class="badge added">Added in 11</span> <span class="badge jep">JEP 181</span></h3>
   <p><em>Why it matters:</em> the Java <em>source</em> for a nested class accessing an outer class's
   <code>private</code> member always looked the same — but before 11, the compiler had to generate a
   hidden <strong>synthetic package-private accessor method</strong> to make that legal at the bytecode
@@ -1042,7 +1042,7 @@ for (var e : scores.entrySet()) { }   // type inferred</code></pre>
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
-  <h3>Standard HTTP Client — <code>java.net.http</code></h3>
+  <h3>Standard HTTP Client — <code>java.net.http</code> <span class="badge jep">JEP 321</span></h3>
   <p><em>Why it matters:</em> a modern client with HTTP/2, WebSocket and async support, replacing the
   clunky <code>HttpURLConnection</code> (incubated in 9, standard in 11).</p>
   <div class="ba">
@@ -1163,9 +1163,9 @@ jcmd &lt;pid&gt; JFR.stop</code></pre>
   <!-- ============ JVM / OTHER ============ -->
   <h2>4 · JVM / performance / other</h2>
   <ul>
-    <li><strong>ZGC</strong> (experimental) &amp; <strong>Epsilon</strong> (no-op) garbage collectors introduced.</li>
+    <li><strong>ZGC</strong> (experimental) <span class="badge jep">JEP 333</span> &amp; <strong>Epsilon</strong> (no-op) <span class="badge jep">JEP 318</span> garbage collectors introduced.</li>
     <li><strong>Parallel full GC for G1</strong> <span class="badge added">Added in 10</span> — shorter worst-case pauses.</li>
-    <li><strong>TLS 1.3</strong> support.</li>
+    <li><strong>TLS 1.3</strong> support. <span class="badge jep">JEP 332</span></li>
     <li><strong>Time-based release versioning</strong> <span class="badge added">Added in 10</span> and
       <strong>root certificates</strong> shipped with OpenJDK.</li>
     <li>Oracle JDK &amp; OpenJDK builds became functionally identical.</li>
@@ -1216,7 +1216,7 @@ jcmd &lt;pid&gt; JFR.stop</code></pre>
         <code>--illegal-access=permit</code> escape hatch is gone. Reflective access to internals now
         fails; add explicit <code>--add-opens</code>/<code>--add-exports</code> only where needed.
         Older bytecode libraries (ASM, cglib, Mockito) may need upgrading.</li>
-      <li><strong>Security Manager deprecated for removal</strong>; <strong>RMI Activation removed</strong>;
+      <li><strong>Security Manager deprecated for removal</strong> <span class="badge jep">JEP 411</span>; <strong>RMI Activation removed</strong> <span class="badge jep">JEP 407</span>;
         experimental AOT/JIT (Graal) compiler removed.</li>
       <li><strong>Always-strict floating point</strong> restored — math may differ slightly from pre-17 non-<code>strictfp</code> results.</li>
     </ul>
@@ -1225,7 +1225,7 @@ jcmd &lt;pid&gt; JFR.stop</code></pre>
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 
-  <h3>Switch expressions <span class="badge added">Final in 14</span></h3>
+  <h3>Switch expressions <span class="badge added">Final in 14</span> <span class="badge jep">JEP 361</span></h3>
   <p><em>Why it matters:</em> <code>switch</code> can return a value, uses arrow labels (no
   fall-through), and <code>yield</code> for blocks — eliminating a whole class of <code>break</code> bugs.</p>
   <div class="ba">
@@ -1249,7 +1249,7 @@ switch (month) {
     </div>
   </div>
 
-  <h3>Records <span class="badge added">Final in 16</span></h3>
+  <h3>Records <span class="badge added">Final in 16</span> <span class="badge jep">JEP 395</span></h3>
   <p><em>Why it matters:</em> immutable data carriers with generated constructor, accessors,
   <code>equals</code>/<code>hashCode</code>/<code>toString</code>.</p>
   <div class="ba">
@@ -1269,7 +1269,7 @@ switch (month) {
   </div>
   <p>Everything about records → <a href="#pg-topics-records-html">Records deep-dive</a>.</p>
 
-  <h3>Sealed classes <span class="badge added">Final in 17</span></h3>
+  <h3>Sealed classes <span class="badge added">Final in 17</span> <span class="badge jep">JEP 409</span></h3>
   <p><em>Why it matters:</em> restrict which types may extend/implement yours, so the compiler knows the
   full set and can check <code>switch</code> exhaustiveness.</p>
   <pre><code class="java">public sealed interface Shape permits Circle, Square, Rectangle { }
@@ -1278,7 +1278,7 @@ public record Square(double side)           implements Shape { }
 public record Rectangle(double w, double h) implements Shape { }</code></pre>
   <p>Full rules → <a href="#pg-topics-sealed-classes-html">Sealed classes deep-dive</a>.</p>
 
-  <h3>Pattern matching for <code>instanceof</code> <span class="badge added">Final in 16</span></h3>
+  <h3>Pattern matching for <code>instanceof</code> <span class="badge added">Final in 16</span> <span class="badge jep">JEP 394</span></h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">if (obj instanceof String) {
@@ -1293,7 +1293,7 @@ public record Rectangle(double w, double h) implements Shape { }</code></pre>
     </div>
   </div>
 
-  <h3>Text blocks <span class="badge added">Final in 15</span></h3>
+  <h3>Text blocks <span class="badge added">Final in 15</span> <span class="badge jep">JEP 378</span></h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">String json = "{\n" +
@@ -1369,7 +1369,7 @@ fmt.format(3_400_000);  // "3.4M"   (locale-aware!)</code></pre>
     </div>
   </div>
 
-  <h3>Unix-domain socket channels <span class="badge added">Added in 16</span></h3>
+  <h3>Unix-domain socket channels <span class="badge added">Added in 16</span> <span class="badge jep">JEP 380</span></h3>
   <p><em>Why it matters:</em> fast, secure local IPC (e.g. talking to Docker or a local DB) without TCP.</p>
   <pre><code class="java">var address = UnixDomainSocketAddress.of("/tmp/app.sock");
 try (var channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
@@ -1377,7 +1377,7 @@ try (var channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
   // ... read/write like any SocketChannel
 }</code></pre>
 
-  <h3>Enhanced pseudorandom generators <span class="badge added">Added in 17</span></h3>
+  <h3>Enhanced pseudorandom generators <span class="badge added">Added in 17</span> <span class="badge jep">JEP 356</span></h3>
   <p><em>Why it matters:</em> <code>java.util.Random</code> locked you into one algorithm forever.
   The new <code>RandomGenerator</code> interface lets you pick from 17 built-in algorithms
   (including modern, statistically stronger ones like Xoshiro/L128X) through one uniform API.</p>
@@ -1431,7 +1431,7 @@ name.transform(String::toUpperCase);</code></pre>
     </div>
   </div>
   <ul>
-    <li><strong>jpackage</strong> <span class="badge added">Added in 16</span> — build a native,
+    <li><strong>jpackage</strong> <span class="badge added">Added in 16</span> <span class="badge jep">JEP 392</span> — build a native,
       double-clickable installer from your app + a bundled JRE, so end users don't need Java installed:
       <pre><code class="java">jpackage --input target/ --name MyApp --main-jar myapp.jar \
     --main-class com.acme.Main --type dmg     # or: msi, exe, deb, rpm, pkg
@@ -1439,6 +1439,14 @@ name.transform(String::toUpperCase);</code></pre>
     <li>The JDK source moved from <strong>Mercurial to Git &amp; GitHub</strong>
       <span class="badge added">Added in 16</span>.</li>
   </ul>
+
+  <h3>JFR Event Streaming <span class="badge added">Added in 14</span> <span class="badge jep">JEP 349</span></h3>
+  <p><em>Why it matters:</em> continuous monitoring of Flight Recorder data without dumping a file.</p>
+  <pre><code class="java">try (var rs = new RecordingStream()) {
+  rs.enable("jdk.CPULoad").withPeriod(Duration.ofSeconds(1));
+  rs.onEvent("jdk.CPULoad", event -&gt; System.out.println(event.getFloat("machineTotal")));
+  rs.start();
+}</code></pre>
 
   <!-- ============ JVM / OTHER ============ -->
   <h2>4 · JVM / performance / other</h2>
@@ -1459,11 +1467,11 @@ Class.forName(hidden.getName()); // throws ClassNotFoundException — verified:
       This is what frameworks like Spring, Mockito and lambda metafactories now use internally instead
       of leaking throwaway classes into your classloader.</li>
     <li><strong>Strong encapsulation of JDK internals by default</strong>
-      <span class="badge added">16</span> <span class="badge jep">JEP 403 (17)</span> — run
+      <span class="badge added">16</span> <span class="badge jep">JEP 396 (Java 16 — warnings)</span> <span class="badge jep">JEP 403 (Java 17 — enforced)</span> — run
       <code>jdeps --jdk-internals</code> before upgrading.</li>
-    <li><strong>macOS/AArch64 (Apple Silicon) port</strong> and a new Metal-based
-      <strong>macOS rendering pipeline</strong> <span class="badge added">Added in 17</span>.</li>
-    <li><strong>EdDSA</strong> signatures <span class="badge added">15</span>; context-specific
+    <li><strong>macOS/AArch64 (Apple Silicon) port</strong> <span class="badge jep">JEP 391</span> and a new Metal-based
+      <strong>macOS rendering pipeline</strong> <span class="badge added">Added in 17</span> <span class="badge jep">JEP 382</span>. <strong>Applet API deprecated for removal</strong> <span class="badge jep">JEP 398</span>.</li>
+    <li><strong>EdDSA</strong> signatures <span class="badge added">15</span> <span class="badge jep">JEP 339</span>; context-specific
       deserialization filters <span class="badge added">17</span>.</li>
     <li><strong>Foreign Function &amp; Memory API</strong> begins incubating
       <span class="badge added">17</span> → <a href="#pg-topics-ffm-api-html">FFM deep-dive</a>.</li>
@@ -1512,17 +1520,17 @@ Class.forName(hidden.getName()); // throws ClassNotFoundException — verified:
         change behaviour. Set charsets explicitly.</li>
       <li><strong>Virtual-thread pinning:</strong> on 21–23, blocking inside <code>synchronized</code>
         pins the carrier and can starve the pool. Prefer <code>ReentrantLock</code> around blocking I/O
-        (fixed in 24).</li>
+        (fixed in 24 — <span class="badge jep">JEP 491</span>).</li>
       <li><strong>Dynamic loading of agents warns</strong>; <strong>finalization deprecated for
         removal</strong> <span class="badge added">18</span> — migrate to <code>Cleaner</code>.</li>
-      <li><strong>String templates</strong> tried in 21 previews were later withdrawn — don't depend on them.</li>
+      <li><strong>String templates (JEP 430) — permanently withdrawn ⚠</strong> previewed in Java 21–22 then completely dropped. The <code>STR."..."</code> interpolation syntax will <em>never</em> ship in stable Java. Use <code>String.formatted()</code> or <code>MessageFormat</code> instead.</li>
     </ul>
   </div>
 
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 
-  <h3>Virtual threads <span class="badge added">Final in 21</span></h3>
+  <h3>Virtual threads <span class="badge added">Final in 21</span> <span class="badge jep">JEP 444</span></h3>
   <p><em>Why it matters:</em> write simple blocking code that scales to millions of concurrent tasks —
   the runtime frees the OS thread while a virtual thread waits.</p>
   <div class="ba">
@@ -1539,7 +1547,7 @@ for (var task : tasks) pool.submit(task);
   </div>
   <p>Architecture, pinning, Spring Boot, migration → <a href="#pg-topics-virtual-threads-html">Virtual threads deep-dive</a>.</p>
 
-  <h3>Pattern matching for <code>switch</code> <span class="badge added">Final in 21</span></h3>
+  <h3>Pattern matching for <code>switch</code> <span class="badge added">Final in 21</span> <span class="badge jep">JEP 441</span></h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — if/else chain of casts</div>
       <pre><code class="java">String s;
@@ -1557,7 +1565,7 @@ else                                s = "other";</code></pre>
     </div>
   </div>
 
-  <h3>Record patterns <span class="badge added">Final in 21</span></h3>
+  <h3>Record patterns <span class="badge added">Final in 21</span> <span class="badge jep">JEP 440</span></h3>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
       <pre><code class="java">if (obj instanceof Point p) {
@@ -1577,7 +1585,7 @@ switch (shape) {
   <h3>Previews that landed here</h3>
   <ul>
     <li><strong>Unnamed patterns &amp; variables</strong> <code>_</code>
-      <span class="badge preview">Preview in 21</span> (final in 25) — ignore what you don't need:
+      <span class="badge preview">Preview in 21</span> (final in 22, JEP 456) — ignore what you don't need:
       <pre><code class="java">if (obj instanceof Point(int x, _)) { }   // ignore y
 catch (Exception _) { }
 for (var _ : items) count++;</code></pre></li>
@@ -1591,7 +1599,7 @@ for (var _ : items) count++;</code></pre></li>
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
-  <h3>Sequenced collections <span class="badge added">Added in 21</span></h3>
+  <h3>Sequenced collections <span class="badge added">Added in 21</span> <span class="badge jep">JEP 431</span></h3>
   <p><em>Why it matters:</em> before, every ordered collection expressed "first/last/reverse"
   differently — and <code>LinkedHashSet</code> had no clean "last" at all. New interfaces
   (<code>SequencedCollection</code>, <code>SequencedSet</code>, <code>SequencedMap</code>) give a uniform vocabulary.</p>
@@ -1612,26 +1620,30 @@ map.firstEntry(); map.lastEntry(); map.reversed();</code></pre>
     </div>
   </div>
 
-  <h3>Key Encapsulation Mechanism (KEM) API <span class="badge added">Added in 21</span></h3>
+  <h3>Key Encapsulation Mechanism (KEM) API <span class="badge added">Added in 21</span> <span class="badge jep">JEP 452</span></h3>
   <p><em>Why it matters:</em> a KEM lets two parties agree on a shared secret using only
   <em>public</em> keys — no separate key-exchange protocol needed. It's the standard building block
   behind post-quantum algorithms like <a href="#pg-versions-java-25-html">ML-KEM</a> (final in 24).</p>
-  <pre><code class="java">// Receiver: generate a key pair, publish the public key
-KeyPairGenerator g = KeyPairGenerator.getInstance("ML-KEM");
+  <pre><code class="java">// Java 21 KEM API — uses classical DHKEM algorithms
+// (ML-KEM / CRYSTALS-Kyber requires Java 24+, JEP 496)
+// Receiver: generate a key pair, publish the public key
+KeyPairGenerator g = KeyPairGenerator.getInstance("EC");
+g.initialize(new ECGenParameterSpec("secp256r1"));
 KeyPair kp = g.generateKeyPair();
 
 // Sender: derive a shared secret using the receiver's public key
-KEM kemS = KEM.getInstance("ML-KEM");
+KEM kemS = KEM.getInstance("DHKEM(P-256, HKDF-SHA256)");
 KEM.Encapsulator enc = kemS.newEncapsulator(kp.getPublic());
 KEM.Encapsulated encapsulated = enc.encapsulate();
 SecretKey senderSecret = encapsulated.key();
 byte[] toSend = encapsulated.encapsulation();   // send this to the receiver
 
 // Receiver: recover the SAME shared secret from the encapsulation
-KEM kemR = KEM.getInstance("ML-KEM");
+KEM kemR = KEM.getInstance("DHKEM(P-256, HKDF-SHA256)");
 KEM.Decapsulator dec = kemR.newDecapsulator(kp.getPrivate());
 SecretKey receiverSecret = dec.decapsulate(toSend);
-// verified: senderSecret and receiverSecret are byte-for-byte identical</code></pre>
+// verified: senderSecret and receiverSecret are byte-for-byte identical
+// ⚠ For post-quantum ML-KEM (CRYSTALS-Kyber), use Java 24+ (JEP 496)</code></pre>
 
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>
@@ -1752,7 +1764,7 @@ try (var r = new NativeResource()) { /* use it */ }
   <!-- ============ LANGUAGE ============ -->
   <h2>1 · Language features</h2>
 
-  <h3>Compact source files &amp; instance <code>main</code> <span class="badge added">Final in 25</span></h3>
+  <h3>Compact source files &amp; instance <code>main</code> <span class="badge added">Final in 25</span> <span class="badge jep">JEP 512</span></h3>
   <p><em>Why it matters:</em> a runnable program with no <code>class</code>, no <code>public
   static</code>, no explicit <code>java.base</code> imports, and a simple <code>IO</code> helper — much
   gentler for learners and scripts. The full ceremony is still available when you need it.</p>
@@ -1772,7 +1784,7 @@ try (var r = new NativeResource()) { /* use it */ }
     </div>
   </div>
 
-  <h3>Flexible constructor bodies <span class="badge added">Final in 25</span></h3>
+  <h3>Flexible constructor bodies <span class="badge added">Final in 25</span> <span class="badge jep">JEP 513</span></h3>
   <p><em>Why it matters:</em> validate or normalise arguments <em>before</em> calling
   <code>super(...)</code>/<code>this(...)</code> — previously impossible, forcing awkward workarounds.</p>
   <div class="ba">
@@ -1794,7 +1806,7 @@ try (var r = new NativeResource()) { /* use it */ }
     </div>
   </div>
 
-  <h3>Module import declarations <span class="badge added">Final in 25</span></h3>
+  <h3>Module import declarations <span class="badge added">Final in 25</span> <span class="badge jep">JEP 511</span></h3>
   <p><em>Why it matters:</em> import <em>every</em> package a module exports in one line — great for scripts and prototypes.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before</div>
@@ -1823,7 +1835,7 @@ if (p instanceof Point(int x, _)) use(x);   // ignore y</code></pre>
     </div>
   </div>
 
-  <h3>Scoped values <span class="badge added">Final in 25</span></h3>
+  <h3>Scoped values <span class="badge added">Final in 25</span> <span class="badge jep">JEP 506</span></h3>
   <p><em>Why it matters:</em> an immutable, auto-cleaning replacement for <code>ThreadLocal</code>,
   designed for virtual threads.</p>
   <div class="ba">
@@ -1846,13 +1858,15 @@ finally { CURRENT.remove(); }   // leak if forgotten</code></pre>
       <a href="#pg-topics-structured-concurrency-html">deep-dive</a>.</li>
     <li><strong>Stable Values</strong> <span class="badge preview">Preview</span> — write-once, lazy, thread-safe constants:
       <pre><code class="java">StableValue&lt;Logger&gt; logger = StableValue.of();
-Logger l = logger.orElseSet(() -> createLogger());   // computed at most once</code></pre></li>
+Logger l = logger.orElseSet(() -> createLogger());   // computed at most once</code></pre>
+      <p class="note"><strong>Note (Java 26):</strong> <code>StableValue</code> was renamed to <code>LazyConstant</code> in Java 26 (second preview). Code targeting Java 25 preview uses <code>StableValue</code>; Java 26 uses <code>LazyConstant</code>.</p>
+    </li>
   </ul>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
-  <h3>Stream Gatherers <span class="badge added">Final in 24</span></h3>
+  <h3>Stream Gatherers <span class="badge added">Final in 24</span> <span class="badge jep">JEP 485</span></h3>
   <p><em>Why it matters:</em> custom <em>intermediate</em> operations — the missing counterpart to a custom <code>Collector</code>.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Before — manual windowing</div>
@@ -1869,7 +1883,7 @@ for (int i = 0; i + 3 &lt;= xs.size(); i++)
   </div>
   <p>Writing your own gatherer → <a href="#pg-topics-streams-gatherers-html">Streams &amp; Gatherers deep-dive</a>.</p>
 
-  <h3>Foreign Function &amp; Memory API <span class="badge added">Final in 22</span></h3>
+  <h3>Foreign Function &amp; Memory API <span class="badge added">Final in 22</span> <span class="badge jep">JEP 454</span></h3>
   <p><em>Why it matters:</em> call native libraries and manage off-heap memory in pure Java — the
   safe, supported replacement for JNI.</p>
   <pre><code class="java">// call C's strlen() — no C glue code, no build step
@@ -1886,6 +1900,7 @@ try (Arena arena = Arena.ofConfined()) {
   <a href="#pg-topics-ffm-api-html">FFM deep-dive</a>.</p>
 
   <h3>Cryptography</h3>
+  <!-- KDF API: JEP 510 (Java 25) -->
   <p><em>Why it matters:</em> the Key Derivation Function API gives HKDF (and future algorithms) a
   standard, uniform API — before 25, teams either hand-rolled HKDF from <code>javax.crypto.Mac</code>
   (easy to get subtly wrong) or pulled in a third-party crypto library just for this.</p>
@@ -2037,7 +2052,7 @@ f.setInt(obj, 999);      // mutates a final field — worked</code></pre>
     </div>
   </div>
 
-  <h3>Primitive types in patterns, <code>instanceof</code> &amp; <code>switch</code> <span class="badge preview">Preview (4th)</span></h3>
+  <h3>Primitive types in patterns, <code>instanceof</code> &amp; <code>switch</code> <span class="badge preview">Preview (4th)</span> <span class="badge jep">JEP 530</span></h3>
   <p><em>Why it matters:</em> extends pattern matching to primitives, so numeric type-narrowing no
   longer needs error-prone manual casts and range checks.</p>
   <div class="ba">
@@ -2062,7 +2077,7 @@ if (bigValue instanceof int i) { use(i); }  // only matches if it fits exactly</
     </div>
   </div>
 
-  <h3>Structured concurrency <span class="badge preview">Preview (6th)</span></h3>
+  <h3>Structured concurrency <span class="badge preview">Preview (6th)</span> <span class="badge jep">JEP 525</span></h3>
   <p><em>Why it matters:</em> approaching final after six previews — treats a group of concurrent
   subtasks as one unit, so a failure in one cancels the rest instead of leaking threads. See the
   <a href="#pg-topics-structured-concurrency-html">structured concurrency deep-dive</a> for the full
@@ -2071,7 +2086,7 @@ if (bigValue instanceof int i) { use(i); }  // only matches if it fits exactly</
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
-  <h3>HTTP/3 for the HTTP Client <span class="badge jep">JEP 517</span></h3>
+  <h3>HTTP/3 for the HTTP Client</h3>
   <p><em>Why it matters:</em> the <code>java.net.http.HttpClient</code> (standardised in Java 11) now
   speaks HTTP/3 (QUIC over UDP) — faster connection setup and better behaviour on lossy/mobile
   networks, with the exact same request/response API you already use.</p>
@@ -2091,7 +2106,7 @@ HttpResponse&lt;String&gt; res = client.send(req, BodyHandlers.ofString());
     </div>
   </div>
 
-  <h3>Lazy Constants <span class="badge preview">Preview (2nd)</span></h3>
+  <h3>Lazy Constants <span class="badge preview">Preview (2nd)</span> <span class="badge jep">JEP 526</span></h3>
   <p><em>Why it matters:</em> the feature previewed as "Stable Values" in Java 25, now renamed. A safe
   primitive for compute-once, thread-safe lazy initialisation that the JIT can fold like a real
   constant — replacing the classic (and easy to get subtly wrong) double-checked-locking idiom.</p>
@@ -2117,7 +2132,7 @@ Config get() {
     </div>
   </div>
 
-  <h3>PEM encodings of cryptographic objects <span class="badge preview">Preview (2nd)</span></h3>
+  <h3>PEM encodings of cryptographic objects <span class="badge preview">Preview (2nd)</span> <span class="badge jep">JEP 524</span></h3>
   <p><em>Why it matters:</em> read/write keys &amp; certificates in the standard PEM text format
   (<code>-----BEGIN...-----</code>) directly — no hand-rolled Base64/DER parsing, no third-party library
   just to save a key to a <code>.pem</code> file.</p>
@@ -2138,7 +2153,7 @@ PrivateKey decoded = decoder.decode(pem, PrivateKey.class);
     </div>
   </div>
 
-  <h3>Vector API <span class="badge">11th incubator</span></h3>
+  <h3>Vector API <span class="badge">11th incubator</span> <span class="badge jep">JEP 529</span></h3>
   <p><em>Why it matters:</em> explicit SIMD (Single Instruction, Multiple Data) — process several
   array elements in one CPU instruction instead of one at a time. Still incubating pending Project
   Valhalla (value types), which will let it reach full native speed.</p>
@@ -2340,7 +2355,8 @@ static &lt;T extends Number & Comparable&lt;T&gt;&gt; T max(T a, T b) {
 
 // recursive bound: T must be comparable to itself — this is exactly
 // how Collections.max() and Comparable-based sorting are declared in the JDK
-static &lt;T extends Comparable&lt;T&gt;&gt; T maxOf(T a, T b) {
+  // Using PECS (Producer Extends, Consumer Super) for maximum compatibility
+static &lt;T extends Comparable&lt;? super T&gt;&gt; T maxOf(T a, T b) {
   return a.compareTo(b) >= 0 ? a : b;
 }
 // verified: maxOf("apple", "banana") -> "banana"</code></pre>
@@ -2458,6 +2474,10 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
   The bridge method is what actually gets called, casts its argument to <code>Integer</code>, and
   <em>that cast</em> is where the <code>ClassCastException</code> is thrown — not inside your code at all.</div>
 
+  <div class="note">
+    <strong>Looking ahead — Project Valhalla:</strong> Valhalla aims to bring <em>primitive specialization for generics</em> to Java, enabling <code>List&lt;int&gt;</code> instead of <code>List&lt;Integer&gt;</code> without boxing overhead. This would fundamentally change the erasure model for specialized types and is expected to ship in a future Java LTS.
+  </div>
+
   <!-- ============================================================ -->
   <h2 id="restrictions">7 · What you cannot do with generics</h2>
   <p>All seven of these are direct, real consequences of erasure — verified against Oracle's own
@@ -2469,7 +2489,7 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
     <tr><td>Cannot declare static fields of a type parameter</td><td>A static field is shared by all instances, but each instantiation could have a different <code>T</code> — there's no single answer for what type it would be.</td></tr>
     <tr><td>Cannot use <code>instanceof</code> or cast against a parameterized type: <code>x instanceof List&lt;String&gt;</code></td><td>Erased at runtime — the JVM can't tell <code>List&lt;Integer&gt;</code> from <code>List&lt;String&gt;</code>. You can check <code>x instanceof List&lt;?&gt;</code> instead.</td></tr>
     <tr><td>Cannot create arrays of a parameterized type: <code>new List&lt;String&gt;[10]</code></td><td>Arrays check their element type at runtime (<code>ArrayStoreException</code>); erasure would silently defeat that safety check, so it's forbidden outright.</td></tr>
-    <tr><td>A generic class cannot extend <code>Throwable</code></td><td>Exception types must be resolvable at both compile and catch time — erasure would make <code>catch</code> clauses ambiguous.</td></tr>
+    <tr><td>A generic class cannot extend <code>Throwable</code></td><td>Exception types must be resolvable at both compile and catch time — erasure would make <code>catch</code> clauses ambiguous. <p><strong>Clarification:</strong> Under JLS §8.1.2, it is a compile-time error if a generic class directly or indirectly subclasses <code>Throwable</code>. You cannot define <code>class MyException&lt;T&gt; extends RuntimeException</code>. However, type parameters <em>are</em> allowed in a method's <code>throws</code> clause (e.g., <code>&lt;T extends Throwable&gt; void doIt() throws T</code>).</p></td></tr>
     <tr><td>Cannot overload two methods that erase to the same signature</td><td><code>void m(List&lt;String&gt; x)</code> and <code>void m(List&lt;Integer&gt; x)</code> both erase to <code>m(List)</code> — a duplicate-method compile error.</td></tr>
   </table>
 
@@ -2511,6 +2531,13 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
       <li>Can't: <code>new T()</code>, static fields of <code>T</code>, <code>instanceof List&lt;String&gt;</code>, arrays of parameterized types, extend <code>Throwable</code> generically.</li>
     </ul>
   </div>
+    <h2>Advanced Generics Topics</h2>
+    <ul>
+      <li><strong>Wildcard Capture:</strong> When the compiler internally infers a specific but unknown type from a wildcard type (<code>?</code>) during type checking.</li>
+      <li><strong>Heap Pollution & <code>@SafeVarargs</code>:</strong> Situations where parameterized types lose their type safety, often related to varargs. The <code>@SafeVarargs</code> annotation suppresses unchecked warnings for varargs parameters.</li>
+      <li><strong>Intersection Types:</strong> Declaring a type that must satisfy multiple bounds (e.g., <code>&lt;T extends Serializable &amp; Comparable&lt;T&gt;&gt;</code>).</li>
+      <li><strong>Super Type Tokens (e.g., <code>TypeReference&lt;T&gt;</code>):</strong> A pattern to retain generic type information at runtime, circumventing type erasure.</li>
+    </ul>
 </section>
 <section id="pg-topics-reflection-html" class="print-page">
   <p class="sec-tag">Deep dive · API · complete guide</p>
@@ -2845,7 +2872,7 @@ public class SomeNonInterceptedService {
   @SuppressWarnings("unchecked")
   static &lt;T&gt; Object invoke(Class&lt;T&gt; serviceClass, String methodName, Object... args) throws Exception {
     T service = serviceClass.getDeclaredConstructor().newInstance();
-    Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+    Class&lt;?&gt;[] types = Arrays.stream(args).map(a -&gt; a == null ? Object.class : a.getClass()).toArray(Class[]::new);
     Method method = serviceClass.getDeclaredMethod(methodName, types);
 
     if (method.isAnnotationPresent(Intercepted.class)) {
@@ -2881,7 +2908,7 @@ System.out.println(r2);   // verified real output: "Hello"</code></pre>
   instance back:</p>
   <pre><code class="java">class BeanFactory {
   static &lt;T&gt; T getInstanceOf(Class&lt;T&gt; beanClass, Object... args) throws ReflectiveOperationException {
-    Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+    Class&lt;?&gt;[] types = Arrays.stream(args).map(a -&gt; a == null ? Object.class : a.getClass()).toArray(Class[]::new);
     Constructor&lt;T&gt; constructor = beanClass.getConstructor(types);   // exact-type match, see §7
     return constructor.newInstance(args);
   }
@@ -2918,7 +2945,7 @@ class BeanFactory {
   }
 
   private static &lt;T&gt; T instantiateBeanClass(Class&lt;T&gt; beanClass, Object... args) throws ReflectiveOperationException {
-    Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+    Class&lt;?&gt;[] types = Arrays.stream(args).map(a -&gt; a == null ? Object.class : a.getClass()).toArray(Class[]::new);
     Constructor&lt;T&gt; constructor = beanClass.getConstructor(types);
     return constructor.newInstance(args);
   }
@@ -2933,13 +2960,14 @@ class BeanFactory {
 
 // instantiateBeanClass grows one more step at the end:
 private static &lt;T&gt; T instantiateBeanClass(Class&lt;T&gt; beanClass, Object... args) throws ReflectiveOperationException {
-  Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+  Class&lt;?&gt;[] types = Arrays.stream(args).map(a -&gt; a == null ? Object.class : a.getClass()).toArray(Class[]::new);
   Constructor&lt;T&gt; constructor = beanClass.getConstructor(types);
   T bean = constructor.newInstance(args);
 
   for (Field field : beanClass.getDeclaredFields()) {           // every field, any visibility
     if (field.isAnnotationPresent(Inject.class)) {
       field.setAccessible(true);                                 // always — even if it were public
+      // Note: Real DI frameworks register 'bean' early here to prevent circular dependency StackOverflows
       Object value = getInstanceOf(field.getType());              // recursive — respects @Singleton
       field.set(bean, value);
     }
@@ -2988,8 +3016,8 @@ System.out.println(a == b);
     <tr><td>A non-public class/record whose constructor you look up with <code>getConstructor()</code></td><td>Verified: throws <code>NoSuchMethodException</code> even though the constructor exists — <code>getConstructor</code> only sees <em>public</em> constructors, and a non-public type's constructor defaults to that same non-public access.</td></tr>
     <tr><td>Expecting exact-vs-assignable parameter matching</td><td><code>getConstructor</code>/<code>getMethod</code> need the exact declared parameter types — verified, a <code>CharSequence</code>-typed constructor won't match a <code>String</code> lookup.</td></tr>
     <tr><td>Reading <code>InvocationTargetException</code> as "the" exception</td><td>It's a wrapper — call <code>.getCause()</code> to see what the invoked method actually threw.</td></tr>
-    <tr><td>Trying to mutate a record's field after <code>setAccessible(true)</code></td><td>Verified: records refuse this at the JVM level — immutability is enforced even against reflection.</td></tr>
-    <tr><td>Using reflection in a hot loop</td><td>Real, measurable overhead — cache the <code>Method</code>/<code>Field</code> lookup outside the loop at minimum; consider <code>MethodHandle</code> for performance-sensitive reflective calls.</td></tr>
+    <tr><td>Trying to mutate a record's field after <code>setAccessible(true)</code></td><td>Verified: records refuse this at the JVM level — immutability is enforced even against reflection. <p><strong>Coming in Java 26 (JEP 500):</strong> The "Prepare to Make final Mean Final" initiative extends this enforcement to <em>all</em> <code>final</code> fields. Deep reflection that mutates <code>final</code> fields via <code>setAccessible(true)</code> now generates warnings in Java 26 and will throw in a future release. See the <a href="#pg-versions-java-26-html">Java 26 page</a> for details.</p></td></tr>
+    <tr><td>Using reflection in a hot loop</td><td>Real, measurable overhead — cache the <code>Method</code>/<code>Field</code> lookup outside the loop at minimum; consider <code>MethodHandle</code> for performance-sensitive reflective calls. <p>For low-level field access with atomic operations (CAS, volatile semantics), see also <code>java.lang.invoke.VarHandle</code> (introduced in Java 9, <a href="#pg-versions-java-9-html">JEP 193</a>) and the <a href="#pg-topics-ffm-api-html">FFM API</a> for native memory access.</p></td></tr>
     <tr><td>Reflecting into another module's internals on Java 9+</td><td>Throws <code>InaccessibleObjectException</code> unless that module <code>opens</code> the package — see §13.</td></tr>
   </table>
 
@@ -3013,13 +3041,23 @@ System.out.println(a == b);
       <li>Entry point: <code>obj.getClass()</code>, <code>Type.class</code>, or <code>Class.forName(name)</code>.</li>
       <li><code>getDeclared*</code> = this class only, includes private. <code>get*</code> (no "Declared") = inherited, public only.</li>
       <li><code>setAccessible(true)</code> before touching a private field/method/constructor.</li>
-      <li><code>Method.invoke</code> / <code>Constructor.newInstance</code> both throw <code>InvocationTargetException</code> — unwrap with <code>getCause()</code>.</li>
+      <li><code>Method.invoke</code> throws <code>InvocationTargetException</code> (unwrap with <code>getCause()</code>), plus <code>IllegalAccessException</code> and <code>IllegalArgumentException</code>.</li>
+      <li><code>Constructor.newInstance</code> throws the same, plus <code>InstantiationException</code>.</li>
       <li><code>Proxy.newProxyInstance</code> — implement an interface at runtime, one handler for every call.</li>
       <li>Records refuse field mutation even via reflection; enums can't gain new constants at runtime.</li>
       <li>Java 9+: reflecting into another module needs that module to <code>opens</code> the package.</li>
       <li>Prefer normal code when you can — reflection is slower and bypasses compile-time checks.</li>
     </ul>
   </div>
+    <h2>Advanced Reflection Topics</h2>
+    <p>
+      Java provides advanced reflection and dynamic bytecode tools:
+    </p>
+    <ul>
+      <li><strong>Generic Type Reflection (<code>java.lang.reflect.Type</code>):</strong> Inspecting parameterized types, wildcards, and type variables at runtime.</li>
+      <li><strong>Method Handles (<code>java.lang.invoke</code>):</strong> Providing strongly typed, direct, and performant access to methods, constructors, and fields compared to traditional Reflection.</li>
+      <li><strong>Class-File API:</strong> A standard API introduced recently to parse, generate, and transform Java class files dynamically.</li>
+    </ul>
 </section>
 <section id="pg-topics-annotations-html" class="print-page">
   <p class="sec-tag">Deep dive · language · complete guide</p>
@@ -3033,7 +3071,7 @@ System.out.println(a == b);
 
   <div class="hero-stats">
     <div class="stat"><span class="num">3</span><span class="lbl">retention policies (SOURCE/CLASS/RUNTIME)</span></div>
-    <div class="stat"><span class="num">13</span><span class="lbl"><code>ElementType</code> targets</span></div>
+    <div class="stat"><span class="num">12</span><span class="lbl"><code>ElementType</code> targets</span></div>
     <div class="stat"><span class="num">Java 8</span><span class="lbl">repeating &amp; type annotations</span></div>
     <div class="stat"><span class="num">meta</span><span class="lbl">annotations that describe annotations</span></div>
     <div class="stat"><span class="num">0</span><span class="lbl">behavior on their own — something must read them</span></div>
@@ -3132,7 +3170,7 @@ public class Widget { ... }</code></pre>
     <tr><td><code>@Override</code></td><td>Tells the compiler this must override a superclass method — a typo in the signature becomes a compile error instead of a silently-new method.</td></tr>
     <tr><td><code>@Deprecated</code></td><td>Warns on use. <code>@Deprecated(since="9", forRemoval=true)</code> (Java 9+) says exactly when and whether it's actually going away.</td></tr>
     <tr><td><code>@SuppressWarnings("...")</code></td><td>Silences specific compiler warning categories: <code>unchecked</code>, <code>deprecation</code>, <code>removal</code>, <code>preview</code>.</td></tr>
-    <tr><td><code>@SafeVarargs</code></td><td>Asserts a varargs method doesn't do anything unsafe with its varargs array — suppresses the unchecked-varargs warning.</td></tr>
+    <tr><td><code>@SafeVarargs</code></td><td>Asserts a varargs method doesn't do anything unsafe with its varargs array — suppresses the unchecked-varargs warning. <span class="badge jep">JEP 213 (Milling Project Coin, Java 9)</span> allowed this on private methods.</td></tr>
     <tr><td><code>@FunctionalInterface</code></td><td>Documents intent and gets the compiler to verify the interface really has exactly one abstract method.</td></tr>
   </table>
 
@@ -3142,7 +3180,7 @@ public class Widget { ... }</code></pre>
     <tr><th>Meta-annotation</th><th>Controls</th></tr>
     <tr><td><code>@Retention</code></td><td>How long the annotation survives: <code>SOURCE</code>, <code>CLASS</code>, or <code>RUNTIME</code> — see §6.</td></tr>
     <tr><td><code>@Target</code></td><td>Which kinds of declarations/uses it's legal on — see the full list below.</td></tr>
-    <tr><td><code>@Documented</code></td><td>Include it in generated Javadoc.</td></tr>
+    <tr><td><code>@Documented</code></td><td>Include it in generated Javadoc. <p><strong>Common pitfall:</strong> <code>@Documented</code> is <em>absent by default</em>. Custom annotations do not appear in generated Javadoc unless <code>@Documented</code> is explicitly added to the annotation declaration. This is a frequent oversight when writing annotation-based APIs.</p></td></tr>
     <tr><td><code>@Inherited</code></td><td>A subclass "sees" its superclass's annotation too — <strong>class declarations only</strong>, verified below.</td></tr>
     <tr><td><code>@Repeatable</code></td><td>Allows the same annotation to be applied more than once — see §8.</td></tr>
   </table>
@@ -3359,6 +3397,13 @@ public class BuilderProcessor extends AbstractProcessor {
       <li>Annotations do nothing by themselves — something (compiler, reflection, a processor) has to read them.</li>
     </ul>
   </div>
+    <h2>Advanced Annotation Topics</h2>
+    <ul>
+      <li><strong>Permitted attribute types:</strong> Annotations can only have attributes of primitive types, <code>String</code>, <code>Class</code>, enums, annotations, and 1-dimensional arrays of these types.</li>
+      <li><strong>Prohibition of <code>null</code> default values:</strong> Annotation attributes cannot have <code>null</code> as a valid default value.</li>
+      <li><strong>Interface Annotation Inheritance:</strong> Annotations on interfaces are generally not inherited by classes implementing them, unlike annotations on superclasses (when marked with <code>@Inherited</code>).</li>
+      <li><strong>@Generated:</strong> Added in Java 9 to <code>javax.annotation.processing</code> to mark code generated by tools.</li>
+    </ul>
 </section>
 <section id="pg-topics-var-html" class="print-page">
   <p class="sec-tag">Deep dive · language · complete guide</p>
@@ -3479,6 +3524,7 @@ void m(var p) { }      // ✗ method parameters cannot use var</code></pre>
       variables/methods named <code>var</code> still compile. You just can't name a <em>class</em> <code>var</code>.</li>
     <li><strong>No effect on generics inference elsewhere</strong> — it only names the local.</li>
   </ul>
+  <p><strong>Intersection-type trap:</strong> <code>var x = condition ? "hello" : 42;</code> infers an intersection type (<code>Serializable &amp; Comparable&lt;?&gt;</code>), not <code>Object</code>. This can surprise readers. Always annotate such variables with an explicit comment or use an explicit type when the inferred type is a non-obvious intersection.</p>
 
   <!-- ============================================================ -->
   <h2 id="vsobject">5 · var vs <code>Object</code></h2>
@@ -3735,7 +3781,7 @@ List&lt;Order&gt; topByScore(List&lt;Order&gt; orders) {
   record Scored(Order order, double score) {}   // local record — only exists in this method
   return orders.stream()
       .map(o -> new Scored(o, rank(o)))
-      .sorted(comparingDouble(Scored::score).reversed())
+      .sorted(Comparator.comparingDouble(Scored::score).reversed())
       .map(Scored::order)
       .toList();
 }</code></pre>
@@ -3799,7 +3845,56 @@ System.out.println(l1.equals(l3));   // verified: false — the nested differenc
   <code>equals</code> on each component — no extra work needed, it composes automatically.</p>
   <div class="note"><strong>The one exception:</strong> if a component is an <strong>array</strong>
   rather than another record, equality does <em>not</em> recurse the way you'd expect — see the
-  verified array-component gotcha in <a href="#pitfalls">§9 Pitfalls</a>.</div>
+  verified array-component gotcha in <a href="#pitfalls">§9 Pitfalls</a>, and the two working fixes
+  right below.</div>
+
+  <h3>If a record contains an array — two working fixes, verified</h3>
+  <p>The generated <code>equals</code>/<code>hashCode</code>/<code>toString</code> treat an array
+  component by <strong>identity</strong>, exactly like <code>Object[]</code> would — because arrays
+  themselves never overrode those methods to compare contents. There are two real fixes.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Broken — verified</div>
+      <pre><code class="java">record BytesDefault(byte[] data) {}
+
+var d1 = new BytesDefault(new byte[]{1, 2, 3});
+var d2 = new BytesDefault(new byte[]{1, 2, 3});   // same content, different array object
+
+d1.equals(d2);   // verified: false
+d1.toString();   // verified: "BytesDefault[data=[B@6356695f]" — identity hash, not content</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Fix 1 — override with Arrays.equals/hashCode</div>
+      <pre><code class="java">record BytesFixed(byte[] data) {
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof BytesFixed other)) return false;
+    return Arrays.equals(data, other.data);
+  }
+  @Override
+  public int hashCode() { return Arrays.hashCode(data); }
+  @Override
+  public String toString() { return "BytesFixed[data=" + Arrays.toString(data) + "]"; }
+}
+
+var f1 = new BytesFixed(new byte[]{1, 2, 3});
+var f2 = new BytesFixed(new byte[]{1, 2, 3});
+f1.equals(f2);   // verified: true
+f1.toString();   // verified: "BytesFixed[data=[1, 2, 3]]"</code></pre>
+    </div>
+  </div>
+  <p><strong>Fix 2 — the simpler option: don't use an array at all.</strong> A <code>List</code>
+  already compares by content, so switching the component type sidesteps the whole problem:</p>
+  <pre><code class="java">record BytesAsList(List&lt;Byte&gt; data) {}
+
+var l1 = new BytesAsList(List.of((byte) 1, (byte) 2, (byte) 3));
+var l2 = new BytesAsList(List.of((byte) 1, (byte) 2, (byte) 3));
+l1.equals(l2);   // verified: true — no overrides needed
+l1.toString();   // verified: "BytesAsList[data=[1, 2, 3]]"</code></pre>
+  <div class="tip"><strong>Prefer Fix 2 when you can.</strong> It's less code, and you get correct
+  <code>equals</code>/<code>hashCode</code>/<code>toString</code> for free, the same way every other
+  record component does. Reach for Fix 1 (manual <code>Arrays.equals</code>) only when you're
+  specifically constrained to an array type — e.g. matching an existing array-based API, or avoiding
+  boxing overhead for a primitive array in a performance-sensitive path.</div>
 
   <h3>Sorting records — they have no natural order by default</h3>
   <p>A record does <em>not</em> automatically implement <code>Comparable</code> — <code>equals</code>
@@ -3889,6 +3984,7 @@ int eval(Expr e) {
     if (cents &lt; 0) throw new IllegalArgumentException("negative");
   }
 }</code></pre>
+  <p><strong>Note:</strong> Records are <em>not</em> serializable by default. The class must explicitly declare <code>implements java.io.Serializable</code>. The guarantee that deserialization routes through the canonical constructor only applies when serialization is enabled.</p>
 
   <!-- ============================================================ -->
   <h2 id="pitfalls">9 · Pitfalls</h2>
@@ -4083,7 +4179,7 @@ record Add(Expr l, Expr r) implements Expr { }</code></pre>
     </li>
     <li>Every permitted subtype must <strong>directly</strong> extend/implement the sealed type.</li>
     <li>Records are implicitly <code>final</code>, so they slot into <code>permits</code> lists perfectly.</li>
-    <li><strong>Enums work too</strong> — an <code>enum</code> is always implicitly <code>final</code>,
+    <li><strong>Enums work too</strong> — an <code>enum</code> with constant bodies is implicitly <code>sealed</code> (otherwise implicitly <code>final</code>),
       so it satisfies a sealed interface's requirement with no extra modifier, and mixes with record
       subtypes in the same hierarchy:
       <pre><code class="java">sealed interface Status permits Active, Suspended, Closed {}
@@ -4099,6 +4195,7 @@ String describe(Status s) {
   };
 }</code></pre></li>
   </ul>
+  <div class="note"><strong>Requires Java 21+</strong> — Record deconstruction patterns in <code>switch</code> (JEP 440, final in Java 21). Sealed classes themselves are available since Java 17 (JEP 409), but deconstruction syntax inside <code>switch</code> requires Java 21.</div>
   <div class="warn"><strong>Forget a modifier and the compiler tells you exactly what's missing —
   verified real error:</strong>
   <pre><code class="java">sealed interface Shape permits Circle {}
@@ -4217,6 +4314,7 @@ Result&lt;User&gt; find(String id) {
   return u != null ? new Ok&lt;&gt;(u) : new Err&lt;&gt;("no user " + id);
 }
 switch (find(id)) {              // compiler enforces both cases
+  case null -> throw new NullPointerException();
   case Ok&lt;User&gt;(var user) -> use(user);
   case Err&lt;User&gt;(var msg) -> showError(msg);
 }</code></pre>
@@ -4315,7 +4413,8 @@ switch (find(id)) {              // compiler enforces both cases
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="switchexpr">2 · Switch expressions <span class="badge added">Java 14</span></h2>
+  <h2 id="switchexpr">2 · Switch expressions <span class="badge added">Java 14</span> <span class="badge jep">JEP 361</span></h2>
+  <p><em>Previewed in Java 12 (JEP 325), Java 13 (JEP 354), finalized in Java 14 (JEP 361).</em></p>
   <div class="ba">
     <div class="before"><div class="ba-label">Legacy — statement, break, fall-through</div>
       <pre><code class="java">int num;
@@ -4344,7 +4443,8 @@ int n = switch (day) {
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="instanceof">3 · Pattern matching for <code>instanceof</code> <span class="badge added">Java 16</span></h2>
+  <h2 id="instanceof">3 · Pattern matching for <code>instanceof</code> <span class="badge added">Java 16</span> <span class="badge jep">JEP 394</span></h2>
+  <p><em>Previewed in Java 14 (JEP 305), Java 15 (JEP 375), finalized in Java 16 (JEP 394).</em></p>
   <div class="ba">
     <div class="before"><div class="ba-label">Legacy</div>
       <pre><code class="java">if (o instanceof String) {
@@ -4365,7 +4465,8 @@ int n = switch (day) {
 System.out.println(s.length());</code></pre>
 
   <!-- ============================================================ -->
-  <h2 id="switchpat">4 · Pattern matching for <code>switch</code> + guards <span class="badge added">Java 21</span></h2>
+  <h2 id="switchpat">4 · Pattern matching for <code>switch</code> + guards <span class="badge added">Java 21</span> <span class="badge jep">JEP 441</span></h2>
+  <p><em>Previewed in Java 17 (JEP 406), 18 (JEP 420), 19 (JEP 427), 20 (JEP 433), finalized in Java 21 (JEP 441).</em></p>
   <div class="ba">
     <div class="before"><div class="ba-label">Legacy — instanceof ladder</div>
       <pre><code class="java">String describe;
@@ -4393,7 +4494,8 @@ else                                 describe = "other";</code></pre>
   </ul>
 
   <!-- ============================================================ -->
-  <h2 id="record">5 · Record patterns (destructuring) <span class="badge added">Java 21</span></h2>
+  <h2 id="record">5 · Record patterns (destructuring) <span class="badge added">Java 21</span> <span class="badge jep">JEP 440</span></h2>
+  <p><em>Previewed in Java 19 (JEP 405), 20 (JEP 432), finalized in Java 21 (JEP 440).</em></p>
   <div class="ba">
     <div class="before"><div class="ba-label">Legacy — manual extraction</div>
       <pre><code class="java">if (obj instanceof Line l) {
@@ -4560,10 +4662,10 @@ String render(Json j) {
     case JStr(var s)  -> "\"" + s + "\"";
     case JNum(var n)  -> String.valueOf(n);
     case JArr(var xs) -> xs.stream().map(this::render)
-                           .collect(joining(",", "[", "]"));
+                           .collect(Collectors.joining(",", "[", "]"));
     case JObj(var m)  -> m.entrySet().stream()
         .map(e -> "\"" + e.getKey() + "\":" + render(e.getValue()))
-        .collect(joining(",", "{", "}"));
+        .collect(Collectors.joining(",", "{", "}"));
   };   // exhaustive — a new Json variant forces an update here
 }</code></pre>
     </div>
@@ -4689,9 +4791,11 @@ String padded = """
 
   <!-- ============================================================ -->
   <h2 id="templating">4 · Templating &amp; interpolation</h2>
-  <p>Java's dedicated <em>string templates</em> feature was previewed (21–22) then <strong>withdrawn</strong>
-  for redesign, so there is no <code>STR."..."</code> in stable Java. The idiomatic approach is
-  <code>formatted</code> / <code>String.format</code> with a text block:</p>
+  <div class="gotcha">
+    <strong>⚠ String Templates permanently withdrawn.</strong>
+    Previewed as JEP 430 (Java 21) and JEP 459 (Java 22), then completely dropped — the <code>STR."..."</code> interpolation syntax will <em>never</em> ship in stable Java. Use <code>String.formatted()</code>, <code>MessageFormat</code>, or a logging framework instead.
+  </div>
+  <p>The idiomatic approach is <code>formatted</code> / <code>String.format</code> with a text block:</p>
   <div class="ba">
     <div class="before"><div class="ba-label">Legacy</div>
       <pre><code class="java">String msg = "{\n" +
@@ -4716,7 +4820,7 @@ String padded = """
     <tr><td><code>strip() / stripLeading() / stripTrailing()</code></td><td>11</td><td>Unicode-aware trim (<code>trim()</code> is ASCII-only).</td></tr>
     <tr><td><code>repeat(n)</code></td><td>11</td><td>Repeat the string n times.</td></tr>
     <tr><td><code>lines()</code></td><td>11</td><td><code>Stream&lt;String&gt;</code> of lines.</td></tr>
-    <tr><td><code>indent(n)</code></td><td>12</td><td>Add/remove n spaces of indentation per line.</td></tr>
+    <tr><td><code>indent(n)</code></td><td>12</td><td>Add/remove n spaces of indentation per line. Negative <code>n</code> removes up to <code>|n|</code> leading whitespace characters (only whitespace is removed, never non-whitespace).</td></tr>
     <tr><td><code>transform(fn)</code></td><td>12</td><td>Apply a function to the whole string (fluent).</td></tr>
     <tr><td><code>formatted(args)</code></td><td>15</td><td>Instance form of <code>String.format</code>.</td></tr>
     <tr><td><code>stripIndent()</code></td><td>15</td><td>Apply text-block indentation stripping to any string.</td></tr>
@@ -4827,6 +4931,15 @@ email.matcher("not-an-email").matches();      // false — verified</code></pre>
     <tr><td>Java 14</td><td>2nd preview (JEP 368); adds <code>\</code> and <code>\s</code>.</td></tr>
     <tr><td>Java 15</td><td><strong>Final</strong> (JEP 378).</td></tr>
   </table>
+<section id="advanced-text">
+    <h2>Advanced String Topics</h2>
+    
+    <h3>Line Terminator Normalization</h3>
+    <p>Text blocks normalize all line terminators to <code>\n</code> (LF), ensuring consistency across operating systems. Windows <code>\r\n</code> and Mac <code>\r</code> are seamlessly converted.</p>
+    
+    <h3>String.indent(n)</h3>
+    <p>The <code>indent(n)</code> method adjusts the indentation of each line of a string. Positive <code>n</code> adds spaces, negative <code>n</code> removes leading spaces (up to the given number).</p>
+</section>
 </section>
 <section id="pg-topics-modules-jpms-html" class="print-page">
   <p class="sec-tag">Deep dive · platform · complete guide</p>
@@ -4908,6 +5021,29 @@ module com.myapp {
   </table>
 
   <!-- ============================================================ -->
+  <h2 id="advanced-directives">3b · Advanced Directives: transitive and static</h2>
+  <p>Two modifiers on the <code>requires</code> directive give you fine-grained control over visibility and runtime footprint:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">requires transitive</div>
+      <pre><code class="java">module my.data.layer {
+  // Anyone who requires my.data.layer ALSO gets java.sql automatically.
+  // Use this when your public API exposes types from another module
+  // (e.g., your public methods return a java.sql.Connection).
+  requires transitive java.sql;
+}</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">requires static</div>
+      <pre><code class="java">module my.utils {
+  // Compile-time only dependency. 
+  // Required to compile, but completely optional at runtime.
+  // Perfect for annotations like Lombok or JMH that aren't 
+  // needed by the JVM when actually running the app.
+  requires static lombok;
+}</code></pre>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
   <h2 id="graph">4 · A module graph</h2>
   <figure class="diagram">
     <svg viewBox="0 0 760 220" role="img" aria-label="com.myapp requires com.mylib and java.net.http; it exports its api package and opens its model package">
@@ -4962,6 +5098,13 @@ opens com.myapp.model to com.fasterxml.jackson.databind;
 // everyone else is still blocked</code></pre>
     </div>
   </div>
+  
+  <p><strong>The dreaded error:</strong> If you use a reflection-based library (like Gson, Jackson, or Spring) to inspect a class in a module that is <em>not</em> opened, Java will throw a strict exception at runtime instead of silently failing:</p>
+  <pre><code class="java">java.lang.reflect.InaccessibleObjectException: 
+  Unable to make field private java.lang.String com.myapp.model.User.name 
+  accessible: module com.myapp does not "opens com.myapp.model" to unnamed module...</code></pre>
+  <p>To fix this, you must either add an <code>opens</code> directive to your <code>module-info.java</code> or use the <code>--add-opens</code> command-line escape hatch.</p>
+
 
   <!-- ============================================================ -->
   <h2 id="openmodule">5b · <code>open module</code> — opening everything at once</h2>
@@ -4996,36 +5139,85 @@ opens com.myapp.model to com.fasterxml.jackson.databind;
   package-by-package <code>opens</code>).</p>
 
   <!-- ============================================================ -->
-  <h2 id="paths">6 · Classpath vs module path</h2>
+  <h2 id="paths">6 · Classpath vs module path &amp; legacy JARs</h2>
+  <p>The JPMS introduces the <strong>module path</strong> (<code>-p</code>), but the legacy <strong>classpath</strong> (<code>-cp</code>) still fully works. How the JVM treats a JAR depends entirely on <em>where you put it</em> and <em>whether it has a <code>module-info.class</code></em>.</p>
+  
   <table class="data">
-    <tr><th></th><th>Classpath (legacy)</th><th>Module path</th></tr>
-    <tr><td>Flag</td><td><code>-cp</code></td><td><code>-p</code> / <code>--module-path</code></td></tr>
-    <tr><td>Encapsulation</td><td>None — all public reachable</td><td>Only <code>exported</code> packages</td></tr>
-    <tr><td>A plain JAR becomes</td><td>Part of the "unnamed module"</td><td>An <em>automatic module</em> (name from JAR)</td></tr>
+    <tr><th>JAR Type</th><th>Placed on Classpath (<code>-cp</code>)</th><th>Placed on Module Path (<code>-p</code>)</th></tr>
+    <tr><td><strong>Legacy JAR</strong><br><small>(No module-info)</small></td><td>Becomes part of the <strong>Unnamed Module</strong>.<br>Reads everything, exports everything.</td><td>Becomes an <strong>Automatic Module</strong>.<br>Name derived from filename (e.g. <code>gson-2.8.jar</code> → <code>gson</code>). Reads everything, exports everything. Can be <code>required</code> by strict modules!</td></tr>
+    <tr><td><strong>Modular JAR</strong><br><small>(Has module-info)</small></td><td><code>module-info</code> is <strong>ignored</strong>! Treated exactly like a legacy JAR in the unnamed module.</td><td>Becomes a <strong>Named Module</strong>.<br>Strict encapsulation applies.</td></tr>
   </table>
-  <pre><code class="java">javac -d out --module-source-path src $(find src -name '*.java')
-java -p out -m com.myapp/com.myapp.Main      # run module/mainclass
-java --list-modules                           # what's available</code></pre>
 
-  <!-- ============================================================ -->
-  <h2 id="services">7 · Services (ServiceLoader)</h2>
-  <p>Modules formalise the plugin pattern: a module <code>provides</code> an implementation, another
-  <code>uses</code> the interface, and <code>ServiceLoader</code> wires them.</p>
+  <h3>How to run with legacy code</h3>
   <div class="ba">
-    <div class="before"><div class="ba-label">Legacy — META-INF/services text files</div>
-      <pre><code class="java">// META-INF/services/com.myapp.spi.Plugin
-com.acme.FancyPlugin
-// loaded via ServiceLoader.load(Plugin.class) — no compile-time check</code></pre>
+    <div class="before"><div class="ba-label">1. Pure legacy (Java 8 style)</div>
+      <pre><code class="java"># Everything goes on the classpath. No modules exist.
+java -cp "my-app.jar:lib/*" com.myapp.Main</code></pre>
     </div>
-    <div class="after"><div class="ba-label">Module declarations</div>
-      <pre><code class="java">// provider module
-module com.acme { provides com.myapp.spi.Plugin with com.acme.FancyPlugin; }
-// consumer module
-module com.myapp { uses com.myapp.spi.Plugin; }
-// checked by the compiler &amp; module system
-ServiceLoader.load(Plugin.class).forEach(Plugin::run);</code></pre>
+    <div class="after"><div class="ba-label">2. Mixing modules &amp; legacy</div>
+      <pre><code class="java"># Put strict modules on module path, legacy on classpath
+# Note: Named modules CANNOT require the unnamed module.
+java -p my-app.jar -cp "legacy-libs/*" -m com.myapp/com.myapp.Main
+
+# Better: Put legacy JARs on the module path!
+# They become "Automatic Modules" so your strict code can require them.
+java -p "my-app.jar:legacy-libs/*" -m com.myapp/com.myapp.Main</code></pre>
     </div>
   </div>
+
+  <!-- ============================================================ -->
+  <h2 id="services">7 · Services (ServiceLoader) — complete example</h2>
+  <p>Modules formalise the plugin pattern. Instead of hard-coding dependencies on implementation classes, a module <code>provides</code> an implementation, another <code>uses</code> the interface, and the JVM's <code>ServiceLoader</code> wires them together at runtime. This completely replaces the old <code>META-INF/services</code> text files.</p>
+  
+  <p><strong>Step 1: The API module</strong> (defines the contract)</p>
+  <pre><code class="java">// module-info.java
+module com.myapp.api {
+  exports com.myapp.spi;
+}
+
+// com/myapp/spi/Plugin.java
+package com.myapp.spi;
+public interface Plugin {
+    void run();
+}</code></pre>
+
+  <p><strong>Step 2: The Provider module</strong> (implements the contract)</p>
+  <pre><code class="java">// module-info.java
+module com.acme.impl {
+  requires com.myapp.api;
+  // We do NOT export the implementation package! It remains hidden.
+  provides com.myapp.spi.Plugin with com.acme.impl.FancyPlugin; 
+}
+
+// com/acme/impl/FancyPlugin.java
+package com.acme.impl;
+import com.myapp.spi.Plugin;
+public class FancyPlugin implements Plugin {
+    public void run() { System.out.println("Running fancy plugin!"); }
+}</code></pre>
+
+  <p><strong>Step 3: The Consumer module</strong> (uses the contract)</p>
+  <pre><code class="java">// module-info.java
+module com.myapp.app {
+  requires com.myapp.api;
+  uses com.myapp.spi.Plugin; // Declares intent to load this service
+}
+
+// com/myapp/app/Main.java
+package com.myapp.app;
+import com.myapp.spi.Plugin;
+import java.util.ServiceLoader;
+
+public class Main {
+    public static void main(String[] args) {
+        // The JVM automatically discovers FancyPlugin on the module path!
+        // Notice: we do NOT require com.acme.impl anywhere.
+        Iterable&lt;Plugin&gt; plugins = ServiceLoader.load(Plugin.class);
+        for (Plugin p : plugins) {
+            p.run(); 
+        }
+    }
+}</code></pre>
 
   <!-- ============================================================ -->
   <h2 id="migration">8 · Migration &amp; escape hatches</h2>
@@ -5040,21 +5232,36 @@ ServiceLoader.load(Plugin.class).forEach(Plugin::run);</code></pre>
   </ul>
 
   <!-- ============================================================ -->
-  <h2 id="tooling">9 · Tooling: jlink &amp; jdeps</h2>
-  <div class="ba">
-    <div class="before"><div class="ba-label">Legacy — ship the whole JRE</div>
-      <pre><code class="java"># container image bundles a full ~200MB+ JRE
-FROM eclipse-temurin:25
-COPY app.jar /app.jar
-CMD ["java","-jar","/app.jar"]</code></pre>
-    </div>
-    <div class="after"><div class="ba-label">jlink — a minimal custom runtime</div>
-      <pre><code class="java">jlink --add-modules com.myapp,java.net.http \
-      --output myruntime --strip-debug --compress=2
-# myruntime/bin/java is a self-contained, much smaller runtime
-jdeps --jdk-internals app.jar   # find internal-API usage first</code></pre>
-    </div>
-  </div>
+  <h2 id="tooling">9 · Tooling: jdeps, jlink, and jpackage</h2>
+  <p>The module system enabled the creation of three powerful tools that completely change how Java apps are distributed: you no longer tell users to "install Java"; you just hand them an installer.</p>
+
+  <h3>1. <code>jdeps</code> (Dependency Analysis)</h3>
+  <p>Scans your JARs to find exactly which JDK modules your code actually requires, and flags any illegal usage of internal JDK APIs (like <code>sun.misc.Unsafe</code>).</p>
+  <pre><code class="java"># What JDK modules does my app need? (Output might be: java.base, java.desktop)
+jdeps --module-path libs -summary my-app.jar
+
+# Am I using any hidden/removed JDK internal APIs?
+jdeps --jdk-internals my-app.jar</code></pre>
+
+  <h3>2. <code>jlink</code> (Custom Runtime Generator)</h3>
+  <p>Why ship a 250MB JRE if your app only uses <code>java.base</code>? <code>jlink</code> strips away unused JDK modules (like Swing or CORBA) to build a minimal, custom JVM just for your app.</p>
+  <pre><code class="java"># Create a tiny custom JVM containing only your app's required modules
+jlink --module-path $JAVA_HOME/jmods:./libs \
+      --add-modules java.base,com.myapp \
+      --strip-debug --no-man-pages --no-header-files --compress zip-9 \
+      --output my-custom-jre
+# Result: my-custom-jre/bin/java is a fully functional, ~30MB runtime!</code></pre>
+
+  <h3>3. <code>jpackage</code> (Native Installer Builder) <span class="badge added">Java 16</span></h3>
+  <p>Takes your JARs and your custom <code>jlink</code> runtime, and wraps them into a native installer (<code>.exe</code>, <code>.dmg</code>, <code>.deb</code>). The user just double-clicks the installer — they don't even know it's a Java app.</p>
+  <pre><code class="java"># Build a Windows MSI installer (must be run on Windows)
+jpackage --type msi \
+         --name "MyApp" \
+         --input ./libs \
+         --main-jar my-app.jar \
+         --main-class com.myapp.Main \
+         --runtime-image ./my-custom-jre \
+         --win-shortcut --win-menu</code></pre>
 
   <!-- ============================================================ -->
   <h2 id="pitfalls">10 · Pitfalls</h2>
@@ -5079,7 +5286,7 @@ jdeps --jdk-internals app.jar   # find internal-API usage first</code></pre>
   </table>
   <div class="tip"><strong>Related (Java 25):</strong> <em>module import declarations</em> let you
   <code>import module java.base;</code> to pull in everything a module exports — handy in scripts and
-  prototypes. See <a href="#pg-versions-java-25-html">Java 25</a>.</div>
+  prototypes. Previewed in Java 23 <span class="badge jep">JEP 476</span> and Java 24 <span class="badge jep">JEP 494</span>; final in Java 25 <span class="badge jep">JEP 511</span>. See <a href="#pg-versions-java-25-html">Java 25</a>.</div>
 
   <!-- ============================================================ -->
   <h2 id="cheat">12 · Cheat sheet</h2>
@@ -5102,6 +5309,12 @@ jdeps --jdk-internals app.jar   # find internal-API usage first</code></pre>
     <tr><td>Java 16/17</td><td>JDK internals strongly encapsulated by default (JEP 396/403).</td></tr>
     <tr><td>Java 25</td><td>Module import declarations — <code>import module M;</code> (JEP 511).</td></tr>
   </table>
+<section id="advanced-jpms">
+    <h2>Advanced JPMS Topics</h2>
+    
+    <h3>Module and ModuleLayer API</h3>
+    <p>The runtime API for JPMS allows programmatic inspection and manipulation of modules. The <code>java.lang.Module</code> class provides runtime information, while <code>ModuleLayer</code> supports dynamic module loading, enabling plugin architectures.</p>
+</section>
 </section>
 <section id="pg-topics-stream-api-html" class="print-page">
   <p class="sec-tag">Deep dive · API · complete guide</p>
@@ -5283,7 +5496,7 @@ result = new ArrayList&lt;&gt;(new LinkedHashSet&lt;&gt;(result));  // dedupe, k
     <tr><td><code>findFirst()</code> / <code>findAny()</code></td><td><code>Optional&lt;T&gt;</code>, short-circuits.</td></tr>
     <tr><td><code>min/max(Comparator)</code></td><td><code>Optional&lt;T&gt;</code>.</td></tr>
     <tr><td><code>toArray()</code></td><td><code>Object[]</code> or typed array.</td></tr>
-    <tr><td><code>toList()</code> <span class="badge added">16</span></td><td>Unmodifiable <code>List&lt;T&gt;</code> — shorthand for <code>collect(toList())</code>.</td></tr>
+    <tr><td><code>toList()</code> <span class="badge added">16</span></td><td>Unmodifiable <code>List&lt;T&gt;</code>, null-tolerant (distinct from <code>Collectors.toList()</code>).</td></tr>
   </table>
   <pre><code class="java">boolean anyExpensive = orders.stream().anyMatch(o -> o.total() > 1000);   // stops at first match
 Optional&lt;Order&gt; first = orders.stream().filter(o -> o.total() > 1000).findFirst();
@@ -5451,6 +5664,7 @@ String stats = "sum=" + sum + " count=" + count;</code></pre>
 // "sum=425000.0 count=5"</code></pre>
     </div>
   </div>
+  <p><strong>Key property:</strong> <code>teeing()</code> performs a <em>single pass</em> over the stream, branching each element into two independent sub-collectors simultaneously — not two sequential passes. This makes it efficient for combined aggregations like (sum + count) or (min + max) without iterating the source twice.</p>
 
   <!-- ============================================================ -->
   <h2 id="customcollector">6 · Writing a custom Collector</h2>
@@ -5568,7 +5782,7 @@ IntStream.range(0, 100_000).parallel().forEach(unsafe::add);
     <div class="after"><div class="ba-label">Correct — let collect() do the merging</div>
       <pre><code class="java">List&lt;Integer&gt; safe = IntStream.range(0, 100_000).parallel()
     .boxed()
-    .collect(Collectors.toList());
+    .toList();
 // each chunk accumulates independently; the Collector's
 // combiner merges them safely — no shared mutable state</code></pre>
     </div>
@@ -5656,8 +5870,9 @@ System.out.println(totalsByRegionSorted);
   </div>
 
   <div class="note"><strong>Beyond Java 8:</strong> the core API above hasn't changed shape since
-  Java 8 — only additions. <code>takeWhile</code>/<code>dropWhile</code> (9), <code>toList()</code>/
-  <code>mapMulti</code> (16), and <code>teeing</code> (12) are covered above. For custom
+  Java 8 — only additions. <code>takeWhile</code>/<code>dropWhile</code> (9), <code>toList()</code> (16)
+  and <code>teeing</code> (12) are covered above. <code>mapMulti</code> (16) offers a zero-allocation
+  imperative alternative to <code>flatMap</code>. For custom
   <em>intermediate</em> operations (the missing piece Collectors couldn't do), see
   <a href="#pg-topics-streams-gatherers-html">Stream Gatherers</a> (final in 24).</div>
 </section>
@@ -5899,6 +6114,7 @@ try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
 
 // For comparison, an explicit platform thread:
 Thread p = Thread.ofPlatform().name("io").start(() -> doWork());</code></pre>
+  <p><code>Thread.ofVirtual().unstarted(task)</code> — creates but does not start the thread; useful when you need to configure additional properties (e.g., name, uncaught-exception handler) before starting.</p>
   <div class="note"><strong>Check at runtime:</strong> <code>Thread.currentThread().isVirtual()</code>
   returns <code>true</code> inside a virtual thread.</div>
 
@@ -5981,7 +6197,7 @@ try { return jdbc.query(sql); } finally { db.release(); }</code></pre>
     <li>Blocking inside a <code>synchronized</code> block or method.</li>
     <li>Calling a native method / foreign function while blocked.</li>
   </ol>
-  <p><strong>Java 24 (JEP 491) removed the <code>synchronized</code> cause entirely</strong> — the big
+  <p><strong>Java 24 <span class="badge jep">JEP 491</span> removed the <code>synchronized</code> cause entirely</strong> — the big
   one. Native-call pinning remains but is rare in application code.</p>
 
   <figure class="diagram">
@@ -6275,6 +6491,15 @@ static int status(HttpClient http, String url) throws Exception {
     <tr><td>Java 21</td><td><strong>Final</strong> (JEP 444).</td></tr>
     <tr><td>Java 24</td><td><code>synchronized</code> no longer pins (JEP 491).</td></tr>
   </table>
+
+  <!-- ============================================================ -->
+  <h2>Virtual Thread Invariants</h2>
+  <p>Virtual threads are managed by the JVM and have a few strict invariants compared to platform threads:</p>
+  <ul>
+    <li><strong>Always Daemon:</strong> Virtual threads are always daemon threads. They will not keep the JVM alive if all non-daemon platform threads terminate.</li>
+    <li><strong>Fixed Priority:</strong> The priority of a virtual thread is always <code>Thread.NORM_PRIORITY</code>. It cannot be changed.</li>
+    <li><strong>No ThreadGroup:</strong> Virtual threads cannot be added to a custom <code>ThreadGroup</code>. They all belong to a single system thread group.</li>
+  </ul>
 </section>
 <section id="pg-topics-structured-concurrency-html" class="print-page">
   <p class="sec-tag">Deep dive · concurrency · complete guide</p>
@@ -6543,10 +6768,27 @@ try {
   <table class="data">
     <tr><th>Version</th><th>Change</th></tr>
     <tr><td>Java 19–20</td><td>Incubator (<code>jdk.incubator.concurrent</code>).</td></tr>
-    <tr><td>Java 21–24</td><td>Preview; <code>ShutdownOnFailure</code>/<code>ShutdownOnSuccess</code> + <code>throwIfFailed()</code>.</td></tr>
-    <tr><td>Java 25</td><td>5th preview (JEP 505) — reworked <code>open(Joiner…)</code> API.</td></tr>
-    <tr><td>Java 26</td><td>6th preview (JEP 525) — refinements, approaching final.</td></tr>
+    <tr><td>Java 21</td><td>1st preview <span class="badge jep">JEP 453</span> — moved to <code>java.util.concurrent</code>.</td></tr>
+    <tr><td>Java 22</td><td>2nd preview <span class="badge jep">JEP 462</span> — minor refinements.</td></tr>
+    <tr><td>Java 23</td><td>3rd preview <span class="badge jep">JEP 480</span> — minor refinements.</td></tr>
+    <tr><td>Java 24</td><td>4th preview <span class="badge jep">JEP 499</span> — minor refinements.</td></tr>
+    <tr><td>Java 25</td><td>5th preview <span class="badge jep">JEP 505</span> — reworked <code>open(Joiner…)</code> API; <strong>breaking change from 21–24</strong>.</td></tr>
+    <tr><td>Java 26</td><td>6th preview <span class="badge jep">JEP 525</span> — refinements, approaching final.</td></tr>
   </table>
+  <div class="gotcha">
+    <strong>⚠ Breaking API change between Java 21–24 and Java 25+.</strong> The Java 21–24 preview used <code>new StructuredTaskScope.ShutdownOnFailure()</code> (subclass instantiation) with explicit <code>scope.throwIfFailed()</code>. Java 25+ replaces this with <code>StructuredTaskScope.open(Joiner.allSuccessfulOrThrow())</code> where <code>join()</code> itself throws. These APIs are <em>incompatible</em> — upgrading from Java 21–24 to Java 25 requires refactoring any code using the old subclass-based API.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>Advanced Topics</h2>
+  <h3>StructuredTaskScope.Config</h3>
+  <p>In the new Java 25+ API, scopes can be customized via <code>StructuredTaskScope.Config</code>. You can set timeouts and thread factories directly on the configuration, providing a cleaner way to apply constraints without subclassing.</p>
+
+  <h3>The Joiner API Surface</h3>
+  <p>The <code>Joiner</code> interface introduced in Java 25+ allows writing custom completion policies. A Joiner defines how to accumulate results and short-circuit when a condition is met, bringing flexibility similar to the Stream API's <code>Collector</code>.</p>
+
+  <h3>Structural Confinement Rule</h3>
+  <p>Structured tasks enforce strict structural confinement. A child subtask cannot outlive the lexical scope of its parent <code>StructuredTaskScope</code>. If a parent exits its scope while subtasks are still running, those subtasks are automatically cancelled (interrupted), preventing orphaned threads.</p>
 </section>
 <section id="pg-topics-scoped-values-html" class="print-page">
   <p class="sec-tag">Deep dive · concurrency · complete guide</p>
@@ -6764,6 +7006,7 @@ void repo() {
     </ul>
   </div>
 
+  <p><strong>Package migration note:</strong> The Java 20 incubator (JEP 429) placed <code>ScopedValue</code> in <code>jdk.incubator.concurrent</code>. Starting from the Java 21 preview (JEP 446), it moved to <code>java.lang</code>. Any code written against the incubator package must be updated to use <code>java.lang.ScopedValue</code>.</p>
   <h2>Evolution</h2>
   <table class="data">
     <tr><th>Version</th><th>Change</th></tr>
@@ -6771,6 +7014,17 @@ void repo() {
     <tr><td>Java 21–24</td><td>Preview (JEPs 446, 464, 481, 487).</td></tr>
     <tr><td>Java 25</td><td><strong>Final</strong> (JEP 506).</td></tr>
   </table>
+
+  <!-- ============================================================ -->
+  <h2>Advanced Topics</h2>
+  <h3>ScopedValue.Carrier</h3>
+  <p>If you need to bind multiple scoped values at once, <code>ScopedValue.where(...)</code> internally uses a <code>ScopedValue.Carrier</code>. This carrier object packages bindings together efficiently, and you can explicitly create one when building dynamic binding contexts across framework boundaries.</p>
+
+  <h3>CallableOp vs Callable</h3>
+  <p>ScopedValue introduces its own <code>ScopedValue.CallableOp</code> instead of reusing <code>java.util.concurrent.Callable</code>. <code>CallableOp</code> can throw any <code>Exception</code>, making it easier to integrate cleanly with your application's checked exception signatures without unnecessary wrapping.</p>
+
+  <h3>Preventing Thread Pool Leaks</h3>
+  <p>One of the largest hidden costs of <code>ThreadLocal</code> in long-lived thread pools is value leakage. If a thread sets a ThreadLocal and fails to clean it up, the object is pinned in memory for the lifetime of that thread. Because scoped values are inherently strictly bound to a <code>Runnable</code> or <code>CallableOp</code> execution block, they automatically unbind when the block completes, eliminating this class of memory leaks entirely.</p>
 </section>
 <section id="pg-topics-streams-gatherers-html" class="print-page">
   <p class="sec-tag">Deep dive · API · complete guide</p>
@@ -6896,6 +7150,7 @@ Stream.of(1,2,3).gather(Gatherers.scan(() -> "", (acc, n) -> acc + n)).toList();
     .gather(Gatherers.fold(() -> "", (acc, n) -> acc + n))
     .findFirst();
 // Optional["123456789"]</code></pre>
+  <p><strong>fold vs reduce:</strong> <code>fold</code> emits <em>exactly one</em> final element after the entire stream is consumed, and supports an arbitrary accumulator type <code>R</code> that differs from the element type <code>T</code>. <code>Stream.reduce()</code> returns an <code>Optional</code> and requires the accumulated type to match the element type. Use <code>fold</code> when you need type transformation during accumulation.</p>
 
   <h3>2.5 · <code>mapConcurrent(n, mapper)</code> — bounded concurrent mapping</h3>
   <p><em>Behaviour:</em> maps up to <code>n</code> elements <em>concurrently</em> (backed by
@@ -6904,6 +7159,7 @@ Stream.of(1,2,3).gather(Gatherers.scan(() -> "", (acc, n) -> acc + n)).toList();
   <pre><code class="java">var bodies = urls.stream()
     .gather(Gatherers.mapConcurrent(10, this::fetch))
     .toList();   // ≤10 in flight, order preserved</code></pre>
+  <p><strong>Implementation note:</strong> <code>mapConcurrent(n, fn)</code> internally runs tasks on virtual threads, bounded by a semaphore of size <code>n</code>. It reorders outputs to match input encounter order regardless of task completion order, making it safe and deterministic for I/O-bound operations.</p>
 
   <h3>Before &amp; after — replacing a manual windowing loop</h3>
   <div class="ba">
@@ -7023,7 +7279,7 @@ Stream.of("A","A","B","B","B","A","C")
     <div class="after"><div class="ba-label">Fused into one named, reusable Gatherer</div>
       <pre><code class="java">// turn a plain mapping function into a (stateless) Gatherer
 static &lt;T, R&gt; Gatherer&lt;T, ?, R&gt; mapping(Function&lt;T, R&gt; f) {
-  return Gatherer.of((state, element, downstream) -> downstream.push(f.apply(element)));
+  return Gatherer.ofSequential((state, element, downstream) -&gt; downstream.push(f.apply(element)));
 }
 
 // fuse "batch into 3s" + "average each batch" into one Gatherer
@@ -7137,6 +7393,17 @@ if (!batch.isEmpty()) repo.insertAll(batch);   // don't forget the tail!</code><
     <tr><td>Java 23</td><td>2nd preview (JEP 473).</td></tr>
     <tr><td>Java 24</td><td><strong>Final</strong> (JEP 485).</td></tr>
   </table>
+
+  <!-- ============================================================ -->
+  <h2>Advanced Gatherer Concepts</h2>
+  <h3>Greedy vs Non-Greedy Integrators</h3>
+  <p>A Gatherer's integrator can be greedy (always returning <code>true</code> to request more elements) or non-greedy (returning <code>false</code> to short-circuit). Non-greedy integrators allow gatherers to act like <code>limit()</code> or <code>takeWhile()</code>, stopping upstream processing early once their specific condition is met.</p>
+
+  <h3>Gatherer.Downstream</h3>
+  <p>The <code>Gatherer.Downstream</code> interface is how an integrator or finisher pushes elements to the next stage in the pipeline. It is intentionally simple, consisting primarily of the <code>push(T element)</code> method. You must check its return value: if it returns <code>false</code>, the downstream no longer accepts elements, and your gatherer should gracefully stop.</p>
+
+  <h3>Parallel Gatherer Support</h3>
+  <p>To support parallel execution, a Gatherer needs a <strong>combiner</strong>. If your Gatherer is stateful and cannot be safely merged across threads, use <code>Gatherer.ofSequential(...)</code>. If the state is mergeable, you supply a combiner function just like in a Collector, allowing the parallel stream framework to split the work and merge the partial states.</p>
 </section>
 <section id="pg-topics-ffm-api-html" class="print-page">
   <p class="sec-tag">Deep dive · API · complete guide</p>
@@ -7304,6 +7571,7 @@ try (Arena arena = Arena.ofConfined()) {
   and generates ready-to-use Java bindings:</p>
   <pre><code class="java">jextract --output src -t org.example.zlib -l z /usr/include/zlib.h
 // then call generated methods like  zlib.compress(...)</code></pre>
+  <p><strong>Note:</strong> <code>jextract</code> is <em>not</em> bundled with the standard JDK. It must be downloaded separately from <a href="https://jdk.java.net/jextract/">jdk.java.net/jextract</a>. It generates FFM Java bindings from native C header files.</p>
 
   <!-- ============================================================ -->
   <h2 id="access">7 · Native-access restrictions</h2>
@@ -7311,6 +7579,9 @@ try (Arena arena = Arena.ofConfined()) {
   <pre><code class="java">java --enable-native-access=com.myapp   -jar app.jar   # a module
 java --enable-native-access=ALL-UNNAMED -jar app.jar   # classpath apps
 // without it you get warnings now, errors later</code></pre>
+  <div class="gotcha">
+    <strong>⚠ Enforcement changed in Java 22 and 24.</strong> In Java 21 and earlier previews, missing <code>--enable-native-access</code> produced a warning. From <strong>Java 22 onwards</strong>, named modules throw <code>IllegalCallerException</code> while unnamed modules still warn. In <strong>Java 24+</strong> (JEP 472), all modules including unnamed ones throw <code>IllegalCallerException</code>. Always include <code>--enable-native-access=ALL-UNNAMED</code> (or the specific module name) in production launch scripts.
+  </div>
 
   <!-- ============================================================ -->
   <h2 id="fullexample">8 · Full runnable example — sort a native array with libc's <code>qsort</code></h2>
@@ -7466,6 +7737,21 @@ After:  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]</code></pre>
     <tr><td>Java 19–21</td><td>Preview (JEPs 424, 434, 442).</td></tr>
     <tr><td>Java 22</td><td><strong>Final</strong> (JEP 454).</td></tr>
   </table>
+<section id="advanced-ffm">
+    <h2>Advanced FFM Features</h2>
+    
+    <h3>MemorySegment.reinterpret</h3>
+    <p>Allows resizing or reattaching a segment to a different scope, commonly used when receiving a zero-length segment from C to resize it to the actual known length.</p>
+    
+    <h3>Linker.Option</h3>
+    <p>Options for downcalls, such as <code>Linker.Option.captureCallState("errno")</code> to capture the state of native thread-local variables like errno.</p>
+
+    <h3>Bulk Memory Operations</h3>
+    <p>FFM API supports highly optimized bulk memory operations such as <code>MemorySegment.copy()</code> and <code>MemorySegment.mismatch()</code> for transferring or comparing large memory regions.</p>
+
+    <h3>SymbolLookup Variants</h3>
+    <p>Various lookups are supported: <code>SymbolLookup.loaderLookup()</code>, <code>SymbolLookup.libraryLookup()</code>, and <code>Linker.defaultLookup()</code> to resolve native symbols across libraries or system paths.</p>
+</section>
 </section>
 <section id="pg-topics-jvm-memory-gc-html" class="print-page">
   <p class="sec-tag">Deep dive · JVM internals · complete guide</p>
@@ -7497,6 +7783,13 @@ After:  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]</code></pre>
     <strong>On this page</strong>
     <a href="#areas">1. JVM runtime memory areas</a>
     <a href="#jmm">2. The Java Memory Model</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2a. Happens-before edges</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2b. volatile vs synchronized</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2c. Instruction reordering &amp; double-checked locking</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2d. Safe publication patterns</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2e. final field semantics</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2f. Atomics &amp; CAS</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2g. VarHandle ordering modes (Java 9+)</a>
     <a href="#heap">3. The heap in detail</a>
     <a href="#howgc">4. How garbage collection actually works</a>
     <a href="#collectors">5. The collectors, one by one</a>
@@ -7582,7 +7875,20 @@ After:  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]</code></pre>
     <li>An <strong>unlock</strong> on a monitor happens-before every subsequent <strong>lock</strong> on that same monitor.</li>
     <li>A write to a <code>volatile</code> field happens-before every subsequent read of that field.</li>
     <li>Starting a thread happens-before the first action inside it; a thread's last action happens-before code that observes it via <code>join()</code> or <code>isAlive()</code>.</li>
+    <li>Writing a default value (<code>0</code>/<code>null</code>/<code>false</code>) to every field of an object happens-before <em>any</em> action in the program — fields are never "uninitialized garbage" in Java.</li>
+    <li>The completion of a constructor for an object with <code>final</code> fields happens-before any read of those fields (the "freeze" action — see §2e below).</li>
+    <li>An action that interrupts a thread (<code>t.interrupt()</code>) happens-before the point where the target detects the interrupt (<code>InterruptedException</code> / <code>Thread.interrupted()</code>).</li>
+    <li>Happens-before is <strong>transitive</strong>: if A hb B and B hb C, then A hb C.</li>
   </ul>
+
+  <h3>Concrete reordering example — why this matters</h3>
+  <p>Without a happens-before edge the compiler/CPU may freely reorder independent writes. Consider two shared variables <code>x</code> and <code>y</code> initially <code>0</code>:</p>
+  <pre><code class="java">// Thread 1           // Thread 2
+x = 1;                int r1 = y;
+y = 1;                int r2 = x;
+// Surprisingly legal result: r1 == 1 AND r2 == 0
+// Thread 1 reordered y=1 before x=1; Thread 2 saw the reordered state</code></pre>
+  <p>Making <code>y</code> volatile would prevent this: the write <code>y = 1</code> would carry a memory barrier that forces <code>x = 1</code> to be visible before <code>y</code>'s write completes.</p>
 
   <h3>Verified: a real visibility bug, and the one-word fix</h3>
   <p>Without a happens-before edge, the compiler and JIT are free to assume a field never changes and
@@ -7641,6 +7947,82 @@ After:  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]</code></pre>
     <tr><td>Use for</td><td>A single flag/reference read by many threads, written by one</td><td>Compound invariants across multiple fields, or multi-step updates</td></tr>
     <tr><td>Does NOT give you</td><td>Atomicity of compound operations (<code>count++</code> is still a race)</td><td>—</td></tr>
   </table>
+
+  <h3>Advanced JMM: Instruction Reordering &amp; the "As-If-Serial" Illusion</h3>
+  <p>To maximize performance, the compiler, JIT, and CPU are legally allowed to reorder your instructions (e.g., delaying a memory write or hoisting a read) <strong>as long as single-threaded execution isn't broken</strong> (the "as-if-serial" guarantee). But across threads, this breaks instantly without a happens-before edge.</p>
+
+  <h3>Advanced JMM: The Double-Checked Locking Bug</h3>
+  <p>The classic Singleton lazy-initialization pattern is the most famous victim of instruction reordering. Without <code>volatile</code>, this code is fatally broken:</p>
+  <pre><code class="java">public class Singleton {
+  private static Singleton instance; // BUG: missing 'volatile'
+  public static Singleton getInstance() {
+    if (instance == null) {
+      synchronized (Singleton.class) {
+        if (instance == null) instance = new Singleton(); // The danger zone
+      }
+    }
+    return instance;
+  }
+}</code></pre>
+  <p><strong>Why it fails:</strong> The JVM performs three steps for <code>new Singleton()</code>: (1) allocate memory, (2) initialize the object (call constructor), and (3) assign the reference to <code>instance</code>. The JMM allows the CPU to reorder these as <strong>1 → 3 → 2</strong>. Another thread calling <code>getInstance()</code> could see <code>instance != null</code> (step 3) and return a <strong>partially initialized object</strong> because the constructor hasn't finished yet (step 2)!<br>
+  <strong>The Fix:</strong> Adding <code>volatile</code> to <code>instance</code> establishes a memory barrier. It strictly prevents the write of the reference from being reordered ahead of the object's initialization.</p>
+
+  <h3>Advanced JMM: <code>final</code> Field Semantics (Initialization Safety)</h3>
+  <p>The JMM provides a special guarantee for <code>final</code> fields. At the end of a constructor, the JMM issues a "freeze" action on all final fields. This creates a happens-before relationship ensuring that any thread that sees the object reference will <em>always</em> see the fully initialized values of those final fields.</p>
+  <ul>
+    <li><strong>No Locks Needed:</strong> You don't need <code>volatile</code> or <code>synchronized</code> to safely read a final field across threads.</li>
+    <li><strong>The Catch (No Leaking):</strong> This guarantee is completely voided if you let the <code>this</code> reference "escape" during construction (e.g., publishing <code>this</code> to a listener or a static field inside the constructor). If <code>this</code> escapes, other threads might see the object before the freeze action occurs.</li>
+  </ul>
+
+  <h3>Advanced JMM: Safe Publication Patterns</h3>
+  <p>"Publication" means making an object reference visible to another thread. <strong>Unsafe publication</strong> is the #1 source of subtle concurrency bugs — thread B sees the reference but reads partially initialized fields. The JMM defines exactly four safe ways to publish an object:</p>
+  <table class="data">
+    <tr><th>Safe Publication Technique</th><th>How it works</th></tr>
+    <tr><td><code>static</code> initializer</td><td>JVM class-loading guarantees the object is fully initialized before any thread can access it. <strong>Simplest and safest.</strong></td></tr>
+    <tr><td><code>volatile</code> field</td><td>Writing the reference to a volatile field establishes a happens-before edge — all prior writes (including the constructor) are visible to readers.</td></tr>
+    <tr><td><code>final</code> field</td><td>The JMM "freeze" action (§2e) guarantees visibility of final fields without any synchronization — the basis of safe immutable objects.</td></tr>
+    <tr><td><code>synchronized</code> / <code>Lock</code></td><td>Acquiring a lock that was released by the publishing thread creates a happens-before edge. Also applies to concurrent collections (<code>ConcurrentHashMap.put</code>, <code>BlockingQueue.offer</code>).</td></tr>
+  </table>
+  <div class="warn">
+    <strong>The Initialization-on-Demand Holder idiom</strong> — the preferred lazy singleton in modern Java:
+    <pre><code class="java">public class Registry {
+  private static class Holder { // Loaded only on first call to getInstance()
+    static final Registry INSTANCE = new Registry();
+  }
+  public static Registry getInstance() { return Holder.INSTANCE; }
+}
+// Thread-safe, lazy, no volatile needed — relies on JVM class-loading guarantee.</code></pre>
+  </div>
+
+  <h3>Advanced JMM: Atomics and Compare-And-Swap (CAS)</h3>
+  <p><code>volatile</code> gives you visibility but <strong>not atomicity</strong> for compound operations. <code>count++</code> on a volatile field is still a race (read → increment → write). The <code>java.util.concurrent.atomic</code> package solves this with hardware-level <strong>Compare-And-Swap (CAS)</strong> instructions:</p>
+  <pre><code class="java">AtomicInteger counter = new AtomicInteger(0);
+counter.incrementAndGet(); // Thread-safe, lock-free, uses CPU CAS instruction
+
+// Under the hood, incrementAndGet does this:
+// for (;;) {
+//     int current = get();
+//     int next = current + 1;
+//     if (compareAndSet(current, next)) return next; // retry on contention
+// }</code></pre>
+  <table class="data">
+    <tr><th>Class</th><th>Use case</th></tr>
+    <tr><td><code>AtomicInteger</code> / <code>AtomicLong</code></td><td>Lock-free counters, sequence generators.</td></tr>
+    <tr><td><code>AtomicReference&lt;V&gt;</code></td><td>Lock-free updates to a shared object reference.</td></tr>
+    <tr><td><code>AtomicBoolean</code></td><td>One-shot flags (e.g., "initialized?").</td></tr>
+    <tr><td><code>LongAdder</code> / <code>LongAccumulator</code></td><td>High-contention counters — internally stripes across cells to reduce CAS retries. <strong>Prefer over AtomicLong for statistics/metrics.</strong></td></tr>
+  </table>
+
+  <h3>Advanced JMM: VarHandle Memory Ordering Modes <span class="badge added">Java 9</span></h3>
+  <p><code>java.lang.invoke.VarHandle</code> (JEP 193) replaced the internal <code>sun.misc.Unsafe</code> API with a standard, type-safe mechanism for fine-grained memory access. It exposes <strong>four ordering modes</strong>, from weakest to strongest:</p>
+  <table class="data">
+    <tr><th>Mode</th><th>Methods</th><th>Guarantee</th><th>Use case</th></tr>
+    <tr><td><strong>Plain</strong></td><td><code>get()</code>, <code>set()</code></td><td>No ordering guarantee across threads (same as a normal field).</td><td>Single-threaded hot paths.</td></tr>
+    <tr><td><strong>Opaque</strong></td><td><code>getOpaque()</code>, <code>setOpaque()</code></td><td>Coherence order for <em>this variable only</em> — no reordering of accesses to this var, but no barrier for other vars.</td><td>Progress indicators, spin-loops.</td></tr>
+    <tr><td><strong>Acquire/Release</strong></td><td><code>getAcquire()</code>, <code>setRelease()</code></td><td>Release writes are visible to subsequent acquire reads. All prior writes become visible (one-way fence).</td><td>Lock-free data structures, message passing.</td></tr>
+    <tr><td><strong>Volatile</strong></td><td><code>getVolatile()</code>, <code>setVolatile()</code></td><td>Full acquire + release + total ordering across all volatile accesses (same as <code>volatile</code> keyword).</td><td>When total order is essential.</td></tr>
+  </table>
+  <div class="tip"><strong>Rule of thumb:</strong> Use <code>java.util.concurrent</code> classes first (<code>AtomicLong</code>, <code>ConcurrentHashMap</code>). Reach for <code>VarHandle</code> only in performance-critical library code where you need acquire/release or opaque semantics — most application code never needs it.</div>
 
   <!-- ============================================================ -->
   <h2 id="heap">3 · The heap in detail</h2>
@@ -7731,12 +8113,12 @@ java -Xmx64m -Xlog:gc+age=trace YourApp.java
   on machines with 8+ hardware threads, it uses roughly <strong>5/8</strong> of them as GC threads by
   default. Best for batch jobs and throughput-sensitive workloads that can tolerate occasional pauses.</p>
 
-  <h3>CMS (Concurrent Mark Sweep) — <span class="badge removed">Removed in 14</span></h3>
+  <h3>CMS (Concurrent Mark Sweep) — <span class="badge removed">Removed in 14</span> <span class="badge jep">JEP 363</span></h3>
   <p>The first mainstream concurrent, low-pause collector. Deprecated in Java 9, removed in Java 14 —
   G1 replaced it entirely. If you inherit code with <code>-XX:+UseConcMarkSweepGC</code>, it won't even
   start on a modern JDK; migrate to G1.</p>
 
-  <h3>G1 (Garbage-First) — default, <code>-XX:+UseG1GC</code></h3>
+  <h3>G1 (Garbage-First) — default, <code>-XX:+UseG1GC</code> <span class="badge jep">JEP 248</span></h3>
   <p><em>Default since Java 9.</em> Verified from Oracle's own docs: "generational, incremental,
   parallel, mostly concurrent, stop-the-world, and evacuating." Splits the heap into equal-sized
   regions (not one contiguous young/old block) and prioritizes collecting the regions with the most
@@ -7745,14 +8127,15 @@ java -Xmx64m -Xlog:gc+age=trace YourApp.java
   <h3>ZGC (Z Garbage Collector) — <code>-XX:+UseZGC</code></h3>
   <p>A scalable, low-latency concurrent collector. Verified from Oracle's docs: pause times independent
   of heap size, "without stopping application threads for more than a millisecond," scales from a few
-  hundred MB to 16 TB. <strong>Verified: as of JDK 24, ZGC is generational by default</strong> — the
-  old <code>-XX:+ZGenerational</code> flag has been removed entirely.</p>
+  hundred MB to 16 TB. <strong>Verified: as of JDK 24, ZGC is generational by default</strong> <span class="badge jep">JEP 474</span> — the
+  old <code>-XX:+ZGenerational</code> and non-generational ZGC have been removed entirely <span class="badge jep">JEP 490</span>.</p>
 
   <h3>Shenandoah — <code>-XX:+UseShenandoahGC</code></h3>
   <p>Verified from the OpenJDK wiki: "the low pause time garbage collector... pause times are no longer
   directly proportional to the size of the heap. Garbage collecting a 200 GB heap or a 2 GB heap should
   have the similar low pause behavior." A Red Hat-led alternative to ZGC with a similar goal, using
   concurrent compaction rather than ZGC's colored-pointer approach.</p>
+  <p><strong>Oracle JDK note:</strong> JEP 189 was merged into OpenJDK 12, but <em>Oracle JDK</em> did not include Shenandoah until Java 17. If using Oracle-branded JDK builds (not OpenJDK), Shenandoah is available starting from Java 17.</p>
 
   <h3>Epsilon (No-Op) — <code>-XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC</code></h3>
   <p>Allocates memory and <strong>never collects it</strong>. Verified: it requires unlocking
@@ -7853,8 +8236,8 @@ GC(7) Pause Young (Mixed) (G1 Evacuation Pause) 17M->14M(28M) 1.559ms  ← also 
   mechanisms:</p>
   <table class="data">
     <tr><th></th><th>ZGC</th><th>Shenandoah</th></tr>
-    <tr><td>Core technique</td><td>Colored pointers + load barriers</td><td>Brooks forwarding pointers + concurrent compaction</td></tr>
-    <tr><td>Metadata location</td><td>Encoded in the pointer itself (unused address bits)</td><td>An extra forwarding-pointer word per object</td></tr>
+    <tr><td>Core technique</td><td>Colored pointers + load barriers</td><td>Load-Reference Barriers (LRB) + concurrent compaction</td></tr>
+    <tr><td>Metadata location</td><td>Encoded in the pointer itself (unused address bits)</td><td>Encoded in the object header (mark word)</td></tr>
     <tr><td>Origin</td><td>Oracle</td><td>Red Hat</td></tr>
     <tr><td>Generational</td><td>Yes, default since JDK 24</td><td>Final in JDK 25 (JEP 404/521 lineage)</td></tr>
     <tr><td>Platform support</td><td>Broad, Oracle-maintained</td><td>Linux/Windows primary; verified from OpenJDK wiki as also community-tested on macOS</td></tr>
@@ -7984,7 +8367,7 @@ jcmd $! GC.heap_info      # run this a few times while it's executing</code></pr
   <table class="data">
     <tr><th>Version</th><th>Change</th></tr>
     <tr><td>Java 1.2–1.4</td><td>Serial and Parallel collectors established.</td></tr>
-    <tr><td>Java 5</td><td>CMS (Concurrent Mark Sweep) introduced.</td></tr>
+    <tr><td>Java 5</td><td>CMS (Concurrent Mark Sweep) introduced (first available in Java 1.4.1; formally part of the JDK since Java 5).</td></tr>
     <tr><td>Java 7u4</td><td>G1 first available (opt-in).</td></tr>
     <tr><td>Java 8</td><td>PermGen replaced by Metaspace.</td></tr>
     <tr><td>Java 9</td><td><strong>G1 becomes the default collector</strong>; CMS deprecated.</td></tr>
@@ -7997,6 +8380,18 @@ jcmd $! GC.heap_info      # run this a few times while it's executing</code></pr
     <tr><td>Java 24</td><td><code>-XX:+ZGenerational</code> flag removed — generational is the only mode.</td></tr>
     <tr><td>Java 25</td><td>Generational Shenandoah finalized; compact object headers finalized.</td></tr>
   </table>
+<section id="advanced-jvm">
+    <h2>Advanced JVM Memory & GC Topics</h2>
+    
+    <h3>Reference Types & Cleaner API</h3>
+    <p>The hierarchy of references (Soft, Weak, Phantom) helps manage object lifecycle. The <code>java.lang.ref.Cleaner</code> API is the modern, safer alternative to overriding <code>Object.finalize()</code>, allowing cleanup actions after objects become phantom reachable.</p>
+    
+    <h3>Project Lilliput (Compact Object Headers)</h3>
+    <p>Aims to reduce object header sizes in HotSpot from 128 bits down to 64 bits or even 32 bits, drastically reducing the overall memory footprint of Java applications with large numbers of small objects.</p>
+
+    <h3>False Sharing and @Contended</h3>
+    <p>False sharing occurs when independent variables share a cache line, causing cache invalidation overhead. The <code>@jdk.internal.vm.annotation.Contended</code> annotation pads fields or classes to isolate them in separate cache lines, improving concurrent performance.</p>
+</section>
 </section>
 <section id="pg-topics-aot-cache-html" class="print-page">
   <p class="sec-tag">Deep dive · JVM internals · complete guide</p>
@@ -8281,7 +8676,7 @@ java -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=classes.jsa -cp . HelloS
   <table class="data">
     <tr><th>Pitfall</th><th>Reality</th></tr>
     <tr><td>Training under one GC/config, running under another</td><td>Verified in §5: the cache is silently discarded with a warning under <code>AOTMode=auto</code> (the default) — you lose the speed-up but the app still runs.</td></tr>
-    <tr><td>Using <code>AOTMode=on</code> in production</td><td>Fails fast and exits if the cache can't load — verified behavior, intended only as a debugging aid, not for production robustness.</td></tr>
+    <tr><td>Using <code>AOTMode=on</code> in production</td><td>This is actually recommended! <p><strong><code>AOTMode=on</code> (fail-fast):</strong> Exits immediately at startup with an error if the cache does not exist or cannot be loaded. Recommended for production to ensure you get the fast startup you expect. Contrast with <code>AOTMode=auto</code>, which silently falls back to normal JVM execution on a cache miss.</p></td></tr>
     <tr><td>Assuming the cache format is stable across JDK versions</td><td>Verified from JEP 483: "the format of the configuration and cache files is not specified and is subject to change without notice." Rebuild the cache for every JDK upgrade.</td></tr>
     <tr><td>Expecting classes loaded by custom class loaders to be cached</td><td>Verified non-goal of JEP 483: only classes from the class path, module path, and the JDK's own built-in loaders are cached.</td></tr>
     <tr><td>Training with a test framework instead of realistic usage</td><td>Bloats the cache with classes production never touches — Oracle's own guidance explicitly warns against this (§8).</td></tr>
@@ -8326,6 +8721,18 @@ java -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=classes.jsa -cp . HelloS
     <tr><td>Java 25</td><td>AOT Command-Line Ergonomics (JEP 514) — one-step workflow. AOT Method Profiling (JEP 515) — warmup, not just startup.</td></tr>
     <tr><td>Java 26</td><td>AOT Object Caching with Any GC (JEP 516) — works with ZGC and every collector.</td></tr>
   </table>
+<section id="advanced-aot">
+    <h2>Advanced AOT & Caching</h2>
+    
+    <h3>Heap Object Archiving</h3>
+    <p>Allows archiving live object graphs into CDS (Class Data Sharing) archives. This significantly speeds up startup times by bypassing the initialization overhead of complex static structures.</p>
+    
+    <h3>AOT Early Initialization</h3>
+    <p>AOT compilation allows running static initializers at build time. Project Leyden seeks to shift work from runtime to build time, capturing the initialized state for faster startup.</p>
+
+    <h3>Cache Invalidation Constraints</h3>
+    <p>When using AOT or CDS, the runtime must match the conditions under which the cache was created. Changes to class paths, module paths, or JVM arguments can invalidate the cache.</p>
+</section>
 </section>
 
 </div>
