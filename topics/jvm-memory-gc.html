@@ -183,6 +183,32 @@
     <tr><td>Does NOT give you</td><td>Atomicity of compound operations (<code>count++</code> is still a race)</td><td>—</td></tr>
   </table>
 
+  <h3>Advanced JMM: Instruction Reordering &amp; the "As-If-Serial" Illusion</h3>
+  <p>To maximize performance, the compiler, JIT, and CPU are legally allowed to reorder your instructions (e.g., delaying a memory write or hoisting a read) <strong>as long as single-threaded execution isn't broken</strong> (the "as-if-serial" guarantee). But across threads, this breaks instantly without a happens-before edge.</p>
+
+  <h3>Advanced JMM: The Double-Checked Locking Bug</h3>
+  <p>The classic Singleton lazy-initialization pattern is the most famous victim of instruction reordering. Without <code>volatile</code>, this code is fatally broken:</p>
+  <pre><code class="java">public class Singleton {
+  private static Singleton instance; // BUG: missing 'volatile'
+  public static Singleton getInstance() {
+    if (instance == null) {
+      synchronized (Singleton.class) {
+        if (instance == null) instance = new Singleton(); // The danger zone
+      }
+    }
+    return instance;
+  }
+}</code></pre>
+  <p><strong>Why it fails:</strong> The JVM performs three steps for <code>new Singleton()</code>: (1) allocate memory, (2) initialize the object (call constructor), and (3) assign the reference to <code>instance</code>. The JMM allows the CPU to reorder these as <strong>1 → 3 → 2</strong>. Another thread calling <code>getInstance()</code> could see <code>instance != null</code> (step 3) and return a <strong>partially initialized object</strong> because the constructor hasn't finished yet (step 2)!<br>
+  <strong>The Fix:</strong> Adding <code>volatile</code> to <code>instance</code> establishes a memory barrier. It strictly prevents the write of the reference from being reordered ahead of the object's initialization.</p>
+
+  <h3>Advanced JMM: <code>final</code> Field Semantics (Initialization Safety)</h3>
+  <p>The JMM provides a special guarantee for <code>final</code> fields. At the end of a constructor, the JMM issues a "freeze" action on all final fields. This creates a happens-before relationship ensuring that any thread that sees the object reference will <em>always</em> see the fully initialized values of those final fields.</p>
+  <ul>
+    <li><strong>No Locks Needed:</strong> You don't need <code>volatile</code> or <code>synchronized</code> to safely read a final field across threads.</li>
+    <li><strong>The Catch (No Leaking):</strong> This guarantee is completely voided if you let the <code>this</code> reference "escape" during construction (e.g., publishing <code>this</code> to a listener or a static field inside the constructor). If <code>this</code> escapes, other threads might see the object before the freeze action occurs.</li>
+  </ul>
+
   <!-- ============================================================ -->
   <h2 id="heap">3 · The heap in detail</h2>
   <p>Almost every collector on this page organizes the heap the same way, based on one empirical
