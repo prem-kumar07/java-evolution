@@ -137,7 +137,9 @@ finally { CURRENT.remove(); }   // leak if forgotten</code></pre>
   <ul>
     <li><strong>Primitive types in patterns</strong> <span class="badge preview">Preview</span> — <code>case int i</code>, etc.</li>
     <li><strong>Structured concurrency</strong> <span class="badge preview">Preview (5th)</span> →
-      <a href="../topics/structured-concurrency.html">deep-dive</a>.</li>
+      <a href="../topics/structured-concurrency.html">deep-dive</a>.
+      <p class="note"><strong>Note (Java 26):</strong> The <code>Joiner</code> API introduced here was refined in Java 26 to include an <code>onTimeout()</code> hook, change <code>allSuccessfulOrThrow()</code> to return a <code>List&lt;T&gt;</code> instead of a <code>Stream</code>, and rename the "any" joiner to <code>anySuccessfulOrThrow()</code>.</p>
+    </li>
     <li><strong>Stable Values</strong> <span class="badge preview">Preview</span> — write-once, lazy, thread-safe constants:
       <pre><code class="java">StableValue&lt;Logger&gt; logger = StableValue.of();
 Logger l = logger.orElseSet(() -> createLogger());   // computed at most once</code></pre>
