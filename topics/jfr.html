@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JFR & JMC — complete guide</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/jfr.html" data-title="JFR & JMC">
+<main>
+  <p class="sec-tag">Deep dive · profiling</p>
+  <h1>Java Flight Recorder (JFR) &amp; JMC <span class="badge added">Java 11</span></h1>
+  <p class="lead">
+    Java Flight Recorder (JFR) is an event-driven diagnostic and profiling framework built directly into the HotSpot JVM. It captures low-level JVM internals (GC, threads, memory, CPU) with negligible runtime overhead (&lt; 1–2%), making it the standard for production profiling.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">&lt;2%</span><span class="lbl">production overhead</span></div>
+    <div class="stat"><span class="num">JMC</span><span class="lbl">mission control GUI</span></div>
+    <div class="stat"><span class="num">Java 14</span><span class="lbl">event streaming API</span></div>
+    <div class="stat"><span class="num">Open</span><span class="lbl">sourced in Java 11</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Profiling Java applications in production historically required attaching heavyweight agents that skewed performance metrics and slowed down the application. JFR is deeply embedded into the JVM, allowing continuous, always-on "black box" flight recording without impacting user latencies.
+  </div>
+
+  <h2>1 · Starting Recordings</h2>
+  <p>You can start JFR at launch using JVM flags, or dynamically at runtime using the <code>jcmd</code> CLI.</p>
+
+  <h3>Via JVM Flags</h3>
+  <pre><code class="bash"># Start a continuous recording with a rolling 1-hour buffer
+$ java -XX:StartFlightRecording=disk=true,maxage=1h,settings=default -jar app.jar
+
+# Start a highly detailed 60-second profile
+$ java -XX:StartFlightRecording=filename=startup.jfr,duration=60s,settings=profile -jar app.jar</code></pre>
+
+  <h3>Via <code>jcmd</code> (Dynamically)</h3>
+  <p>Find your Java PID using <code>jcmd -l</code>, then issue commands to the running JVM:</p>
+  <pre><code class="bash"># Start recording
+$ jcmd &lt;PID&gt; JFR.start name=ProdTrace settings=profile duration=60s filename=/tmp/prod.jfr
+
+# Dump active recording without stopping it
+$ jcmd &lt;PID&gt; JFR.dump name=ProdTrace filename=/tmp/snapshot.jfr
+
+# Stop recording
+$ jcmd &lt;PID&gt; JFR.stop name=ProdTrace</code></pre>
+
+  <h2>2 · JDK Mission Control (JMC)</h2>
+  <p><strong>JDK Mission Control (JMC)</strong> is the official desktop GUI for analyzing <code>.jfr</code> dump files. It provides:</p>
+  <ul>
+    <li><strong>Automated Analysis:</strong> Rule-based scorecard with tuning recommendations (e.g., GC pauses, memory leaks).</li>
+    <li><strong>Flame Graphs:</strong> Visualizes call trees and hotspot methods.</li>
+    <li><strong>Thread &amp; Lock Contention:</strong> Swimlanes for thread states, lock wait times, and deadlocks.</li>
+    <li><strong>Memory Profiling:</strong> Allocation pressure, object lifetimes, and heap fragmentation.</li>
+  </ul>
+
+  <h2>3 · Custom Application Events</h2>
+  <p>You can emit your own application telemetry directly into the JFR pipeline alongside JVM events.</p>
+  <pre><code class="java">import jdk.jfr.*;
+
+@Name("com.example.OrderProcessed")
+@Label("Order Processed")
+@Category({"E-Commerce", "Orders"})
+public class OrderEvent extends Event {
+    @Label("Order ID")
+    String orderId;
+
+    @Label("Amount")
+    double amount;
+}
+
+// Usage in application code
+public void processOrder(String id, double amt) {
+    OrderEvent event = new OrderEvent();
+    event.begin();
+    try {
+        // ... business logic ...
+    } finally {
+        event.orderId = id;
+        event.amount = amt;
+        event.end();
+        event.commit(); // Writes to the JFR buffer
+    }
+}</code></pre>
+
+  <h2>4 · JFR Event Streaming <span class="badge added">Java 14</span></h2>
+  <p>Introduced in Java 14 (JEP 349), <strong>Event Streaming</strong> allows applications to consume JFR events continuously in real-time, completely bypassing the need to dump <code>.jfr</code> files to disk.</p>
+  <pre><code class="java">import jdk.jfr.consumer.RecordingStream;
+import java.time.Duration;
+
+public class JfrStreamer {
+    public static void main(String[] args) throws Exception {
+        try (var stream = new RecordingStream()) {
+            
+            // Sample built-in CPU load every 1 second
+            stream.enable("jdk.CPULoad").withPeriod(Duration.ofSeconds(1));
+            
+            stream.onEvent("jdk.CPULoad", event -&gt; {
+                float machineCpu = event.getFloat("machineTotal") * 100;
+                float jvmCpu = event.getFloat("jvmUser") * 100;
+                System.out.printf("CPU - Machine: %.1f%% | JVM: %.1f%%%n", machineCpu, jvmCpu);
+            });
+
+            // Listen to your custom application events instantly
+            stream.onEvent("com.example.OrderProcessed", event -&gt; {
+                System.out.println("Order completed: $" + event.getDouble("amount"));
+            });
+
+            // Start asynchronously
+            stream.startAsync();
+            
+            // Keep app alive
+            Thread.sleep(Long.MAX_VALUE);
+        }
+    }
+}</code></pre>
+
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

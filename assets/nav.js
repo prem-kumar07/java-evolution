@@ -54,7 +54,10 @@
       { href: "topics/aot-cache.html",               label: "AOT Cache" }
     ]},
     { title: "Deep dives — tooling", items: [
-      { href: "topics/jshell.html",                 label: "JShell (REPL)" }
+      { href: "topics/jshell.html",                 label: "JShell (REPL)" },
+      { href: "topics/jlink-jpackage.html",         label: "Custom runtime & packaging (jlink)" },
+      { href: "topics/jfr.html",                    label: "JFR & Mission Control" },
+      { href: "topics/jwebserver.html",             label: "Simple Web Server" }
     ]}
   ];
 

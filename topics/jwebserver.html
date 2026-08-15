@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simple Web Server — complete guide</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/jwebserver.html" data-title="Simple Web Server">
+<main>
+  <p class="sec-tag">Deep dive · tooling · prototyping</p>
+  <h1>Simple Web Server (jwebserver) <span class="badge added">Java 18</span></h1>
+  <p class="lead">
+    Introduced in Java 18 (JEP 408), the Simple Web Server is a lightweight, out-of-the-box HTTP server for serving static files. It removes the need for Python, Node, or Apache just to preview local assets during development or education.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">CLI</span><span class="lbl">start from terminal</span></div>
+    <div class="stat"><span class="num">API</span><span class="lbl">programmatic hooks</span></div>
+    <div class="stat"><span class="num">Static</span><span class="lbl">files only (GET / HEAD)</span></div>
+    <div class="stat"><span class="num">Java 18</span><span class="lbl">introduction</span></div>
+  </div>
+
+  <h2>1 · Command-Line Tool</h2>
+  <p>To serve the current directory on port 8000, simply run <code>jwebserver</code>.</p>
+  <pre><code class="bash">$ jwebserver
+Binding to 127.0.0.1:8000 and serving /Users/you/project
+URL http://127.0.0.1:8000/</code></pre>
+
+  <p>You can customize the directory, port, and binding address (e.g., to make it accessible to your local network instead of just localhost):</p>
+  <pre><code class="bash">$ jwebserver -b 0.0.0.0 -p 9000 -d ./public -o verbose</code></pre>
+
+  <h2>2 · Programmatic API</h2>
+  <p>If you want to bake the static file server into your application, Java 18 added factory methods to <code>com.sun.net.httpserver.SimpleFileServer</code> and <code>HttpHandlers</code>.</p>
+  
+  <h3>Basic Embedded Server</h3>
+  <pre><code class="java">import com.sun.net.httpserver.*;
+import java.net.InetSocketAddress;
+import java.nio.file.Path;
+
+public class BasicFileServer {
+    public static void main(String[] args) {
+        var address = new InetSocketAddress(8080);
+        var rootDir = Path.of("./public").toAbsolutePath();
+        
+        HttpServer server = SimpleFileServer.createFileServer(address, rootDir, SimpleFileServer.OutputLevel.INFO);
+        server.start();
+        
+        System.out.println("Serving on http://localhost:8080");
+    }
+}</code></pre>
+
+  <h3>Advanced Routing &amp; Fallbacks</h3>
+  <p>You can compose handlers conditionally. For example, serve static files for public paths, but return a custom 403 response for hidden paths.</p>
+  <pre><code class="java">import com.sun.net.httpserver.*;
+import java.net.InetSocketAddress;
+import java.nio.file.Path;
+
+public class AdvancedRoutingServer {
+    public static void main(String[] args) throws Exception {
+        var staticDir = Path.of("./static").toAbsolutePath();
+        HttpHandler fileHandler = SimpleFileServer.createFileHandler(staticDir);
+
+        // Fallback for forbidden access
+        HttpHandler forbidden = HttpHandlers.of(403, new Headers(), "Access Denied");
+
+        // Route traffic conditionally
+        HttpHandler router = HttpHandlers.handleOrElse(
+            req -&gt; !req.getRequestURI().getPath().startsWith("/admin"),
+            fileHandler,
+            forbidden
+        );
+
+        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0, "/", router);
+        server.start();
+    }
+}</code></pre>
+
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

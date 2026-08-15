@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>jlink & jpackage — complete guide</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/jlink-jpackage.html" data-title="jlink & jpackage">
+<main>
+  <p class="sec-tag">Deep dive · tooling · packaging</p>
+  <h1>Custom Runtimes &amp; Native Packaging <span class="badge added">Java 9 &amp; 14</span></h1>
+  <p class="lead">
+    Modern Java deployment has shifted away from relying on users to install system-wide JREs. Instead, applications now ship as self-contained bundles. The pipeline consists of three tools: <code>jdeps</code> (dependency discovery), <code>jlink</code> (custom runtime creation), and <code>jpackage</code> (native installer generation).
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">30MB</span><span class="lbl">custom JRE sizes</span></div>
+    <div class="stat"><span class="num">.exe/.dmg</span><span class="lbl">native OS installers</span></div>
+    <div class="stat"><span class="num">Zero</span><span class="lbl">user java installs needed</span></div>
+    <div class="stat"><span class="num">jlink</span><span class="lbl">added in Java 9</span></div>
+  </div>
+
+  <h2>1 · jdeps: Discovering Dependencies</h2>
+  <p>To build a custom JVM, you need to know exactly which standard modules your application relies on. If you have a non-modular legacy JAR (a "fat JAR"), <code>jdeps</code> can inspect its bytecode and print out the required JDK modules.</p>
+  <pre><code class="bash">$ jdeps --multi-release 21 --ignore-missing-deps --print-module-deps target/myapp-fat.jar
+java.base,java.desktop,java.logging,java.sql</code></pre>
+  <div class="note"><strong>Warning:</strong> <code>jdeps</code> cannot detect modules loaded dynamically via reflection or ServiceLoader (e.g., JDBC drivers or crypto providers). You may need to manually append modules like <code>jdk.crypto.ec</code> or <code>jdk.unsupported</code>.</div>
+
+  <h2>2 · jlink: Building the Custom Runtime</h2>
+  <p>Introduced in Java 9, <code>jlink</code> takes the module list and strips the JDK down to exactly what you need. This typically reduces the JVM footprint by 85-90% (from ~300MB down to ~35MB).</p>
+  <pre><code class="bash">$ jlink \
+  --module-path "$JAVA_HOME/jmods" \
+  --add-modules java.base,java.desktop,java.logging,java.sql,jdk.crypto.ec \
+  --output custom-jre \
+  --compress zip-9 \
+  --no-header-files \
+  --no-man-pages \
+  --strip-debug</code></pre>
+  <p>You can now distribute this <code>custom-jre</code> folder alongside your JAR file. Users run your app using <code>./custom-jre/bin/java -jar myapp.jar</code>.</p>
+
+  <h2>3 · jpackage: Building Native Installers</h2>
+  <p>Introduced in Java 14 (finalized in Java 16), <code>jpackage</code> wraps your JAR and your <code>custom-jre</code> into native executable installers: <code>.exe</code>/<code>.msi</code> for Windows, <code>.dmg</code>/<code>.pkg</code> for macOS, and <code>.deb</code>/<code>.rpm</code> for Linux.</p>
+  <pre><code class="bash">$ jpackage \
+  --type exe \
+  --name "MyApp" \
+  --app-version "1.0.0" \
+  --input dist/input \
+  --main-jar myapp-fat.jar \
+  --main-class com.example.AppMain \
+  --runtime-image custom-jre \
+  --icon assets/app.ico \
+  --win-shortcut \
+  --win-menu</code></pre>
+  <div class="note"><strong>Cross-compilation:</strong> <code>jpackage</code> is not a cross-compiler. You must run it on Windows to generate Windows installers, on macOS to generate macOS installers, etc.</div>
+
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>
