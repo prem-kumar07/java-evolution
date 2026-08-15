@@ -188,7 +188,7 @@ result = new ArrayList&lt;&gt;(new LinkedHashSet&lt;&gt;(result));  // dedupe, k
     <tr><td><code>findFirst()</code> / <code>findAny()</code></td><td><code>Optional&lt;T&gt;</code>, short-circuits.</td></tr>
     <tr><td><code>min/max(Comparator)</code></td><td><code>Optional&lt;T&gt;</code>.</td></tr>
     <tr><td><code>toArray()</code></td><td><code>Object[]</code> or typed array.</td></tr>
-    <tr><td><code>toList()</code> <span class="badge added">16</span></td><td>Unmodifiable <code>List&lt;T&gt;</code> — shorthand for <code>collect(toList())</code>.</td></tr>
+    <tr><td><code>toList()</code> <span class="badge added">16</span></td><td>Unmodifiable <code>List&lt;T&gt;</code>, null-tolerant (distinct from <code>Collectors.toList()</code>).</td></tr>
   </table>
   <pre><code class="java">boolean anyExpensive = orders.stream().anyMatch(o -> o.total() > 1000);   // stops at first match
 Optional&lt;Order&gt; first = orders.stream().filter(o -> o.total() > 1000).findFirst();
@@ -562,8 +562,9 @@ System.out.println(totalsByRegionSorted);
   </div>
 
   <div class="note"><strong>Beyond Java 8:</strong> the core API above hasn't changed shape since
-  Java 8 — only additions. <code>takeWhile</code>/<code>dropWhile</code> (9), <code>toList()</code>/
-  <code>mapMulti</code> (16), and <code>teeing</code> (12) are covered above. For custom
+  Java 8 — only additions. <code>takeWhile</code>/<code>dropWhile</code> (9), <code>toList()</code> (16)
+  and <code>teeing</code> (12) are covered above. <code>mapMulti</code> (16) offers a zero-allocation
+  imperative alternative to <code>flatMap</code>. For custom
   <em>intermediate</em> operations (the missing piece Collectors couldn't do), see
   <a href="streams-gatherers.html">Stream Gatherers</a> (final in 24).</div>
 </main>

@@ -183,7 +183,7 @@ try (Arena arena = Arena.ofConfined()) {
 java --enable-native-access=ALL-UNNAMED -jar app.jar   # classpath apps
 // without it you get warnings now, errors later</code></pre>
   <div class="gotcha">
-    <strong>⚠ Enforcement changed in Java 22.</strong> In Java 21 and earlier previews, calling restricted FFM operations without <code>--enable-native-access</code> produced a warning. From <strong>Java 22 onwards</strong> (when FFM API was finalized, JEP 454), the same call throws <code>IllegalCallerException</code> at runtime. Always include <code>--enable-native-access=ALL-UNNAMED</code> (or the specific module name) in production launch scripts.
+    <strong>⚠ Enforcement changed in Java 22 and 24.</strong> In Java 21 and earlier previews, missing <code>--enable-native-access</code> produced a warning. From <strong>Java 22 onwards</strong>, named modules throw <code>IllegalCallerException</code> while unnamed modules still warn. In <strong>Java 24+</strong> (JEP 472), all modules including unnamed ones throw <code>IllegalCallerException</code>. Always include <code>--enable-native-access=ALL-UNNAMED</code> (or the specific module name) in production launch scripts.
   </div>
 
   <!-- ============================================================ -->

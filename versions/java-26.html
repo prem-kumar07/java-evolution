@@ -95,7 +95,7 @@ if (bigValue instanceof int i) { use(i); }  // only matches if it fits exactly</
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
 
-  <h3>HTTP/3 for the HTTP Client <span class="badge jep">JEP 517</span></h3>
+  <h3>HTTP/3 for the HTTP Client</h3>
   <p><em>Why it matters:</em> the <code>java.net.http.HttpClient</code> (standardised in Java 11) now
   speaks HTTP/3 (QUIC over UDP) — faster connection setup and better behaviour on lossy/mobile
   networks, with the exact same request/response API you already use.</p>
@@ -204,7 +204,7 @@ java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
     <li><strong>G1: improved throughput by reducing synchronization</strong> <span class="badge jep">JEP 522</span> —
       less internal locking overhead in the default collector, meaning better throughput with no
       config changes for most apps.</li>
-    <li><strong>Applet API removed</strong> <span class="badge removed">Removed</span> <span class="badge jep">JEP 504</span> — the last of the
+    <li><strong>Applet API removed</strong> <span class="badge removed">Removed</span> — the last of the
       applet era is gone (deprecated back in Java 17). Any lingering <code>java.applet.*</code> usage
       now fails to compile.</li>
   </ul>

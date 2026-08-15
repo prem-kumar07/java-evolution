@@ -315,7 +315,7 @@ jdeps --jdk-internals my-app.jar</code></pre>
   <pre><code class="java"># Create a tiny custom JVM containing only your app's required modules
 jlink --module-path $JAVA_HOME/jmods:./libs \
       --add-modules java.base,com.myapp \
-      --strip-debug --no-man-pages --no-header-files --compress=2 \
+      --strip-debug --no-man-pages --no-header-files --compress zip-9 \
       --output my-custom-jre
 # Result: my-custom-jre/bin/java is a fully functional, ~30MB runtime!</code></pre>
 

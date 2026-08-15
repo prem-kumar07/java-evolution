@@ -248,7 +248,7 @@ ProcessHandle.allProcesses()
   <h2>3 · Tooling</h2>
   <h3>JShell — the REPL <span class="badge jep">JEP 222</span></h3>
   <p><em>Why it matters:</em> try an expression instantly without a class, <code>main</code>, or compile step.</p>
-  <pre><code class="java">jshell&gt; var xs = List.of(1, 2, 3)
+  <pre><code class="java">jshell&gt; List&lt;Integer&gt; xs = List.of(1, 2, 3)
 xs ==&gt; [1, 2, 3]
 jshell&gt; xs.stream().mapToInt(i -&gt; i).sum()
 $2 ==&gt; 6</code></pre>

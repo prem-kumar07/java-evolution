@@ -150,7 +150,8 @@ static &lt;T extends Number & Comparable&lt;T&gt;&gt; T max(T a, T b) {
 
 // recursive bound: T must be comparable to itself — this is exactly
 // how Collections.max() and Comparable-based sorting are declared in the JDK
-static &lt;T extends Comparable&lt;T&gt;&gt; T maxOf(T a, T b) {
+  // Using PECS (Producer Extends, Consumer Super) for maximum compatibility
+static &lt;T extends Comparable&lt;? super T&gt;&gt; T maxOf(T a, T b) {
   return a.compareTo(b) >= 0 ? a : b;
 }
 // verified: maxOf("apple", "banana") -> "banana"</code></pre>
@@ -283,7 +284,7 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
     <tr><td>Cannot declare static fields of a type parameter</td><td>A static field is shared by all instances, but each instantiation could have a different <code>T</code> — there's no single answer for what type it would be.</td></tr>
     <tr><td>Cannot use <code>instanceof</code> or cast against a parameterized type: <code>x instanceof List&lt;String&gt;</code></td><td>Erased at runtime — the JVM can't tell <code>List&lt;Integer&gt;</code> from <code>List&lt;String&gt;</code>. You can check <code>x instanceof List&lt;?&gt;</code> instead.</td></tr>
     <tr><td>Cannot create arrays of a parameterized type: <code>new List&lt;String&gt;[10]</code></td><td>Arrays check their element type at runtime (<code>ArrayStoreException</code>); erasure would silently defeat that safety check, so it's forbidden outright.</td></tr>
-    <tr><td>A generic class cannot extend <code>Throwable</code></td><td>Exception types must be resolvable at both compile and catch time — erasure would make <code>catch</code> clauses ambiguous. <p><strong>Clarification:</strong> The restriction is that <em>type parameters</em> cannot be used in a catch clause (<code>catch (T e)</code> is a compile error). A class that extends a concrete exception supertype is allowed — e.g., <code>class MyException&lt;T&gt; extends RuntimeException</code> is legal. The error only occurs when the type parameter itself is the caught/thrown type.</p></td></tr>
+    <tr><td>A generic class cannot extend <code>Throwable</code></td><td>Exception types must be resolvable at both compile and catch time — erasure would make <code>catch</code> clauses ambiguous. <p><strong>Clarification:</strong> Under JLS §8.1.2, it is a compile-time error if a generic class directly or indirectly subclasses <code>Throwable</code>. You cannot define <code>class MyException&lt;T&gt; extends RuntimeException</code>. However, type parameters <em>are</em> allowed in a method's <code>throws</code> clause (e.g., <code>&lt;T extends Throwable&gt; void doIt() throws T</code>).</p></td></tr>
     <tr><td>Cannot overload two methods that erase to the same signature</td><td><code>void m(List&lt;String&gt; x)</code> and <code>void m(List&lt;Integer&gt; x)</code> both erase to <code>m(List)</code> — a duplicate-method compile error.</td></tr>
   </table>
 

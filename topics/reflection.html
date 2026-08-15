@@ -341,7 +341,7 @@ public class SomeNonInterceptedService {
   @SuppressWarnings("unchecked")
   static &lt;T&gt; Object invoke(Class&lt;T&gt; serviceClass, String methodName, Object... args) throws Exception {
     T service = serviceClass.getDeclaredConstructor().newInstance();
-    Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+    Class&lt;?&gt;[] types = Arrays.stream(args).map(a -&gt; a == null ? Object.class : a.getClass()).toArray(Class[]::new);
     Method method = serviceClass.getDeclaredMethod(methodName, types);
 
     if (method.isAnnotationPresent(Intercepted.class)) {
@@ -377,7 +377,7 @@ System.out.println(r2);   // verified real output: "Hello"</code></pre>
   instance back:</p>
   <pre><code class="java">class BeanFactory {
   static &lt;T&gt; T getInstanceOf(Class&lt;T&gt; beanClass, Object... args) throws ReflectiveOperationException {
-    Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+    Class&lt;?&gt;[] types = Arrays.stream(args).map(a -&gt; a == null ? Object.class : a.getClass()).toArray(Class[]::new);
     Constructor&lt;T&gt; constructor = beanClass.getConstructor(types);   // exact-type match, see §7
     return constructor.newInstance(args);
   }
@@ -414,7 +414,7 @@ class BeanFactory {
   }
 
   private static &lt;T&gt; T instantiateBeanClass(Class&lt;T&gt; beanClass, Object... args) throws ReflectiveOperationException {
-    Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+    Class&lt;?&gt;[] types = Arrays.stream(args).map(a -&gt; a == null ? Object.class : a.getClass()).toArray(Class[]::new);
     Constructor&lt;T&gt; constructor = beanClass.getConstructor(types);
     return constructor.newInstance(args);
   }
@@ -429,13 +429,14 @@ class BeanFactory {
 
 // instantiateBeanClass grows one more step at the end:
 private static &lt;T&gt; T instantiateBeanClass(Class&lt;T&gt; beanClass, Object... args) throws ReflectiveOperationException {
-  Class&lt;?&gt;[] types = Arrays.stream(args).map(Object::getClass).toArray(Class[]::new);
+  Class&lt;?&gt;[] types = Arrays.stream(args).map(a -&gt; a == null ? Object.class : a.getClass()).toArray(Class[]::new);
   Constructor&lt;T&gt; constructor = beanClass.getConstructor(types);
   T bean = constructor.newInstance(args);
 
   for (Field field : beanClass.getDeclaredFields()) {           // every field, any visibility
     if (field.isAnnotationPresent(Inject.class)) {
       field.setAccessible(true);                                 // always — even if it were public
+      // Note: Real DI frameworks register 'bean' early here to prevent circular dependency StackOverflows
       Object value = getInstanceOf(field.getType());              // recursive — respects @Singleton
       field.set(bean, value);
     }
@@ -509,7 +510,8 @@ System.out.println(a == b);
       <li>Entry point: <code>obj.getClass()</code>, <code>Type.class</code>, or <code>Class.forName(name)</code>.</li>
       <li><code>getDeclared*</code> = this class only, includes private. <code>get*</code> (no "Declared") = inherited, public only.</li>
       <li><code>setAccessible(true)</code> before touching a private field/method/constructor.</li>
-      <li><code>Method.invoke</code> / <code>Constructor.newInstance</code> both throw <code>InvocationTargetException</code> — unwrap with <code>getCause()</code>.</li>
+      <li><code>Method.invoke</code> throws <code>InvocationTargetException</code> (unwrap with <code>getCause()</code>), plus <code>IllegalAccessException</code> and <code>IllegalArgumentException</code>.</li>
+      <li><code>Constructor.newInstance</code> throws the same, plus <code>InstantiationException</code>.</li>
       <li><code>Proxy.newProxyInstance</code> — implement an interface at runtime, one handler for every call.</li>
       <li>Records refuse field mutation even via reflection; enums can't gain new constants at runtime.</li>
       <li>Java 9+: reflecting into another module needs that module to <code>opens</code> the package.</li>

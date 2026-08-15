@@ -491,8 +491,8 @@ GC(7) Pause Young (Mixed) (G1 Evacuation Pause) 17M->14M(28M) 1.559ms  ← also 
   mechanisms:</p>
   <table class="data">
     <tr><th></th><th>ZGC</th><th>Shenandoah</th></tr>
-    <tr><td>Core technique</td><td>Colored pointers + load barriers</td><td>Brooks forwarding pointers + concurrent compaction</td></tr>
-    <tr><td>Metadata location</td><td>Encoded in the pointer itself (unused address bits)</td><td>An extra forwarding-pointer word per object</td></tr>
+    <tr><td>Core technique</td><td>Colored pointers + load barriers</td><td>Load-Reference Barriers (LRB) + concurrent compaction</td></tr>
+    <tr><td>Metadata location</td><td>Encoded in the pointer itself (unused address bits)</td><td>Encoded in the object header (mark word)</td></tr>
     <tr><td>Origin</td><td>Oracle</td><td>Red Hat</td></tr>
     <tr><td>Generational</td><td>Yes, default since JDK 24</td><td>Final in JDK 25 (JEP 404/521 lineage)</td></tr>
     <tr><td>Platform support</td><td>Broad, Oracle-maintained</td><td>Linux/Windows primary; verified from OpenJDK wiki as also community-tested on macOS</td></tr>

@@ -127,7 +127,7 @@ record Add(Expr l, Expr r) implements Expr { }</code></pre>
     </li>
     <li>Every permitted subtype must <strong>directly</strong> extend/implement the sealed type.</li>
     <li>Records are implicitly <code>final</code>, so they slot into <code>permits</code> lists perfectly.</li>
-    <li><strong>Enums work too</strong> — an <code>enum</code> is always implicitly <code>final</code>,
+    <li><strong>Enums work too</strong> — an <code>enum</code> with constant bodies is implicitly <code>sealed</code> (otherwise implicitly <code>final</code>),
       so it satisfies a sealed interface's requirement with no extra modifier, and mixes with record
       subtypes in the same hierarchy:
       <pre><code class="java">sealed interface Status permits Active, Suspended, Closed {}
