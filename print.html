@@ -2079,9 +2079,9 @@ if (bigValue instanceof int i) { use(i); }  // only matches if it fits exactly</
 
   <h3>Structured concurrency <span class="badge preview">Preview (6th)</span> <span class="badge jep">JEP 525</span></h3>
   <p><em>Why it matters:</em> approaching final after six previews — treats a group of concurrent
-  subtasks as one unit, so a failure in one cancels the rest instead of leaking threads. See the
-  <a href="#pg-topics-structured-concurrency-html">structured concurrency deep-dive</a> for the full
-  <code>StructuredTaskScope</code> API and worked examples.</p>
+  subtasks as one unit, so a failure in one cancels the rest instead of leaking threads.</p>
+  <p><strong>Java 26 Refinements:</strong> This release continues to polish the new <code>Joiner</code> API introduced in Java 25. Key changes include adding an <code>onTimeout()</code> hook for custom cleanup, changing <code>Joiner.allSuccessfulOrThrow()</code> to return a <code>List&lt;T&gt;</code> instead of a <code>Stream&lt;T&gt;</code>, and renaming the "any" joiner to <code>Joiner.anySuccessfulOrThrow()</code>.</p>
+  <p>See the <a href="#pg-topics-structured-concurrency-html">structured concurrency deep-dive</a> for the full <code>StructuredTaskScope</code> API and worked examples.</p>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
@@ -6638,7 +6638,7 @@ try {
     </div>
     <div class="after"><div class="ba-label">Race — first success wins</div>
       <pre><code class="java">try (var scope = StructuredTaskScope.open(
-        Joiner.&lt;String&gt;anySuccessfulResultOrThrow())) {
+        Joiner.&lt;String&gt;anySuccessfulOrThrow())) {
   scope.fork(() -> mirror1());
   scope.fork(() -> mirror2());
   String fastest = scope.join();   // others cancelled
@@ -6756,7 +6756,7 @@ try {
     <h3>Structured concurrency in one glance</h3>
     <ul>
       <li><code>try (var scope = StructuredTaskScope.open(joiner)) { scope.fork(...); scope.join(); }</code></li>
-      <li>Joiners: <code>allSuccessfulOrThrow</code>, <code>anySuccessfulResultOrThrow</code>, custom.</li>
+      <li>Joiners: <code>allSuccessfulOrThrow</code> (returns a <code>List</code> in 26+), <code>anySuccessfulOrThrow</code>, custom.</li>
       <li>Read <code>subtask.get()</code> only <strong>after</strong> <code>join()</code>.</li>
       <li>All subtasks complete or are cancelled before the block exits — no leaks.</li>
       <li>One virtual thread per subtask; add <code>withTimeout</code> for a group deadline.</li>
@@ -6786,6 +6786,7 @@ try {
 
   <h3>The Joiner API Surface</h3>
   <p>The <code>Joiner</code> interface introduced in Java 25+ allows writing custom completion policies. A Joiner defines how to accumulate results and short-circuit when a condition is met, bringing flexibility similar to the Stream API's <code>Collector</code>.</p>
+  <p><strong>Java 26 Updates:</strong> The API was further refined in Java 26 (JEP 525) to return a <code>List&lt;T&gt;</code> instead of a <code>Stream&lt;T&gt;</code> from <code>allSuccessfulOrThrow()</code>, rename the "any" joiner to <code>anySuccessfulOrThrow()</code>, and add an <code>onTimeout()</code> hook to custom joiners to allow graceful cleanup when scope deadlines expire.</p>
 
   <h3>Structural Confinement Rule</h3>
   <p>Structured tasks enforce strict structural confinement. A child subtask cannot outlive the lexical scope of its parent <code>StructuredTaskScope</code>. If a parent exits its scope while subtasks are still running, those subtasks are automatically cancelled (interrupted), preventing orphaned threads.</p>

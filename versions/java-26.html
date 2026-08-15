@@ -88,9 +88,9 @@ if (bigValue instanceof int i) { use(i); }  // only matches if it fits exactly</
 
   <h3>Structured concurrency <span class="badge preview">Preview (6th)</span> <span class="badge jep">JEP 525</span></h3>
   <p><em>Why it matters:</em> approaching final after six previews — treats a group of concurrent
-  subtasks as one unit, so a failure in one cancels the rest instead of leaking threads. See the
-  <a href="../topics/structured-concurrency.html">structured concurrency deep-dive</a> for the full
-  <code>StructuredTaskScope</code> API and worked examples.</p>
+  subtasks as one unit, so a failure in one cancels the rest instead of leaking threads.</p>
+  <p><strong>Java 26 Refinements:</strong> This release continues to polish the new <code>Joiner</code> API introduced in Java 25. Key changes include adding an <code>onTimeout()</code> hook for custom cleanup, changing <code>Joiner.allSuccessfulOrThrow()</code> to return a <code>List&lt;T&gt;</code> instead of a <code>Stream&lt;T&gt;</code>, and renaming the "any" joiner to <code>Joiner.anySuccessfulOrThrow()</code>.</p>
+  <p>See the <a href="../topics/structured-concurrency.html">structured concurrency deep-dive</a> for the full <code>StructuredTaskScope</code> API and worked examples.</p>
 
   <!-- ============ APIs ============ -->
   <h2>2 · New &amp; updated APIs</h2>
