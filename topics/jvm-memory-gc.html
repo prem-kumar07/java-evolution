@@ -38,6 +38,13 @@
     <strong>On this page</strong>
     <a href="#areas">1. JVM runtime memory areas</a>
     <a href="#jmm">2. The Java Memory Model</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2a. Happens-before edges</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2b. volatile vs synchronized</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2c. Instruction reordering &amp; double-checked locking</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2d. Safe publication patterns</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2e. final field semantics</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2f. Atomics &amp; CAS</a>
+    <a href="#jmm" style="padding-left:1.5em;font-size:.9em">2g. VarHandle ordering modes (Java 9+)</a>
     <a href="#heap">3. The heap in detail</a>
     <a href="#howgc">4. How garbage collection actually works</a>
     <a href="#collectors">5. The collectors, one by one</a>
@@ -123,7 +130,20 @@
     <li>An <strong>unlock</strong> on a monitor happens-before every subsequent <strong>lock</strong> on that same monitor.</li>
     <li>A write to a <code>volatile</code> field happens-before every subsequent read of that field.</li>
     <li>Starting a thread happens-before the first action inside it; a thread's last action happens-before code that observes it via <code>join()</code> or <code>isAlive()</code>.</li>
+    <li>Writing a default value (<code>0</code>/<code>null</code>/<code>false</code>) to every field of an object happens-before <em>any</em> action in the program — fields are never "uninitialized garbage" in Java.</li>
+    <li>The completion of a constructor for an object with <code>final</code> fields happens-before any read of those fields (the "freeze" action — see §2e below).</li>
+    <li>An action that interrupts a thread (<code>t.interrupt()</code>) happens-before the point where the target detects the interrupt (<code>InterruptedException</code> / <code>Thread.interrupted()</code>).</li>
+    <li>Happens-before is <strong>transitive</strong>: if A hb B and B hb C, then A hb C.</li>
   </ul>
+
+  <h3>Concrete reordering example — why this matters</h3>
+  <p>Without a happens-before edge the compiler/CPU may freely reorder independent writes. Consider two shared variables <code>x</code> and <code>y</code> initially <code>0</code>:</p>
+  <pre><code class="java">// Thread 1           // Thread 2
+x = 1;                int r1 = y;
+y = 1;                int r2 = x;
+// Surprisingly legal result: r1 == 1 AND r2 == 0
+// Thread 1 reordered y=1 before x=1; Thread 2 saw the reordered state</code></pre>
+  <p>Making <code>y</code> volatile would prevent this: the write <code>y = 1</code> would carry a memory barrier that forces <code>x = 1</code> to be visible before <code>y</code>'s write completes.</p>
 
   <h3>Verified: a real visibility bug, and the one-word fix</h3>
   <p>Without a happens-before edge, the compiler and JIT are free to assume a field never changes and
@@ -208,6 +228,56 @@
     <li><strong>No Locks Needed:</strong> You don't need <code>volatile</code> or <code>synchronized</code> to safely read a final field across threads.</li>
     <li><strong>The Catch (No Leaking):</strong> This guarantee is completely voided if you let the <code>this</code> reference "escape" during construction (e.g., publishing <code>this</code> to a listener or a static field inside the constructor). If <code>this</code> escapes, other threads might see the object before the freeze action occurs.</li>
   </ul>
+
+  <h3>Advanced JMM: Safe Publication Patterns</h3>
+  <p>"Publication" means making an object reference visible to another thread. <strong>Unsafe publication</strong> is the #1 source of subtle concurrency bugs — thread B sees the reference but reads partially initialized fields. The JMM defines exactly four safe ways to publish an object:</p>
+  <table class="data">
+    <tr><th>Safe Publication Technique</th><th>How it works</th></tr>
+    <tr><td><code>static</code> initializer</td><td>JVM class-loading guarantees the object is fully initialized before any thread can access it. <strong>Simplest and safest.</strong></td></tr>
+    <tr><td><code>volatile</code> field</td><td>Writing the reference to a volatile field establishes a happens-before edge — all prior writes (including the constructor) are visible to readers.</td></tr>
+    <tr><td><code>final</code> field</td><td>The JMM "freeze" action (§2e) guarantees visibility of final fields without any synchronization — the basis of safe immutable objects.</td></tr>
+    <tr><td><code>synchronized</code> / <code>Lock</code></td><td>Acquiring a lock that was released by the publishing thread creates a happens-before edge. Also applies to concurrent collections (<code>ConcurrentHashMap.put</code>, <code>BlockingQueue.offer</code>).</td></tr>
+  </table>
+  <div class="warn">
+    <strong>The Initialization-on-Demand Holder idiom</strong> — the preferred lazy singleton in modern Java:
+    <pre><code class="java">public class Registry {
+  private static class Holder { // Loaded only on first call to getInstance()
+    static final Registry INSTANCE = new Registry();
+  }
+  public static Registry getInstance() { return Holder.INSTANCE; }
+}
+// Thread-safe, lazy, no volatile needed — relies on JVM class-loading guarantee.</code></pre>
+  </div>
+
+  <h3>Advanced JMM: Atomics and Compare-And-Swap (CAS)</h3>
+  <p><code>volatile</code> gives you visibility but <strong>not atomicity</strong> for compound operations. <code>count++</code> on a volatile field is still a race (read → increment → write). The <code>java.util.concurrent.atomic</code> package solves this with hardware-level <strong>Compare-And-Swap (CAS)</strong> instructions:</p>
+  <pre><code class="java">AtomicInteger counter = new AtomicInteger(0);
+counter.incrementAndGet(); // Thread-safe, lock-free, uses CPU CAS instruction
+
+// Under the hood, incrementAndGet does this:
+// for (;;) {
+//     int current = get();
+//     int next = current + 1;
+//     if (compareAndSet(current, next)) return next; // retry on contention
+// }</code></pre>
+  <table class="data">
+    <tr><th>Class</th><th>Use case</th></tr>
+    <tr><td><code>AtomicInteger</code> / <code>AtomicLong</code></td><td>Lock-free counters, sequence generators.</td></tr>
+    <tr><td><code>AtomicReference&lt;V&gt;</code></td><td>Lock-free updates to a shared object reference.</td></tr>
+    <tr><td><code>AtomicBoolean</code></td><td>One-shot flags (e.g., "initialized?").</td></tr>
+    <tr><td><code>LongAdder</code> / <code>LongAccumulator</code></td><td>High-contention counters — internally stripes across cells to reduce CAS retries. <strong>Prefer over AtomicLong for statistics/metrics.</strong></td></tr>
+  </table>
+
+  <h3>Advanced JMM: VarHandle Memory Ordering Modes <span class="badge added">Java 9</span></h3>
+  <p><code>java.lang.invoke.VarHandle</code> (JEP 193) replaced the internal <code>sun.misc.Unsafe</code> API with a standard, type-safe mechanism for fine-grained memory access. It exposes <strong>four ordering modes</strong>, from weakest to strongest:</p>
+  <table class="data">
+    <tr><th>Mode</th><th>Methods</th><th>Guarantee</th><th>Use case</th></tr>
+    <tr><td><strong>Plain</strong></td><td><code>get()</code>, <code>set()</code></td><td>No ordering guarantee across threads (same as a normal field).</td><td>Single-threaded hot paths.</td></tr>
+    <tr><td><strong>Opaque</strong></td><td><code>getOpaque()</code>, <code>setOpaque()</code></td><td>Coherence order for <em>this variable only</em> — no reordering of accesses to this var, but no barrier for other vars.</td><td>Progress indicators, spin-loops.</td></tr>
+    <tr><td><strong>Acquire/Release</strong></td><td><code>getAcquire()</code>, <code>setRelease()</code></td><td>Release writes are visible to subsequent acquire reads. All prior writes become visible (one-way fence).</td><td>Lock-free data structures, message passing.</td></tr>
+    <tr><td><strong>Volatile</strong></td><td><code>getVolatile()</code>, <code>setVolatile()</code></td><td>Full acquire + release + total ordering across all volatile accesses (same as <code>volatile</code> keyword).</td><td>When total order is essential.</td></tr>
+  </table>
+  <div class="tip"><strong>Rule of thumb:</strong> Use <code>java.util.concurrent</code> classes first (<code>AtomicLong</code>, <code>ConcurrentHashMap</code>). Reach for <code>VarHandle</code> only in performance-critical library code where you need acquire/release or opaque semantics — most application code never needs it.</div>
 
   <!-- ============================================================ -->
   <h2 id="heap">3 · The heap in detail</h2>
