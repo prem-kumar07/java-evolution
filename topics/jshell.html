@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JShell — complete guide</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/jshell.html" data-title="JShell">
+<main>
+  <p class="sec-tag">Deep dive · tooling · REPL</p>
+  <h1>JShell — The Java REPL <span class="badge added">Java 9</span></h1>
+  <p class="lead">
+    JShell (JEP 222) is Java's official interactive Read-Eval-Print Loop. It lets you evaluate declarations, statements, and expressions directly without the boilerplate of a class or <code>main</code> method, making it an essential tool for prototyping, learning, and debugging.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">instant</span><span class="lbl">feedback loop</span></div>
+    <div class="stat"><span class="num">$1</span><span class="lbl">implicit variables</span></div>
+    <div class="stat"><span class="num">lazy</span><span class="lbl">forward references</span></div>
+    <div class="stat"><span class="num">/</span><span class="lbl">slash commands</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Before Java 9, testing a one-line Java expression required creating a file, writing a class, adding a <code>public static void main</code>, compiling it, and running it. JShell removes this friction, bringing Java in line with languages like Python or Node.js that have native interactive shells.
+  </div>
+
+  <h2>1 · Basic Usage &amp; Shortcuts</h2>
+  <p>To start JShell, simply type <code>jshell</code> in your terminal. You can immediately type expressions, statements, or declarations.</p>
+  <pre><code class="java">jshell&gt; 10 + 25
+$1 ==&gt; 35
+|  created scratch variable $1 : int
+
+jshell&gt; Math.sqrt($1)
+$2 ==&gt; 5.916079783099616</code></pre>
+
+  <h3>Essential Shortcuts</h3>
+  <table class="data">
+    <tr><th>Shortcut</th><th>Action</th></tr>
+    <tr><td><code>Tab</code></td><td>Autocompletes identifiers, methods, and classes. Press twice inside a method call (e.g., <code>Math.max(</code>) to see overloads, and thrice for Javadoc.</td></tr>
+    <tr><td><code>Shift+Tab</code> then <code>v</code></td><td><strong>Extract Variable:</strong> Converts the expression into a strongly-typed variable declaration automatically.</td></tr>
+    <tr><td><code>Shift+Tab</code> then <code>i</code></td><td><strong>Auto-Import:</strong> Finds and imports unresolved classes based on what you've typed.</td></tr>
+    <tr><td><code>Ctrl+R</code></td><td>Reverse search through your command history.</td></tr>
+  </table>
+
+  <h2>2 · Slash Commands</h2>
+  <p>JShell commands start with a forward slash (<code>/</code>) and control the environment state. They can be abbreviated (e.g., <code>/v</code> for <code>/vars</code>).</p>
+  <table class="data">
+    <tr><th>Command</th><th>Description</th></tr>
+    <tr><td><code>/vars</code>, <code>/methods</code>, <code>/types</code></td><td>Lists active variables, methods, or classes/interfaces/records defined in your session.</td></tr>
+    <tr><td><code>/imports</code></td><td>Lists all active imports.</td></tr>
+    <tr><td><code>/list</code></td><td>Shows all snippets you've entered with their IDs (e.g., <code>1</code>, <code>2</code>).</td></tr>
+    <tr><td><code>/edit [id]</code></td><td>Opens the specified snippet (or all active snippets) in an editor.</td></tr>
+    <tr><td><code>/drop [id]</code></td><td>Deletes a variable, method, or class from the session state.</td></tr>
+    <tr><td><code>/save &lt;file&gt;</code></td><td>Saves the current session history or active snippets to a local file.</td></tr>
+    <tr><td><code>/open &lt;file&gt;</code></td><td>Executes a JShell script file or built-in script (like <code>PRINTING</code>).</td></tr>
+    <tr><td><code>/env</code></td><td>Modifies the classpath or module path dynamically, triggering a reset and replay.</td></tr>
+    <tr><td><code>/reset</code></td><td>Wipes the session slate clean.</td></tr>
+    <tr><td><code>/history</code></td><td>Displays the full history of all code snippets and slash commands typed.</td></tr>
+  </table>
+
+  <h2>3 · Advanced Features</h2>
+  <h3>Forward References (Corralled Snippets)</h3>
+  <p>JShell supports declaring a method that references an undefined method or variable. JShell will accept it (marking it "recoverable"), but execution will fail until the missing dependency is declared.</p>
+  <pre><code class="java">jshell&gt; double getVolume() { return height * calcArea(); }
+|  created method getVolume(), however, it cannot be invoked until variable height, and method calcArea() are declared
+
+jshell&gt; double height = 10.0;
+jshell&gt; double calcArea() { return 25.0; }
+jshell&gt; getVolume()
+$3 ==&gt; 250.0</code></pre>
+  <div class="note"><strong>Note:</strong> Forward referencing works for methods and classes, but not for <em>variable initializers</em> (e.g., <code>int x = y + 1;</code> will fail if <code>y</code> doesn't exist).</div>
+
+  <h3>External Editors</h3>
+  <p>The built-in prompt is great for one-liners, but multi-line methods are easier in an editor. You can configure JShell to open your preferred IDE or terminal editor when you run <code>/edit</code>:</p>
+  <pre><code class="bash"># For VS Code (use --wait so JShell halts until you close the file)
+jshell&gt; /set editor -retain "code --wait"
+
+# For Vim or Nano
+jshell&gt; /set editor -retain vim</code></pre>
+
+  <h3>Custom Feedback Modes</h3>
+  <p>If you find JShell too noisy, you can reduce its output verbosity using feedback modes: <code>normal</code> (default), <code>verbose</code>, <code>concise</code>, or <code>silent</code>.</p>
+  <pre><code class="bash"># Switch to concise mode
+jshell&gt; /set feedback concise
+
+# Retain this choice across all future terminal sessions
+jshell&gt; /set feedback -retain concise</code></pre>
+
+  <h3>Startup Scripts and Classpaths</h3>
+  <p>By default, JShell imports <code>java.util.*</code>, <code>java.io.*</code>, etc. You can load additional built-in scripts, like <code>PRINTING</code>, to skip writing <code>System.out.</code> every time:</p>
+  <pre><code class="bash">jshell&gt; /set start -retain DEFAULT PRINTING
+jshell&gt; println("Hello without System.out!")</code></pre>
+  
+  <p>To launch JShell with external JARs or modules, pass them at startup:</p>
+  <pre><code class="bash">$ jshell --class-path "libs/*:target/classes"</code></pre>
+  <p>Or modify it mid-session:</p>
+  <pre><code class="bash">jshell&gt; /env --class-path /libs/gson-2.10.1.jar</code></pre>
+
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>
