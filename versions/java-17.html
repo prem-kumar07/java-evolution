@@ -256,13 +256,13 @@ name.transform(String::toUpperCase);</code></pre>
       double-clickable installer from your app + a bundled JRE, so end users don't need Java installed:
       <pre><code class="java">jpackage --input target/ --name MyApp --main-jar myapp.jar \
     --main-class com.acme.Main --type dmg     # or: msi, exe, deb, rpm, pkg
-# produces MyApp.dmg — a self-contained installer, no separate JRE download</code></pre></li>
+# produces MyApp.dmg — a self-contained installer, no separate JRE download</code></pre> See the <a href="../topics/jlink-jpackage.html">jlink &amp; jpackage deep-dive</a>.</li>
     <li>The JDK source moved from <strong>Mercurial to Git &amp; GitHub</strong>
       <span class="badge added">Added in 16</span>.</li>
   </ul>
 
   <h3>JFR Event Streaming <span class="badge added">Added in 14</span> <span class="badge jep">JEP 349</span></h3>
-  <p><em>Why it matters:</em> continuous monitoring of Flight Recorder data without dumping a file.</p>
+  <p><em>Why it matters:</em> continuous monitoring of Flight Recorder data without dumping a file. See the <a href="../topics/jfr.html">JFR &amp; Mission Control deep-dive</a> for working examples.</p>
   <pre><code class="java">try (var rs = new RecordingStream()) {
   rs.enable("jdk.CPULoad").withPeriod(Duration.ofSeconds(1));
   rs.onEvent("jdk.CPULoad", event -&gt; System.out.println(event.getFloat("machineTotal")));

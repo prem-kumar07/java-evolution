@@ -194,8 +194,8 @@ SecretKey receiverSecret = dec.decapsulate(toSend);
   <h3>Simple Web Server &amp; Generational ZGC</h3>
   <ul>
     <li><strong>Simple Web Server</strong> <span class="badge added">Added in 18</span> — a zero-config
-      static file server for testing/prototyping:
-      <pre><code class="java">jwebserver -p 8000 -d /path/to/site</code></pre></li>
+      command-line tool for serving static files, great for local prototyping.
+      <pre><code class="java">jwebserver -p 8000 -d /path/to/site</code></pre> See the <a href="../topics/jwebserver.html">Simple Web Server deep-dive</a>.</li>
     <li><strong>Generational ZGC</strong> <span class="badge added">Added in 21</span> — ZGC now keeps a
       young generation, improving throughput:
       <code>-XX:+UseZGC -XX:+ZGenerational</code>.</li>

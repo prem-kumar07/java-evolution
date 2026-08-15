@@ -247,7 +247,7 @@ ProcessHandle.allProcesses()
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>
   <h3>JShell — the REPL <span class="badge jep">JEP 222</span></h3>
-  <p><em>Why it matters:</em> try an expression instantly without a class, <code>main</code>, or compile step.</p>
+  <p><em>Why it matters:</em> try an expression instantly without a class, <code>main</code>, or compile step. See the <a href="../topics/jshell.html">JShell deep-dive</a> for a full command reference.</p>
   <pre><code class="java">jshell&gt; List&lt;Integer&gt; xs = List.of(1, 2, 3)
 xs ==&gt; [1, 2, 3]
 jshell&gt; xs.stream().mapToInt(i -&gt; i).sum()
@@ -255,7 +255,7 @@ $2 ==&gt; 6</code></pre>
   <h3>jlink · multi-release JARs · unified logging</h3>
   <ul>
     <li><strong>jlink</strong> — assemble a minimal runtime with only the modules you need:
-      <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre></li>
+      <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre> See the <a href="../topics/jlink-jpackage.html">jlink &amp; jpackage deep-dive</a>.</li>
     <li><strong>Multi-release JARs</strong> — one JAR carrying version-specific classes under
       <code>META-INF/versions/N/</code>, so a library can use newer APIs on newer JDKs while still
       running on older ones. The JVM picks the highest matching version automatically:

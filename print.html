@@ -117,6 +117,7 @@ $env:Path = "$env:JAVA_HOME\bin;" + $env:Path</code></pre>
   </div>
 
   <h2>3 · JShell — the Java REPL <span class="badge added">Added in 9</span></h2>
+  <p>See the <a href="topics/jshell.html">JShell deep-dive</a> for advanced shortcuts, variables, and commands.</p>
   <p>The fastest way to try a snippet without a class, <code>main</code>, or compile step.</p>
   <pre><code class="java">jshell                    # start the REPL
 jshell> var xs = List.of(1, 2, 3)
@@ -890,7 +891,7 @@ ProcessHandle.allProcesses()
   <!-- ============ TOOLING ============ -->
   <h2>3 · Tooling</h2>
   <h3>JShell — the REPL <span class="badge jep">JEP 222</span></h3>
-  <p><em>Why it matters:</em> try an expression instantly without a class, <code>main</code>, or compile step.</p>
+  <p><em>Why it matters:</em> try an expression instantly without a class, <code>main</code>, or compile step. See the <a href="../topics/jshell.html">JShell deep-dive</a> for a full command reference.</p>
   <pre><code class="java">jshell&gt; List&lt;Integer&gt; xs = List.of(1, 2, 3)
 xs ==&gt; [1, 2, 3]
 jshell&gt; xs.stream().mapToInt(i -&gt; i).sum()
@@ -898,7 +899,7 @@ $2 ==&gt; 6</code></pre>
   <h3>jlink · multi-release JARs · unified logging</h3>
   <ul>
     <li><strong>jlink</strong> — assemble a minimal runtime with only the modules you need:
-      <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre></li>
+      <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre> See the <a href="../topics/jlink-jpackage.html">jlink &amp; jpackage deep-dive</a>.</li>
     <li><strong>Multi-release JARs</strong> — one JAR carrying version-specific classes under
       <code>META-INF/versions/N/</code>, so a library can use newer APIs on newer JDKs while still
       running on older ones. The JVM picks the highest matching version automatically:
@@ -1435,13 +1436,13 @@ name.transform(String::toUpperCase);</code></pre>
       double-clickable installer from your app + a bundled JRE, so end users don't need Java installed:
       <pre><code class="java">jpackage --input target/ --name MyApp --main-jar myapp.jar \
     --main-class com.acme.Main --type dmg     # or: msi, exe, deb, rpm, pkg
-# produces MyApp.dmg — a self-contained installer, no separate JRE download</code></pre></li>
+# produces MyApp.dmg — a self-contained installer, no separate JRE download</code></pre> See the <a href="../topics/jlink-jpackage.html">jlink &amp; jpackage deep-dive</a>.</li>
     <li>The JDK source moved from <strong>Mercurial to Git &amp; GitHub</strong>
       <span class="badge added">Added in 16</span>.</li>
   </ul>
 
   <h3>JFR Event Streaming <span class="badge added">Added in 14</span> <span class="badge jep">JEP 349</span></h3>
-  <p><em>Why it matters:</em> continuous monitoring of Flight Recorder data without dumping a file.</p>
+  <p><em>Why it matters:</em> continuous monitoring of Flight Recorder data without dumping a file. See the <a href="../topics/jfr.html">JFR &amp; Mission Control deep-dive</a> for working examples.</p>
   <pre><code class="java">try (var rs = new RecordingStream()) {
   rs.enable("jdk.CPULoad").withPeriod(Duration.ofSeconds(1));
   rs.onEvent("jdk.CPULoad", event -&gt; System.out.println(event.getFloat("machineTotal")));
@@ -1677,8 +1678,8 @@ SecretKey receiverSecret = dec.decapsulate(toSend);
   <h3>Simple Web Server &amp; Generational ZGC</h3>
   <ul>
     <li><strong>Simple Web Server</strong> <span class="badge added">Added in 18</span> — a zero-config
-      static file server for testing/prototyping:
-      <pre><code class="java">jwebserver -p 8000 -d /path/to/site</code></pre></li>
+      command-line tool for serving static files, great for local prototyping.
+      <pre><code class="java">jwebserver -p 8000 -d /path/to/site</code></pre> See the <a href="../topics/jwebserver.html">Simple Web Server deep-dive</a>.</li>
     <li><strong>Generational ZGC</strong> <span class="badge added">Added in 21</span> — ZGC now keeps a
       young generation, improving throughput:
       <code>-XX:+UseZGC -XX:+ZGenerational</code>.</li>
