@@ -326,10 +326,10 @@ String render(Json j) {
     case JStr(var s)  -> "\"" + s + "\"";
     case JNum(var n)  -> String.valueOf(n);
     case JArr(var xs) -> xs.stream().map(this::render)
-                           .collect(joining(",", "[", "]"));
+                           .collect(Collectors.joining(",", "[", "]"));
     case JObj(var m)  -> m.entrySet().stream()
         .map(e -> "\"" + e.getKey() + "\":" + render(e.getValue()))
-        .collect(joining(",", "{", "}"));
+        .collect(Collectors.joining(",", "{", "}"));
   };   // exhaustive — a new Json variant forces an update here
 }</code></pre>
     </div>

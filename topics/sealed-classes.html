@@ -262,6 +262,7 @@ Result&lt;User&gt; find(String id) {
   return u != null ? new Ok&lt;&gt;(u) : new Err&lt;&gt;("no user " + id);
 }
 switch (find(id)) {              // compiler enforces both cases
+  case null -> throw new NullPointerException();
   case Ok&lt;User&gt;(var user) -> use(user);
   case Err&lt;User&gt;(var msg) -> showError(msg);
 }</code></pre>

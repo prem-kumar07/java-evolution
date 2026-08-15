@@ -165,7 +165,7 @@ List&lt;Order&gt; topByScore(List&lt;Order&gt; orders) {
   record Scored(Order order, double score) {}   // local record — only exists in this method
   return orders.stream()
       .map(o -> new Scored(o, rank(o)))
-      .sorted(comparingDouble(Scored::score).reversed())
+      .sorted(Comparator.comparingDouble(Scored::score).reversed())
       .map(Scored::order)
       .toList();
 }</code></pre>

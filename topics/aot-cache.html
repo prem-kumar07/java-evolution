@@ -336,6 +336,18 @@ java -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=classes.jsa -cp . HelloS
     <tr><td>Java 25</td><td>AOT Command-Line Ergonomics (JEP 514) — one-step workflow. AOT Method Profiling (JEP 515) — warmup, not just startup.</td></tr>
     <tr><td>Java 26</td><td>AOT Object Caching with Any GC (JEP 516) — works with ZGC and every collector.</td></tr>
   </table>
+<section id="advanced-aot">
+    <h2>Advanced AOT & Caching</h2>
+    
+    <h3>Heap Object Archiving</h3>
+    <p>Allows archiving live object graphs into CDS (Class Data Sharing) archives. This significantly speeds up startup times by bypassing the initialization overhead of complex static structures.</p>
+    
+    <h3>AOT Early Initialization</h3>
+    <p>AOT compilation allows running static initializers at build time. Project Leyden seeks to shift work from runtime to build time, capturing the initialized state for faster startup.</p>
+
+    <h3>Cache Invalidation Constraints</h3>
+    <p>When using AOT or CDS, the runtime must match the conditions under which the cache was created. Changes to class paths, module paths, or JVM arguments can invalidate the cache.</p>
+</section>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>

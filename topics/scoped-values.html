@@ -232,6 +232,17 @@ void repo() {
     <tr><td>Java 21–24</td><td>Preview (JEPs 446, 464, 481, 487).</td></tr>
     <tr><td>Java 25</td><td><strong>Final</strong> (JEP 506).</td></tr>
   </table>
+
+  <!-- ============================================================ -->
+  <h2>Advanced Topics</h2>
+  <h3>ScopedValue.Carrier</h3>
+  <p>If you need to bind multiple scoped values at once, <code>ScopedValue.where(...)</code> internally uses a <code>ScopedValue.Carrier</code>. This carrier object packages bindings together efficiently, and you can explicitly create one when building dynamic binding contexts across framework boundaries.</p>
+
+  <h3>CallableOp vs Callable</h3>
+  <p>ScopedValue introduces its own <code>ScopedValue.CallableOp</code> instead of reusing <code>java.util.concurrent.Callable</code>. <code>CallableOp</code> can throw any <code>Exception</code>, making it easier to integrate cleanly with your application's checked exception signatures without unnecessary wrapping.</p>
+
+  <h3>Preventing Thread Pool Leaks</h3>
+  <p>One of the largest hidden costs of <code>ThreadLocal</code> in long-lived thread pools is value leakage. If a thread sets a ThreadLocal and fails to clean it up, the object is pinned in memory for the lifetime of that thread. Because scoped values are inherently strictly bound to a <code>Runnable</code> or <code>CallableOp</code> execution block, they automatically unbind when the block completes, eliminating this class of memory leaks entirely.</p>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>

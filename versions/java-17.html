@@ -261,6 +261,14 @@ name.transform(String::toUpperCase);</code></pre>
       <span class="badge added">Added in 16</span>.</li>
   </ul>
 
+  <h3>JFR Event Streaming <span class="badge added">Added in 14</span> <span class="badge jep">JEP 349</span></h3>
+  <p><em>Why it matters:</em> continuous monitoring of Flight Recorder data without dumping a file.</p>
+  <pre><code class="java">try (var rs = new RecordingStream()) {
+  rs.enable("jdk.CPULoad").withPeriod(Duration.ofSeconds(1));
+  rs.onEvent("jdk.CPULoad", event -&gt; System.out.println(event.getFloat("machineTotal")));
+  rs.start();
+}</code></pre>
+
   <!-- ============ JVM / OTHER ============ -->
   <h2>4 · JVM / performance / other</h2>
   <ul>

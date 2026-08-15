@@ -326,6 +326,13 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
       <li>Can't: <code>new T()</code>, static fields of <code>T</code>, <code>instanceof List&lt;String&gt;</code>, arrays of parameterized types, extend <code>Throwable</code> generically.</li>
     </ul>
   </div>
+    <h2>Advanced Generics Topics</h2>
+    <ul>
+      <li><strong>Wildcard Capture:</strong> When the compiler internally infers a specific but unknown type from a wildcard type (<code>?</code>) during type checking.</li>
+      <li><strong>Heap Pollution & <code>@SafeVarargs</code>:</strong> Situations where parameterized types lose their type safety, often related to varargs. The <code>@SafeVarargs</code> annotation suppresses unchecked warnings for varargs parameters.</li>
+      <li><strong>Intersection Types:</strong> Declaring a type that must satisfy multiple bounds (e.g., <code>&lt;T extends Serializable &amp; Comparable&lt;T&gt;&gt;</code>).</li>
+      <li><strong>Super Type Tokens (e.g., <code>TypeReference&lt;T&gt;</code>):</strong> A pattern to retain generic type information at runtime, circumventing type erasure.</li>
+    </ul>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>

@@ -375,6 +375,17 @@ if (!batch.isEmpty()) repo.insertAll(batch);   // don't forget the tail!</code><
     <tr><td>Java 23</td><td>2nd preview (JEP 473).</td></tr>
     <tr><td>Java 24</td><td><strong>Final</strong> (JEP 485).</td></tr>
   </table>
+
+  <!-- ============================================================ -->
+  <h2>Advanced Gatherer Concepts</h2>
+  <h3>Greedy vs Non-Greedy Integrators</h3>
+  <p>A Gatherer's integrator can be greedy (always returning <code>true</code> to request more elements) or non-greedy (returning <code>false</code> to short-circuit). Non-greedy integrators allow gatherers to act like <code>limit()</code> or <code>takeWhile()</code>, stopping upstream processing early once their specific condition is met.</p>
+
+  <h3>Gatherer.Downstream</h3>
+  <p>The <code>Gatherer.Downstream</code> interface is how an integrator or finisher pushes elements to the next stage in the pipeline. It is intentionally simple, consisting primarily of the <code>push(T element)</code> method. You must check its return value: if it returns <code>false</code>, the downstream no longer accepts elements, and your gatherer should gracefully stop.</p>
+
+  <h3>Parallel Gatherer Support</h3>
+  <p>To support parallel execution, a Gatherer needs a <strong>combiner</strong>. If your Gatherer is stateful and cannot be safely merged across threads, use <code>Gatherer.ofSequential(...)</code>. If the state is mergeable, you supply a combiner function just like in a Collector, allowing the parallel stream framework to split the work and merge the partial states.</p>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>

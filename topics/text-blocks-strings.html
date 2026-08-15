@@ -254,6 +254,15 @@ email.matcher("not-an-email").matches();      // false — verified</code></pre>
     <tr><td>Java 14</td><td>2nd preview (JEP 368); adds <code>\</code> and <code>\s</code>.</td></tr>
     <tr><td>Java 15</td><td><strong>Final</strong> (JEP 378).</td></tr>
   </table>
+<section id="advanced-text">
+    <h2>Advanced String Topics</h2>
+    
+    <h3>Line Terminator Normalization</h3>
+    <p>Text blocks normalize all line terminators to <code>\n</code> (LF), ensuring consistency across operating systems. Windows <code>\r\n</code> and Mac <code>\r</code> are seamlessly converted.</p>
+    
+    <h3>String.indent(n)</h3>
+    <p>The <code>indent(n)</code> method adjusts the indentation of each line of a string. Positive <code>n</code> adds spaces, negative <code>n</code> removes leading spaces (up to the given number).</p>
+</section>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>

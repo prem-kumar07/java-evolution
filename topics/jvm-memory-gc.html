@@ -635,6 +635,18 @@ jcmd $! GC.heap_info      # run this a few times while it's executing</code></pr
     <tr><td>Java 24</td><td><code>-XX:+ZGenerational</code> flag removed — generational is the only mode.</td></tr>
     <tr><td>Java 25</td><td>Generational Shenandoah finalized; compact object headers finalized.</td></tr>
   </table>
+<section id="advanced-jvm">
+    <h2>Advanced JVM Memory & GC Topics</h2>
+    
+    <h3>Reference Types & Cleaner API</h3>
+    <p>The hierarchy of references (Soft, Weak, Phantom) helps manage object lifecycle. The <code>java.lang.ref.Cleaner</code> API is the modern, safer alternative to overriding <code>Object.finalize()</code>, allowing cleanup actions after objects become phantom reachable.</p>
+    
+    <h3>Project Lilliput (Compact Object Headers)</h3>
+    <p>Aims to reduce object header sizes in HotSpot from 128 bits down to 64 bits or even 32 bits, drastically reducing the overall memory footprint of Java applications with large numbers of small objects.</p>
+
+    <h3>False Sharing and @Contended</h3>
+    <p>False sharing occurs when independent variables share a cache line, causing cache invalidation overhead. The <code>@jdk.internal.vm.annotation.Contended</code> annotation pads fields or classes to isolate them in separate cache lines, improving concurrent performance.</p>
+</section>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>

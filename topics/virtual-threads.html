@@ -623,6 +623,15 @@ static int status(HttpClient http, String url) throws Exception {
     <tr><td>Java 21</td><td><strong>Final</strong> (JEP 444).</td></tr>
     <tr><td>Java 24</td><td><code>synchronized</code> no longer pins (JEP 491).</td></tr>
   </table>
+
+  <!-- ============================================================ -->
+  <h2>Virtual Thread Invariants</h2>
+  <p>Virtual threads are managed by the JVM and have a few strict invariants compared to platform threads:</p>
+  <ul>
+    <li><strong>Always Daemon:</strong> Virtual threads are always daemon threads. They will not keep the JVM alive if all non-daemon platform threads terminate.</li>
+    <li><strong>Fixed Priority:</strong> The priority of a virtual thread is always <code>Thread.NORM_PRIORITY</code>. It cannot be changed.</li>
+    <li><strong>No ThreadGroup:</strong> Virtual threads cannot be added to a custom <code>ThreadGroup</code>. They all belong to a single system thread group.</li>
+  </ul>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>

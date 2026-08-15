@@ -474,7 +474,7 @@ IntStream.range(0, 100_000).parallel().forEach(unsafe::add);
     <div class="after"><div class="ba-label">Correct — let collect() do the merging</div>
       <pre><code class="java">List&lt;Integer&gt; safe = IntStream.range(0, 100_000).parallel()
     .boxed()
-    .collect(Collectors.toList());
+    .toList();
 // each chunk accumulates independently; the Collector's
 // combiner merges them safely — no shared mutable state</code></pre>
     </div>

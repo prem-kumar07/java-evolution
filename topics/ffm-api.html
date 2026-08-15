@@ -340,6 +340,21 @@ After:  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]</code></pre>
     <tr><td>Java 19–21</td><td>Preview (JEPs 424, 434, 442).</td></tr>
     <tr><td>Java 22</td><td><strong>Final</strong> (JEP 454).</td></tr>
   </table>
+<section id="advanced-ffm">
+    <h2>Advanced FFM Features</h2>
+    
+    <h3>MemorySegment.reinterpret</h3>
+    <p>Allows resizing or reattaching a segment to a different scope, commonly used when receiving a zero-length segment from C to resize it to the actual known length.</p>
+    
+    <h3>Linker.Option</h3>
+    <p>Options for downcalls, such as <code>Linker.Option.captureCallState("errno")</code> to capture the state of native thread-local variables like errno.</p>
+
+    <h3>Bulk Memory Operations</h3>
+    <p>FFM API supports highly optimized bulk memory operations such as <code>MemorySegment.copy()</code> and <code>MemorySegment.mismatch()</code> for transferring or comparing large memory regions.</p>
+
+    <h3>SymbolLookup Variants</h3>
+    <p>Various lookups are supported: <code>SymbolLookup.loaderLookup()</code>, <code>SymbolLookup.libraryLookup()</code>, and <code>Linker.defaultLookup()</code> to resolve native symbols across libraries or system paths.</p>
+</section>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>

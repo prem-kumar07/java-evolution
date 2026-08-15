@@ -285,6 +285,17 @@ try {
   <div class="gotcha">
     <strong>⚠ Breaking API change between Java 21–24 and Java 25+.</strong> The Java 21–24 preview used <code>new StructuredTaskScope.ShutdownOnFailure()</code> (subclass instantiation) with explicit <code>scope.throwIfFailed()</code>. Java 25+ replaces this with <code>StructuredTaskScope.open(Joiner.allSuccessfulOrThrow())</code> where <code>join()</code> itself throws. These APIs are <em>incompatible</em> — upgrading from Java 21–24 to Java 25 requires refactoring any code using the old subclass-based API.
   </div>
+
+  <!-- ============================================================ -->
+  <h2>Advanced Topics</h2>
+  <h3>StructuredTaskScope.Config</h3>
+  <p>In the new Java 25+ API, scopes can be customized via <code>StructuredTaskScope.Config</code>. You can set timeouts and thread factories directly on the configuration, providing a cleaner way to apply constraints without subclassing.</p>
+
+  <h3>The Joiner API Surface</h3>
+  <p>The <code>Joiner</code> interface introduced in Java 25+ allows writing custom completion policies. A Joiner defines how to accumulate results and short-circuit when a condition is met, bringing flexibility similar to the Stream API's <code>Collector</code>.</p>
+
+  <h3>Structural Confinement Rule</h3>
+  <p>Structured tasks enforce strict structural confinement. A child subtask cannot outlive the lexical scope of its parent <code>StructuredTaskScope</code>. If a parent exits its scope while subtasks are still running, those subtasks are automatically cancelled (interrupted), preventing orphaned threads.</p>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>
