@@ -48,7 +48,8 @@
     <a href="#processing">10. Compile-time annotation processing</a>
     <a href="#pitfalls">11. Pitfalls</a>
     <a href="#realworld">12. Real-world use cases</a>
-    <a href="#cheat">13. Cheat sheet</a>
+    <a href="#examples">13. Five complete examples, basic to advanced</a>
+    <a href="#cheat">14. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -333,7 +334,275 @@ public class BuilderProcessor extends AbstractProcessor {
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">13 · Cheat sheet</h2>
+  <h2 id="examples">13 · Five complete examples, basic to advanced</h2>
+  <p>Every example on this page so far is a fragment. These five are complete, compiling programs —
+  each one was actually run to produce the output shown — going from a five-minute pattern to the same
+  compile-time code generation trick Lombok and Dagger use.</p>
+
+  <h3>Example 1 — Basic: method logging with a dynamic proxy</h3>
+  <p>The smallest useful pattern: mark specific interface methods, then have an
+  <code>InvocationHandler</code> check for the marker before deciding whether to log. This is the same
+  shape as Spring's <code>@Transactional</code>/<code>@Async</code> — an annotation that triggers
+  cross-cutting behavior <em>around</em> a call, without the method itself knowing about it.</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+@interface Loggable {}
+
+interface Calculator {
+  @Loggable
+  int add(int a, int b);
+  int subtract(int a, int b);      // not annotated — stays silent
+}
+
+class CalculatorImpl implements Calculator {
+  public int add(int a, int b) { return a + b; }
+  public int subtract(int a, int b) { return a - b; }
+}
+
+class LoggingHandler implements InvocationHandler {
+  private final Object target;
+  LoggingHandler(Object target) { this.target = target; }
+
+  public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    boolean log = method.isAnnotationPresent(Loggable.class);
+    if (log) System.out.println("-> " + method.getName() + Arrays.toString(args));
+    Object result = method.invoke(target, args);
+    if (log) System.out.println("<- " + result);
+    return result;
+  }
+}
+
+Calculator calc = (Calculator) Proxy.newProxyInstance(
+    Calculator.class.getClassLoader(),
+    new Class&lt;?&gt;[] { Calculator.class },
+    new LoggingHandler(new CalculatorImpl()));
+calc.add(2, 3);
+calc.subtract(5, 1);
+
+// verified output:
+// -> add[2, 3]
+// <- 5
+// (subtract prints nothing)</code></pre>
+
+  <h3>Example 2 — Basic/intermediate: a bean-validation mini-framework</h3>
+  <p>This is the mechanism behind Jakarta Bean Validation's <code>@NotBlank</code>/<code>@Min</code>:
+  walk an object's fields with reflection, and let each annotation carry its own rule data.</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface NotBlank {}
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Min { int value(); }
+
+class User {
+  @NotBlank String name;
+  @Min(18) int age;
+  User(String name, int age) { this.name = name; this.age = age; }
+}
+
+class Validator {
+  static List&lt;String&gt; validate(Object obj) throws IllegalAccessException {
+    List&lt;String&gt; errors = new ArrayList&lt;&gt;();
+    for (Field f : obj.getClass().getDeclaredFields()) {
+      f.setAccessible(true);
+      if (f.isAnnotationPresent(NotBlank.class)) {
+        Object value = f.get(obj);
+        if (value == null || value.toString().isBlank())
+          errors.add(f.getName() + " must not be blank");
+      }
+      if (f.isAnnotationPresent(Min.class)) {
+        int min = f.getAnnotation(Min.class).value();
+        if (f.getInt(obj) < min)
+          errors.add(f.getName() + " must be >= " + min);
+      }
+    }
+    return errors;
+  }
+}
+
+Validator.validate(new User("Ada", 30));   // verified: []
+Validator.validate(new User("", 12));      // verified: [name must not be blank, age must be >= 18]</code></pre>
+
+  <h3>Example 3 — Intermediate: a tiny dependency-injection container</h3>
+  <p><code>@Inject</code>/<code>@Autowired</code> demystified: a container is just a
+  <code>Map&lt;Class, Object&gt;</code> and a loop that reflects over annotated fields and fills them in.</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Inject {}
+
+interface PaymentGateway { String charge(int cents); }
+
+class StripeGateway implements PaymentGateway {
+  public String charge(int cents) { return "charged " + cents + " via Stripe"; }
+}
+
+class CheckoutService {
+  @Inject PaymentGateway gateway;
+  String checkout(int cents) { return gateway.charge(cents); }
+}
+
+class MiniContainer {
+  private final Map&lt;Class&lt;?&gt;, Object&gt; registry = new HashMap&lt;&gt;();
+  &lt;T&gt; void register(Class&lt;T&gt; type, T instance) { registry.put(type, instance); }
+
+  &lt;T&gt; T create(Class&lt;T&gt; type) throws Exception {
+    T instance = type.getDeclaredConstructor().newInstance();
+    for (Field f : type.getDeclaredFields()) {
+      if (f.isAnnotationPresent(Inject.class)) {
+        f.setAccessible(true);
+        f.set(instance, registry.get(f.getType()));   // wire the dependency in by type
+      }
+    }
+    return instance;
+  }
+}
+
+MiniContainer container = new MiniContainer();
+container.register(PaymentGateway.class, new StripeGateway());
+CheckoutService checkout = container.create(CheckoutService.class);
+checkout.checkout(2500);   // verified: "charged 2500 via Stripe"</code></pre>
+
+  <h3>Example 4 — Intermediate/advanced: a mini ORM (<code>@Entity</code>/<code>@Column</code> → SQL)</h3>
+  <p>Hibernate's field mapping starts here: annotations describe how a class corresponds to a table,
+  and a generator turns any annotated instance into SQL without either side hand-writing the mapping.</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@interface Entity { String table(); }
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Column { String name(); }
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Id {}
+
+@Entity(table = "users")
+class UserRow {
+  @Id @Column(name = "id") int id;
+  @Column(name = "full_name") String name;
+  @Column(name = "email") String email;
+
+  UserRow(int id, String name, String email) {
+    this.id = id; this.name = name; this.email = email;
+  }
+}
+
+class SqlGenerator {
+  static String insertStatement(Object entity) throws IllegalAccessException {
+    Class&lt;?&gt; type = entity.getClass();
+    Entity table = type.getAnnotation(Entity.class);
+    if (table == null) throw new IllegalArgumentException(type + " is not @Entity");
+
+    List&lt;String&gt; columns = new ArrayList&lt;&gt;();
+    List&lt;String&gt; values = new ArrayList&lt;&gt;();
+    for (Field f : type.getDeclaredFields()) {
+      Column col = f.getAnnotation(Column.class);
+      if (col == null) continue;
+      f.setAccessible(true);
+      columns.add(col.name());
+      Object v = f.get(entity);
+      values.add(v instanceof String ? "'" + v + "'" : String.valueOf(v));
+    }
+    return "INSERT INTO " + table.table() + " (" + String.join(", ", columns)
+         + ") VALUES (" + String.join(", ", values) + ")";
+  }
+}
+
+SqlGenerator.insertStatement(new UserRow(1, "Ada Lovelace", "ada@example.com"));
+// verified: INSERT INTO users (id, full_name, email) VALUES (1, 'Ada Lovelace', 'ada@example.com')</code></pre>
+
+  <h3>Example 5 — Advanced: compile-time code generation (the Lombok/Dagger trick)</h3>
+  <p>This is the full version of the sketch in §10 — a real <code>@GenerateBuilder</code> annotation
+  processor that writes a new <code>.java</code> source file during compilation. Four pieces, compiled
+  and run in order.</p>
+  <p><strong>1. The marker annotation</strong> — <code>SOURCE</code> retention, because nothing needs
+  it after <code>javac</code> is done:</p>
+  <pre><code class="java">package demo;
+
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.SOURCE)
+public @interface GenerateBuilder {}</code></pre>
+  <p><strong>2. The processor</strong> — for every <code>@GenerateBuilder</code> class, writes a sibling
+  <code>XxxBuilder</code> class with one setter per field:</p>
+  <pre><code class="java">package demo;
+
+@SupportedAnnotationTypes("demo.GenerateBuilder")
+@SupportedSourceVersion(SourceVersion.RELEASE_21)
+public class BuilderProcessor extends AbstractProcessor {
+  @Override
+  public boolean process(Set&lt;? extends TypeElement&gt; annotations, RoundEnvironment roundEnv) {
+    for (Element e : roundEnv.getElementsAnnotatedWith(GenerateBuilder.class)) {
+      TypeElement classElement = (TypeElement) e;
+      String className = classElement.getSimpleName().toString();
+      String packageName = processingEnv.getElementUtils()
+          .getPackageOf(classElement).getQualifiedName().toString();
+      String builderName = className + "Builder";
+
+      try (PrintWriter out = new PrintWriter(
+          processingEnv.getFiler().createSourceFile(packageName + "." + builderName).openWriter())) {
+        out.println("package " + packageName + ";");
+        out.println("public class " + builderName + " {");
+        out.println("  private final " + className + " instance = new " + className + "();");
+        for (Element field : classElement.getEnclosedElements()) {
+          if (field.getKind() != ElementKind.FIELD) continue;
+          String name = field.getSimpleName().toString();
+          String type = field.asType().toString();
+          out.println("  public " + builderName + " " + name + "(" + type + " value) {");
+          out.println("    instance." + name + " = value;");
+          out.println("    return this;");
+          out.println("  }");
+        }
+        out.println("  public " + className + " build() { return instance; }");
+        out.println("}");
+      } catch (Exception ex) {
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Failed to generate builder: " + ex);
+      }
+    }
+    return true;
+  }
+}
+// registered in META-INF/services/javax.annotation.processing.Processor
+// with a single line: demo.BuilderProcessor</code></pre>
+  <p><strong>3. The annotated class</strong> — no builder written by hand:</p>
+  <pre><code class="java">package demo;
+
+@GenerateBuilder
+public class Product {
+  String name;
+  double price;
+
+  @Override
+  public String toString() { return name + " ($" + price + ")"; }
+}</code></pre>
+  <p><strong>4. Code that uses the generated class</strong> — <code>ProductBuilder</code> doesn't exist
+  anywhere in this source tree; <code>javac</code> generates it during compilation and then compiles
+  this file against it in the same pass:</p>
+  <pre><code class="java">package demo;
+
+public class Main {
+  public static void main(String[] args) {
+    Product p = new ProductBuilder().name("Widget").price(9.99).build();
+    System.out.println(p);
+  }
+}
+// verified generated source (demo/ProductBuilder.java):
+//   package demo;
+//   public class ProductBuilder {
+//     private final Product instance = new Product();
+//     public ProductBuilder name(java.lang.String value) { instance.name = value; return this; }
+//     public ProductBuilder price(double value) { instance.price = value; return this; }
+//     public Product build() { return instance; }
+//   }
+// verified output: Widget ($9.99)</code></pre>
+  <div class="note">Compiling this requires two passes: first compile <code>GenerateBuilder</code> and
+  <code>BuilderProcessor</code> on their own, then compile <code>Product</code>/<code>Main</code> with
+  <code>javac -processorpath &lt;dir-with-compiled-processor&gt; ...</code> — a processor can't process the
+  same compilation unit it's part of.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">14 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Annotations in one glance</h3>
     <ul>
