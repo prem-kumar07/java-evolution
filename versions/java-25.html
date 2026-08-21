@@ -43,8 +43,17 @@
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Compact source files &amp; instance <code>main</code> <span class="badge added">Final in 25</span> <span class="badge jep">JEP 512</span></h3>
   <p><em>Why it matters:</em> a runnable program with no <code>class</code>, no <code>public
@@ -148,7 +157,7 @@ Logger l = logger.orElseSet(() -> createLogger());   // computed at most once</c
   </ul>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>Stream Gatherers <span class="badge added">Final in 24</span> <span class="badge jep">JEP 485</span></h3>
   <p><em>Why it matters:</em> custom <em>intermediate</em> operations — the missing counterpart to a custom <code>Collector</code>.</p>
@@ -212,7 +221,7 @@ KeyPairGenerator kem = KeyPairGenerator.getInstance("ML-KEM");   // JEP 496
 Signature       dsa = Signature.getInstance("ML-DSA");          // JEP 497</code></pre>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
 
   <h3>Markdown in Javadoc <span class="badge added">Added in 23</span></h3>
   <p><em>Why it matters:</em> write doc comments in Markdown (<code>///</code> lines) instead of HTML tags.</p>
@@ -257,7 +266,7 @@ class Greeter {
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>Compact Object Headers</strong> <span class="badge added">Final in 25</span> (experimental in 24) —
       shrinks every object header from 12/16 to 8 bytes, meaningfully cutting heap use.</li>
@@ -270,7 +279,7 @@ class Greeter {
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 25 (LTS) in one glance</h3>
     <ul>

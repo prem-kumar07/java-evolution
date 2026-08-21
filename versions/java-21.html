@@ -44,8 +44,17 @@
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Virtual threads <span class="badge added">Final in 21</span> <span class="badge jep">JEP 444</span></h3>
   <p><em>Why it matters:</em> write simple blocking code that scales to millions of concurrent tasks —
@@ -114,7 +123,7 @@ for (var _ : items) count++;</code></pre></li>
   </ul>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>Sequenced collections <span class="badge added">Added in 21</span> <span class="badge jep">JEP 431</span></h3>
   <p><em>Why it matters:</em> before, every ordered collection expressed "first/last/reverse"
@@ -163,7 +172,7 @@ SecretKey receiverSecret = dec.decapsulate(toSend);
 // ⚠ For post-quantum ML-KEM (CRYSTALS-Kyber), use Java 24+ (JEP 496)</code></pre>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
 
   <h3>Code snippets in Javadoc — <code>@snippet</code> <span class="badge added">Added in 18</span></h3>
   <p><em>Why it matters:</em> old <code>{@code ...}</code> examples were plain text — never compiled, so
@@ -202,7 +211,7 @@ SecretKey receiverSecret = dec.decapsulate(toSend);
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>UTF-8 is the default charset</strong> <span class="badge added">Added in 18</span> —
       file I/O no longer depends on the platform locale. Watch behaviour changes in old code.</li>
@@ -229,7 +238,7 @@ try (var r = new NativeResource()) { /* use it */ }
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 21 (LTS) in one glance</h3>
     <ul>

@@ -40,8 +40,17 @@
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Prepare to Make <code>final</code> Mean Final <span class="badge jep">JEP 500</span></h3>
   <p><em>Why it matters:</em> part of the "integrity by default" effort. Historically, libraries could
@@ -93,7 +102,7 @@ if (bigValue instanceof int i) { use(i); }  // only matches if it fits exactly</
   <p>See the <a href="../topics/structured-concurrency.html">structured concurrency deep-dive</a> for the full <code>StructuredTaskScope</code> API and worked examples.</p>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>HTTP/3 for the HTTP Client</h3>
   <p><em>Why it matters:</em> the <code>java.net.http.HttpClient</code> (standardised in Java 11) now
@@ -186,7 +195,7 @@ for (; i &lt; a.length; i++) result[i] = a[i] + b[i];   // scalar tail
 // run with:  java --add-modules jdk.incubator.vector Demo.java</code></pre>
 
   <!-- ============ TOOLING / JVM ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
   <h3>Ahead-of-Time Object Caching with Any GC <span class="badge jep">JEP 516</span></h3>
   <p><em>Why it matters:</em> Project Leyden's AOT cache (pre-warmed classes and heap objects) was
   previously tied to specific collectors; now it works regardless of the garbage collector you choose,
@@ -199,7 +208,7 @@ java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
   <p>Full lineage (CDS → AppCDS → AOT Cache), verified GC-mismatch behavior, and measured startup-time
   numbers → <a href="../topics/aot-cache.html">AOT Cache deep-dive</a>.</p>
 
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>G1: improved throughput by reducing synchronization</strong> <span class="badge jep">JEP 522</span> —
       less internal locking overhead in the default collector, meaning better throughput with no
@@ -210,7 +219,7 @@ java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 26 in one glance</h3>
     <ul>

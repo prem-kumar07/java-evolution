@@ -44,8 +44,17 @@
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Lambda expressions</h3>
   <p><em>Why it matters:</em> passing behavior around used to mean an anonymous class — four lines of
@@ -150,7 +159,7 @@ class Job {}
   static-analysis tools like Checker Framework rather than the JDK itself.</p>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>The Streams API</h3>
   <p><em>Why it matters:</em> filtering, transforming and aggregating collections in bulk, declaratively,
@@ -274,7 +283,7 @@ sj.add("a").add("b").add("c");
 System.out.println(sj);   // verified: "[a, b, c]"</code></pre>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
   <ul>
     <li><strong>Nashorn</strong> — a new, faster JavaScript engine replacing Rhino, invoked from the
       command line or embedded via <code>javax.script</code>:
@@ -292,7 +301,7 @@ jjs&gt; print("hello from Nashorn")</code></pre>
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>PermGen removed; Metaspace introduced</strong> <span class="badge jep">JEP 122</span> —
       class metadata moved out of the heap into native memory that grows automatically. The
@@ -314,7 +323,7 @@ jjs&gt; print("hello from Nashorn")</code></pre>
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 8 in one glance</h3>
     <ul>

@@ -39,8 +39,17 @@
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Private methods in interfaces</h3>
   <p><em>Why it matters:</em> Java 8 gave interfaces <code>default</code> methods, but there was no way
@@ -106,7 +115,7 @@ public void oldApi() { }    // compilers warn louder for forRemoval</code></pre>
 int _ = 3;   // COMPILE ERROR: '_' is now reserved (for future language use)</code></pre>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>Immutable collection factory methods <span class="badge jep">JEP 269</span></h3>
   <p><em>Why it matters:</em> creating small immutable collections was verbose and error-prone.</p>
@@ -245,7 +254,7 @@ ProcessHandle.allProcesses()
     .forEach(p -> System.out.println(p.pid() + " " + p.info().command().get()));</code></pre>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
   <h3>JShell — the REPL <span class="badge jep">JEP 222</span></h3>
   <p><em>Why it matters:</em> try an expression instantly without a class, <code>main</code>, or compile step. See the <a href="../topics/jshell.html">JShell deep-dive</a> for a full command reference.</p>
   <pre><code class="java">jshell&gt; List&lt;Integer&gt; xs = List.of(1, 2, 3)
@@ -271,7 +280,7 @@ $2 ==&gt; 6</code></pre>
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>The Module System (JPMS)</strong> <span class="badge jep">JEP 261</span> — the headline
       change; the JDK is split into ~90 modules and you can declare your own with
@@ -296,7 +305,7 @@ boolean swapped = vh.compareAndSet(10, 20);   // atomic CAS, no Unsafe needed
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 9 in one glance</h3>
     <ul>

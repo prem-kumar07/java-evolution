@@ -43,8 +43,17 @@
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Switch expressions <span class="badge added">Final in 14</span> <span class="badge jep">JEP 361</span></h3>
   <p><em>Why it matters:</em> <code>switch</code> can return a value, uses arrow labels (no
@@ -142,7 +151,7 @@ public record Rectangle(double w, double h) implements Shape { }</code></pre>
 };</code></pre>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3><code>Stream.toList()</code> <span class="badge added">Added in 16</span></h3>
   <div class="ba">
@@ -237,7 +246,7 @@ String hex = HexFormat.of().formatHex(new byte[]{1, 2, 3});   // "010203"
 name.transform(String::toUpperCase);</code></pre>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
   <h3>Helpful NullPointerExceptions <span class="badge added">Added in 14</span></h3>
   <p><em>Why it matters:</em> the message names the <em>exact</em> expression that was null.</p>
   <div class="ba">
@@ -270,7 +279,7 @@ name.transform(String::toUpperCase);</code></pre>
 }</code></pre>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>ZGC</strong> and <strong>Shenandoah</strong> low-pause collectors reached
       <em>production</em> <span class="badge added">Added in 15</span>.</li>
@@ -299,7 +308,7 @@ Class.forName(hidden.getName()); // throws ClassNotFoundException — verified:
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 17 (LTS) in one glance</h3>
     <ul>

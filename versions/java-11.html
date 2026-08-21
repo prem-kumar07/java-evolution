@@ -40,8 +40,17 @@
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3><code>var</code> — local-variable type inference <span class="badge added">Added in 10</span></h3>
   <p><em>Why it matters:</em> drops the redundant left-hand type when it's obvious from the initializer.
@@ -95,7 +104,7 @@ for (var e : scores.entrySet()) { }   // type inferred</code></pre>
   are the new reflection APIs that expose this relationship directly.</p>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>Standard HTTP Client — <code>java.net.http</code> <span class="badge jep">JEP 321</span></h3>
   <p><em>Why it matters:</em> a modern client with HTTP/2, WebSocket and async support, replacing the
@@ -185,7 +194,7 @@ list.removeIf(Predicate.not(String::isBlank)); // Predicate.not, Added in 11</co
   </div>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
   <h3>Run a single source file — no compile step <span class="badge jep">JEP 330</span></h3>
   <p><em>Why it matters:</em> scripting in Java without a build tool or <code>.class</code> files.</p>
   <div class="ba">
@@ -216,7 +225,7 @@ jcmd &lt;pid&gt; JFR.stop</code></pre>
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>ZGC</strong> (experimental) <span class="badge jep">JEP 333</span> &amp; <strong>Epsilon</strong> (no-op) <span class="badge jep">JEP 318</span> garbage collectors introduced.</li>
     <li><strong>Parallel full GC for G1</strong> <span class="badge added">Added in 10</span> — shorter worst-case pauses.</li>
@@ -227,7 +236,7 @@ jcmd &lt;pid&gt; JFR.stop</code></pre>
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 11 (LTS) in one glance</h3>
     <ul>
