@@ -215,6 +215,15 @@
     if (e.target.tagName === "A") sidebar.classList.remove("open");
   });
 
+  /* close mobile sidebar on outside click/tap */
+  document.addEventListener("click", function (e) {
+    if (sidebar.classList.contains("open") &&
+        !sidebar.contains(e.target) &&
+        e.target !== menuBtn) {
+      sidebar.classList.remove("open");
+    }
+  });
+
   /* ---------- load the search index (offline-safe, no fetch) ---------- */
   var idxScript = document.createElement("script");
   idxScript.src = root + "assets/search-index.js";
