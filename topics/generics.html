@@ -44,7 +44,8 @@
     <a href="#restrictions">7. What you cannot do with generics</a>
     <a href="#pitfalls">8. Pitfalls</a>
     <a href="#realworld">9. Real-world use cases</a>
-    <a href="#cheat">10. Cheat sheet</a>
+    <a href="#advanced">10. Advanced generics</a>
+    <a href="#cheat">11. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -143,7 +144,7 @@ static double sumOf(List&lt;? extends Number&gt; nums) { ... }
 
 // multiple bounds: at most ONE class, then any number of interfaces —
 // the class (if any) must be listed first
-static &lt;T extends Number & Comparable&lt;T&gt;&gt; T max(T a, T b) {
+static &lt;T extends Number &amp; Comparable&lt;T&gt;&gt; T max(T a, T b) {
   return a.compareTo(b) >= 0 ? a : b;
 }
 // verified: max(3, 7) -> 7
@@ -345,7 +346,135 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">10 · Cheat sheet</h2>
+  <h2 id="advanced">10 · Advanced generics</h2>
+  <p>Four topics that go past the everyday PECS/erasure material above — each verified by actually
+  compiling and running it, and cross-checked against
+  <a href="https://dev.java/learn/generics/wildcards/">dev.java's generics tutorial</a> and
+  <a href="https://docs.oracle.com/javase/tutorial/java/generics/nonReifiableVarargsType.html">Oracle's
+  "Non-Reifiable Types" reference</a> for wording.</p>
+
+  <h3>Wildcard capture — the "capture helper" pattern</h3>
+  <p>dev.java's own definition: a list may be declared as <code>List&lt;?&gt;</code>, but "when
+  evaluating an expression, the compiler infers a particular type from the code" — that inferred,
+  unnamed type is the <strong>capture</strong> (printed by <code>javac</code> as <code>CAP#1</code>).
+  You hit its limits the moment you try to both read <em>and</em> write a <code>List&lt;?&gt;</code> in
+  the same method:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Doesn't compile — two "?" uses aren't provably the same capture</div>
+      <pre><code class="java">static void swapFirstTwo(List&lt;?&gt; list) {
+  Object tmp = list.get(0);
+  list.set(0, list.get(1));   // compile error
+  list.set(1, tmp);           // compile error
+}
+// javap/javac's real message:
+// error: incompatible types: Object cannot be converted to CAP#1
+//   where CAP#1 is a fresh type-variable:
+//     CAP#1 extends Object from capture of ?</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Fixed — a private generic helper method captures the wildcard</div>
+      <pre><code class="java">static void swapFirstTwo(List&lt;?&gt; list) {
+  swapHelper(list);          // capture happens on THIS call
+}
+
+private static &lt;T&gt; void swapHelper(List&lt;T&gt; list) {
+  T tmp = list.get(0);       // now get()/set() both agree on the same T
+  list.set(0, list.get(1));
+  list.set(1, tmp);
+}
+
+List&lt;String&gt; names = new ArrayList&lt;&gt;(List.of("Ada", "Grace", "Barbara"));
+swapFirstTwo(names);
+System.out.println(names);   // verified: [Grace, Ada, Barbara]</code></pre>
+    </div>
+  </div>
+  <div class="tip">The helper method doesn't change behavior — it changes what the <em>compiler</em> can
+  prove. Calling <code>swapHelper(list)</code> from inside <code>swapFirstTwo</code> lets the compiler
+  bind the unknown <code>?</code> to one concrete, if unnameable, type parameter <code>T</code> for the
+  duration of that call. dev.java's convention: name it
+  <code>&lt;originalMethodName&gt;Helper</code>.</div>
+
+  <h3>Heap pollution &amp; <code>@SafeVarargs</code></h3>
+  <p>Oracle's exact definition: <strong>heap pollution</strong> "occurs when a variable of a
+  parameterized type refers to an object that is not of that parameterized type" — and it becomes
+  possible specifically because a varargs parameter of a non-reifiable type (like
+  <code>List&lt;String&gt;</code>) is compiled down to a plain <code>Object[]</code>, which happily
+  accepts any array store:</p>
+  <pre><code class="java">static void faultyMethod(List&lt;String&gt;... l) {   // no @SafeVarargs — and rightly so
+  Object[] objectArray = l;             // fine: T[] "is-a" Object[]
+  objectArray[0] = Arrays.asList(42);   // heap pollution: an Integer list, disguised as List&lt;String&gt;
+  String s = l[0].get(0);               // ClassCastException — thrown HERE, not where the lie was told
+}
+
+faultyMethod(List.of("x"), List.of("y"));
+// verified: java.lang.ClassCastException: class java.lang.Integer cannot be cast to class java.lang.String</code></pre>
+  <p><code>@SafeVarargs</code> is how you tell the compiler (and readers) "I checked — this method never
+  does that." It's legal only on <code>static</code>/<code>final</code>/<code>private</code> methods and
+  constructors, because those can't be overridden with a less careful body:</p>
+  <pre><code class="java">@SafeVarargs   // legal: static, and the body only ever reads `items`, never stores into it
+static &lt;T&gt; List&lt;T&gt; listOf(T... items) {
+  List&lt;T&gt; result = new ArrayList&lt;&gt;();
+  for (T item : items) result.add(item);
+  return result;
+}
+listOf("a", "b", "c");   // verified: [a, b, c] — compiles with ZERO warnings under -Xlint:all</code></pre>
+  <div class="note"><strong>Reifiable vs. non-reifiable, precisely</strong> (Oracle's wording): a
+  <em>reifiable</em> type has all its information available at runtime — primitives, non-generic types,
+  raw types, and unbounded-wildcard invocations like <code>List&lt;?&gt;</code> all qualify.
+  <em>Non-reifiable</em> types — <code>List&lt;String&gt;</code>, <code>List&lt;Number&gt;</code> — have
+  had information erased, and it's exactly those types that make a varargs parameter dangerous.</div>
+
+  <h3>Intersection types — bounds that require more than one interface</h3>
+  <p>An intersection type shows up in two places: as a type-parameter bound with <code>&amp;</code>
+  joining several types, and as an explicit cast. Both require the argument to satisfy every listed type
+  simultaneously — at most one class, then any number of interfaces:</p>
+  <pre><code class="java">// bound form: T must be Comparable<T> AND Serializable at once
+static &lt;T extends Comparable&lt;T&gt; &amp; Serializable&gt; T max(T a, T b) {
+  return a.compareTo(b) >= 0 ? a : b;
+}
+max(3, 7);   // verified: 7 — Integer already implements both
+
+// cast form: force a lambda to implement two interfaces at once
+Comparator&lt;String&gt; byLength =
+    (Comparator&lt;String&gt; &amp; Serializable) (a, b) -> a.length() - b.length();
+
+try (ObjectOutputStream oos = new ObjectOutputStream(byteStream)) {
+  oos.writeObject(byLength);   // only compiles/works because of the &amp; Serializable half of the cast
+}
+// verified: serializes successfully; writeObject(byLength) alone (no cast) would not compile —
+// Comparator itself isn't Serializable</code></pre>
+  <div class="warn">Same ordering rule as bounded type parameters everywhere else on this page: if one
+  of the intersected types is a class, it must come first — <code>(Serializable &amp; Comparator&lt;String&gt;)</code>
+  reversed would be a compile error.</div>
+
+  <h3>Super type tokens — reifying a generic type at runtime</h3>
+  <p>Erasure destroys <code>T</code> on the class holding it — but it does <em>not</em> erase a
+  subclass's <code>extends TypeToken&lt;List&lt;String&gt;&gt;</code> clause, because that's part of the
+  subclass's own class-file signature, not the generic class's runtime representation. Neal Gafter's
+  "super type token" trick (the pattern behind Guice's <code>TypeLiteral</code>, Jackson's
+  <code>TypeReference</code>, and Gson's <code>TypeToken</code>) exploits exactly that gap:</p>
+  <pre><code class="java">abstract class TypeToken&lt;T&gt; {
+  private final Type type;
+
+  protected TypeToken() {
+    Type superclass = getClass().getGenericSuperclass();   // e.g. TypeToken&lt;List&lt;String&gt;&gt;
+    this.type = ((ParameterizedType) superclass).getActualTypeArguments()[0];
+  }
+
+  public Type getType() { return type; }
+}
+
+// the anonymous subclass "{}" is what makes this work — it's a real class file whose
+// generic superclass is permanently TypeToken<List<String>>, unaffected by T's own erasure
+TypeToken&lt;List&lt;String&gt;&gt; token = new TypeToken&lt;List&lt;String&gt;&gt;() {};
+System.out.println(token.getType());
+// verified: java.util.List&lt;java.lang.String&gt;</code></pre>
+  <div class="tip">Without the anonymous <code>{}</code> subclass, this doesn't work — a plain
+  <code>new TypeToken&lt;List&lt;String&gt;&gt;()</code> has nothing for
+  <code>getGenericSuperclass()</code> to read, because <code>TypeToken</code> itself has no superclass
+  carrying that information. The empty braces are the whole trick.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">11 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Generics in one glance</h3>
     <ul>
@@ -358,13 +487,6 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
       <li>Can't: <code>new T()</code>, static fields of <code>T</code>, <code>instanceof List&lt;String&gt;</code>, arrays of parameterized types, extend <code>Throwable</code> generically.</li>
     </ul>
   </div>
-    <h2>Advanced Generics Topics</h2>
-    <ul>
-      <li><strong>Wildcard Capture:</strong> When the compiler internally infers a specific but unknown type from a wildcard type (<code>?</code>) during type checking.</li>
-      <li><strong>Heap Pollution & <code>@SafeVarargs</code>:</strong> Situations where parameterized types lose their type safety, often related to varargs. The <code>@SafeVarargs</code> annotation suppresses unchecked warnings for varargs parameters.</li>
-      <li><strong>Intersection Types:</strong> Declaring a type that must satisfy multiple bounds (e.g., <code>&lt;T extends Serializable &amp; Comparable&lt;T&gt;&gt;</code>).</li>
-      <li><strong>Super Type Tokens (e.g., <code>TypeReference&lt;T&gt;</code>):</strong> A pattern to retain generic type information at runtime, circumventing type erasure.</li>
-    </ul>
 </main>
 <script src="../assets/nav.js"></script>
 <script src="../assets/highlight.js"></script>
