@@ -110,14 +110,37 @@ body {
   font-size: .9rem;
 }
 #sidebar nav { padding: 0 8px 40px; }
-#sidebar .nav-group-title {
+.nav-group { margin-top: 8px; }
+.nav-group-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  background: none;
+  border: none;
+  font-family: inherit;
   text-transform: uppercase;
   font-size: .72rem;
   letter-spacing: .08em;
   color: var(--text-soft);
-  margin: 18px 12px 6px;
+  padding: 10px 12px;
+  margin: 0;
   font-weight: 700;
+  cursor: pointer;
+  border-radius: 6px;
+  text-align: left;
 }
+#sidebar .nav-group-title:hover { background: var(--badge-bg); }
+.nav-group-arrow {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: .65rem;
+  transition: transform .15s ease;
+  transform: rotate(90deg);   /* expanded: pointing down */
+}
+.nav-group.collapsed .nav-group-arrow { transform: rotate(0deg); }   /* collapsed: pointing right */
+.nav-group-items { overflow: hidden; }
+.nav-group.collapsed .nav-group-items { display: none; }
 #sidebar a {
   display: block;
   padding: 6px 12px;
@@ -593,10 +616,14 @@ pre.has-copy:hover .copy-btn, .copy-btn:focus { opacity: 1; }
 @media (max-width: 900px) {
   #sidebar {
     position: fixed; left: 0; top: 0; z-index: 50;
+    width: min(280px, 85vw); height: 100dvh;
     transform: translateX(-100%); transition: transform .2s ease;
   }
   #sidebar.open { transform: translateX(0); box-shadow: var(--shadow); }
   .menu-toggle { display: inline-block; }
   .sidebar-collapse-toggle { display: none; }   /* mobile already has its own toggle above */
   main { padding: 20px 18px 80px; }
+  /* bigger tap targets for the collapsible tree on touch screens */
+  .nav-group-title { padding: 13px 12px; }
+  #sidebar a { padding: 10px 12px; }
 }

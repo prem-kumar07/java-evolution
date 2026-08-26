@@ -101,33 +101,84 @@
   search.placeholder = "Filter pages…";
   sidebar.appendChild(search);
 
+  /* ---------- collapsible group state (persisted, per group title) ---------- */
+  var groupStateKey = "java-doc-nav-groups";
+  var groupState;
+  try { groupState = JSON.parse(localStorage.getItem(groupStateKey) || "{}"); } catch (e) { groupState = {}; }
+
   var nav = document.createElement("nav");
-  SITEMAP.forEach(function (group) {
-    var gt = document.createElement("div");
-    gt.className = "nav-group-title";
-    gt.textContent = group.title;
-    nav.appendChild(gt);
+  var groupWraps = [];   // { wrap, defaultExpanded, title } — used to restore state after search
+
+  SITEMAP.forEach(function (group, gi) {
+    var hasActive = group.items.some(function (it) { return it.href === page; });
+    var defaultExpanded = Object.prototype.hasOwnProperty.call(groupState, group.title)
+      ? groupState[group.title]
+      : hasActive;   // collapsed by default, except the group containing the current page
+
+    var wrap = document.createElement("div");
+    wrap.className = "nav-group" + (defaultExpanded ? "" : " collapsed");
+
+    var itemsId = "nav-group-items-" + gi;
+
+    var header = document.createElement("button");
+    header.type = "button";
+    header.className = "nav-group-title";
+    header.setAttribute("aria-expanded", String(defaultExpanded));
+    header.setAttribute("aria-controls", itemsId);
+    header.innerHTML = '<span class="nav-group-arrow" aria-hidden="true">&#9656;</span><span>' +
+                        group.title + "</span>";
+    header.addEventListener("click", function () {
+      var collapsed = wrap.classList.toggle("collapsed");
+      header.setAttribute("aria-expanded", String(!collapsed));
+      groupState[group.title] = !collapsed;
+      try { localStorage.setItem(groupStateKey, JSON.stringify(groupState)); } catch (e) {}
+    });
+    wrap.appendChild(header);
+
+    var itemsWrap = document.createElement("div");
+    itemsWrap.className = "nav-group-items";
+    itemsWrap.id = itemsId;
     group.items.forEach(function (it) {
       var a = document.createElement("a");
       a.href = root + it.href;
       a.textContent = it.label;
       a.setAttribute("data-key", it.href);
       if (it.href === page) a.className = "active";
-      nav.appendChild(a);
+      itemsWrap.appendChild(a);
     });
+    wrap.appendChild(itemsWrap);
+
+    nav.appendChild(wrap);
+    groupWraps.push({ wrap: wrap, header: header, title: group.title, hasActive: hasActive });
   });
   sidebar.appendChild(nav);
 
-  /* ---------- search filter ---------- */
+  /* current (possibly user-toggled-since-load) expand state for a group */
+  function isExpanded(g) {
+    return Object.prototype.hasOwnProperty.call(groupState, g.title) ? groupState[g.title] : g.hasActive;
+  }
+
+  /* ---------- search filter (expands matching groups, restores state when cleared) ---------- */
   search.addEventListener("input", function () {
     var q = search.value.toLowerCase();
-    nav.querySelectorAll("a").forEach(function (a) {
-      a.style.display = a.textContent.toLowerCase().indexOf(q) >= 0 ? "" : "none";
-    });
-    nav.querySelectorAll(".nav-group-title").forEach(function (gt) {
-      var n = gt.nextElementSibling, any = false;
-      while (n && n.tagName === "A") { if (n.style.display !== "none") any = true; n = n.nextElementSibling; }
-      gt.style.display = any ? "" : "none";
+    var filtering = q.length > 0;
+    groupWraps.forEach(function (g) {
+      var anyMatch = false;
+      g.wrap.querySelectorAll(".nav-group-items a").forEach(function (a) {
+        var match = a.textContent.toLowerCase().indexOf(q) >= 0;
+        a.style.display = match ? "" : "none";
+        if (match) anyMatch = true;
+      });
+      if (filtering) {
+        g.wrap.style.display = anyMatch ? "" : "none";
+        g.wrap.classList.remove("collapsed");
+        g.header.setAttribute("aria-expanded", "true");
+      } else {
+        var expanded = isExpanded(g);
+        g.wrap.style.display = "";
+        g.wrap.classList.toggle("collapsed", !expanded);
+        g.header.setAttribute("aria-expanded", String(expanded));
+      }
     });
   });
 
