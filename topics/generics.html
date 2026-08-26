@@ -266,6 +266,23 @@ n.setData("Hello");       // compiles (with an unchecked warning) — erased to 
   <code>javap -p MyNode</code>:
   <pre><code class="java">void setData(java.lang.Integer);   // your real method
 void setData(java.lang.Object);    // compiler-generated bridge — casts, then delegates</code></pre>
+  <code>javap</code> only prints the two signatures — translated back into the Java syntax it's
+  equivalent to (not legal to write by hand: a class can't declare two methods that erase to the same
+  signature), the generated bridge looks like this:
+  <pre><code class="java">class MyNode extends Node {   // erased: Node<Integer> -> raw Node
+
+  // your real method, exactly as you wrote it — untouched by erasure
+  void setData(Integer data) {
+    System.out.println("MyNode.setData");
+    super.setData(data);
+  }
+
+  // compiler-generated bridge — same erased signature as Node.setData(Object),
+  // so it's the one that actually overrides Node's method and gets called virtually
+  /* bridge, synthetic */ void setData(Object data) {
+    setData((Integer) data);   // <- the cast: throws ClassCastException here, then
+  }                            //    delegates to your real setData(Integer) above
+}</code></pre>
   The bridge method is what actually gets called, casts its argument to <code>Integer</code>, and
   <em>that cast</em> is where the <code>ClassCastException</code> is thrown — not inside your code at all.
   Its full bytecode, verified with <code>javap -p -c -v MyNode</code>, shows exactly that:
