@@ -124,7 +124,68 @@ hello from a non-modular app, in a real package        # verified output</code><
   exactly as shown below.</p>
 
   <h2>4 · jpackage: Building Native Installers</h2>
-  <p>Introduced in Java 14 (finalized in Java 16), <code>jpackage</code> wraps your JAR and your <code>custom-jre</code> into native executable installers: <code>.exe</code>/<code>.msi</code> for Windows, <code>.dmg</code>/<code>.pkg</code> for macOS, and <code>.deb</code>/<code>.rpm</code> for Linux.</p>
+  <p>Introduced in Java 14 (finalized in Java 16), <code>jpackage</code> wraps a runtime image and your
+  app into a native, double-click-able package: <code>.exe</code>/<code>.msi</code> for Windows,
+  <code>.dmg</code>/<code>.pkg</code> for macOS, and <code>.deb</code>/<code>.rpm</code> for Linux.</p>
+
+  <h3>Modular vs. non-modular — the invocation itself changes, not just a flag</h3>
+  <p><code>jpackage --help</code> states this as two different command shapes outright: <em>"For a
+  modular application: <code>jpackage -n name -p modulePath -m moduleName/className</code>"</em> vs.
+  <em>"For a non-modular application: <code>jpackage -i inputDir -n name --main-class className
+  --main-jar myJar.jar</code>"</em>. Verified end-to-end below by actually building and running both:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Non-modular — <code>--input</code> + <code>--main-jar</code>/<code>--main-class</code></div>
+      <pre><code class="bash">$ jpackage \
+  --type app-image \
+  --name NonModApp \
+  --input dist/input \
+  --main-jar app.jar \
+  --main-class NonModMain
+$ ./NonModApp.app/Contents/MacOS/NonModApp
+non-modular app running        # verified</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Modular — <code>--module-path</code> + <code>--module</code> (no <code>--input</code> at all)</div>
+      <pre><code class="bash">$ jpackage \
+  --type app-image \
+  --name ModApp \
+  --module-path mods \
+  --module com.example.app/com.example.Main
+$ ./ModApp.app/Contents/MacOS/ModApp
+modular app running             # verified</code></pre>
+    </div>
+  </div>
+  <p>The structural difference from §3 carries all the way through to what <code>jpackage</code> actually
+  ships — verified by inspecting both built bundles' contents:</p>
+  <pre><code class="bash">$ ls NonModApp.app/Contents/app/
+app.jar   NonModApp.cfg          # your jar, shipped as-is, run on the classpath
+
+$ ls ModApp.app/Contents/app/
+ModApp.cfg                       # no jar here at all —
+# com.example.app was linked straight into Contents/runtime by the jlink step jpackage ran internally</code></pre>
+  <div class="tip">Both forms accept <code>--runtime-image</code> to reuse a runtime you already built
+  yourself with <code>jlink</code> (§2/§3), instead of letting <code>jpackage</code> invoke
+  <code>jlink</code> internally.</div>
+
+  <h3>Per-OS installer types &amp; flags</h3>
+  <p><code>--type</code>'s valid values are platform-dependent — <code>jpackage --help</code> only lists
+  the types the <em>host</em> OS can actually build. Run on macOS, it reports
+  <code>{"app-image", "dmg", "pkg"}</code> — verified; the equivalent flag sets for the other two
+  platforms come from Oracle's <code>jpackage</code> tool reference, since each only builds on its own OS
+  (see the cross-compilation note below):</p>
+  <table class="data">
+    <tr><th>Host OS</th><th><code>--type</code> values</th><th>OS-specific flags</th><th>Icon format</th></tr>
+    <tr><td>Windows</td><td><code>exe</code>, <code>msi</code></td>
+      <td><code>--win-shortcut</code>, <code>--win-menu</code>, <code>--win-dir-chooser</code>,
+      <code>--win-per-user-install</code>, <code>--win-console</code></td><td><code>.ico</code></td></tr>
+    <tr><td>macOS</td><td><code>dmg</code>, <code>pkg</code></td>
+      <td><code>--mac-package-name</code>, <code>--mac-app-category</code>, <code>--mac-sign</code>,
+      <code>--mac-package-identifier</code></td><td><code>.icns</code></td></tr>
+    <tr><td>Linux</td><td><code>deb</code>, <code>rpm</code></td>
+      <td><code>--linux-shortcut</code>, <code>--linux-menu-group</code>,
+      <code>--linux-app-category</code>, <code>--linux-package-name</code></td><td><code>.png</code></td></tr>
+  </table>
+
+  <p><strong>Windows:</strong></p>
   <pre><code class="bash">$ jpackage \
   --type exe \
   --name "MyApp" \
@@ -136,7 +197,35 @@ hello from a non-modular app, in a real package        # verified output</code><
   --icon assets/app.ico \
   --win-shortcut \
   --win-menu</code></pre>
-  <div class="note"><strong>Cross-compilation:</strong> <code>jpackage</code> is not a cross-compiler. You must run it on Windows to generate Windows installers, on macOS to generate macOS installers, etc.</div>
+
+  <p><strong>macOS</strong> — flags verified against <code>jpackage --help</code> on macOS:</p>
+  <pre><code class="bash">$ jpackage \
+  --type dmg \
+  --name "MyApp" \
+  --app-version "1.0.0" \
+  --input dist/input \
+  --main-jar myapp-fat.jar \
+  --main-class com.example.AppMain \
+  --runtime-image custom-jre \
+  --icon assets/app.icns \
+  --mac-package-name "MyApp" \
+  --mac-app-category "utilities"</code></pre>
+
+  <p><strong>Linux:</strong></p>
+  <pre><code class="bash">$ jpackage \
+  --type deb \
+  --name "MyApp" \
+  --app-version "1.0.0" \
+  --input dist/input \
+  --main-jar myapp-fat.jar \
+  --main-class com.example.AppMain \
+  --runtime-image custom-jre \
+  --icon assets/app.png \
+  --linux-shortcut \
+  --linux-menu-group "Utility" \
+  --linux-app-category "utils"</code></pre>
+
+  <div class="note"><strong>Cross-compilation:</strong> <code>jpackage</code> is not a cross-compiler. You must run it on Windows to generate Windows installers, on macOS to generate macOS installers, and on Linux to generate <code>.deb</code>/<code>.rpm</code> — each command above only runs on its matching host OS.</div>
 
 </main>
 <script src="../assets/nav.js"></script>
