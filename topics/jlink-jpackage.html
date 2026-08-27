@@ -233,6 +233,15 @@ ModApp.cfg                       # no jar here at all —
   <p>Three inputs collapse to two: the module path replaces <code>--input</code>, and
   <code>--module</code> carries both "which jar" and "which class" in one
   <code>module/Class</code> argument — there's no separate <code>--main-class</code> to pair it with.</p>
+  <div class="note">Both stripped-down commands above are the real minimum — verified by actually
+  running them as-is, with no <code>--name</code>, <code>--type</code>, <code>--app-version</code>, or
+  <code>--icon</code> at all. Both exited <code>0</code> and produced a real installer.
+  <code>jpackage</code> fills in defaults for everything else: <code>--name</code> falls back to the
+  bare main-class name (<code>Main</code>, not <code>com.foo.Main</code>), and <code>--type</code> falls
+  back to the host OS's default installer format (<code>dmg</code> on macOS) — so the result was a
+  working <code>Main-1.0.dmg</code> in both cases, not an error. Add the cosmetic flags
+  (<code>--name</code>, <code>--app-version</code>, <code>--icon</code>, the per-OS flags below) when you
+  want control over the output; they're not required to make <code>jpackage</code> run.</div>
 
   <h3>Per-OS installer types &amp; flags</h3>
   <p><code>--type</code>'s valid values are platform-dependent — <code>jpackage --help</code> only lists
