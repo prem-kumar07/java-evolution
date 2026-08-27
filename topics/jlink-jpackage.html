@@ -68,6 +68,38 @@ Error: automatic module cannot be used with jlink: app from file:///.../app.jar<
   flag to force it through. To link your own code into the image as a module, it must be a real,
   explicit module with its own <code>module-info.java</code>.</div>
 
+  <h3>Running the image once your module <em>is</em> linked in</h3>
+  <p>If your app has a real <code>module-info.java</code>, <code>jlink</code> will link it straight into
+  the image alongside the JDK modules — no separate JAR to ship, no classpath at all:</p>
+  <pre><code class="bash">$ jlink \
+  --module-path "app.jar:$JAVA_HOME/jmods" \
+  --add-modules com.example.app \
+  --output image
+$ ./image/bin/java --list-modules | grep com.example
+com.example.app                    # verified — it's genuinely baked into image/lib/modules</code></pre>
+  <p>Three verified, equivalent ways to launch it — no <code>-cp</code>/<code>-jar</code> anywhere,
+  because the module is already inside the image:</p>
+  <pre><code class="bash"># 1. explicit module/class — works on any image, no extra jlink flags needed
+$ ./image/bin/java -m com.example.app/com.example.Main
+hello from a real modular app, module=com.example.app
+
+# 2. module name alone — works when the module jar's manifest/module-info
+#    already points at a main class (jar --create --main-class ... at build time)
+$ ./image/bin/java -m com.example.app
+hello from a real modular app, module=com.example.app</code></pre>
+  <p>The third way skips <code>java -m</code> entirely — add <code>--launcher</code> at
+  <code>jlink</code> time and it bakes the whole invocation into a ready-to-ship script:</p>
+  <pre><code class="bash">$ jlink \
+  --module-path "app.jar:$JAVA_HOME/jmods" \
+  --add-modules com.example.app \
+  --launcher run=com.example.app/com.example.Main \
+  --output image
+$ ./image/bin/run                       # just this — no -m, no module name to remember
+hello from a real modular app, module=com.example.app</code></pre>
+  <div class="tip"><code>--launcher</code> is what <code>jpackage</code> (§4) uses under the hood to
+  turn a linked image into a native, double-click-able app — the generated launcher script/binary
+  <em>is</em> the executable the installer ships.</div>
+
   <p>That restriction only applies to linking your code <em>in</em>. Building the slimmed-down runtime
   and running your existing non-modular JAR <em>on top of it</em> is unaffected — this is the real-world
   pattern almost every non-modular project actually uses, verified end-to-end:</p>
