@@ -216,6 +216,24 @@ ModApp.cfg                       # no jar here at all —
   from <code>jpackage --help</code>: <em>"Either --module or --main-jar option can be specified but not
   both."</em> There's no combined form — pick the row that matches your jar.</div>
 
+  <p>Same two commands, flag-by-flag:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Non-modular</div>
+      <pre><code class="bash">jpackage \
+  --input input-dir \           # 1. directory containing all JARs
+  --main-jar "my-app.jar" \     # 2. the main target JAR file
+  --main-class "com.foo.Main"   # 3. entry point class name</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Modular</div>
+      <pre><code class="bash">jpackage \
+  --module-path mods/ \                          # 1. directory containing modules
+  --module com.myapp.core/com.myapp.core.Main    # 2. Module/MainClass syntax</code></pre>
+    </div>
+  </div>
+  <p>Three inputs collapse to two: the module path replaces <code>--input</code>, and
+  <code>--module</code> carries both "which jar" and "which class" in one
+  <code>module/Class</code> argument — there's no separate <code>--main-class</code> to pair it with.</p>
+
   <h3>Per-OS installer types &amp; flags</h3>
   <p><code>--type</code>'s valid values are platform-dependent — <code>jpackage --help</code> only lists
   the types the <em>host</em> OS can actually build. Run on macOS, it reports
