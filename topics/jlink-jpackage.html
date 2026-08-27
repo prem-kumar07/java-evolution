@@ -100,6 +100,34 @@ hello from a real modular app, module=com.example.app</code></pre>
   turn a linked image into a native, double-click-able app — the generated launcher script/binary
   <em>is</em> the executable the installer ships.</div>
 
+  <h3>Quick reference — the <code>java</code> launcher flags themselves differ</h3>
+  <p>This is the root of every difference above: a non-modular jar and a modular jar aren't launched
+  with the same flags at all — <code>-cp</code>/<code>-jar</code> vs. <code>-p</code>/<code>-m</code>,
+  never mixed for the same artifact:</p>
+  <table class="data">
+    <tr><th></th><th>Non-modular jar</th><th>Modular jar</th></tr>
+    <tr><td>Where to look for code</td>
+      <td><code>-cp</code> / <code>-classpath</code> (a flat bag of classes)</td>
+      <td><code>-p</code> / <code>--module-path</code> (a directory of modules/modular jars)</td></tr>
+    <tr><td>What to run</td>
+      <td><code>-jar app.jar</code> (main class read from the jar's <code>Main-Class</code> manifest
+      attribute) — or name the class explicitly with <code>-cp</code></td>
+      <td><code>-m</code> / <code>--module module[/Main]</code> (main class read from
+      <code>module-info</code>/the module's declared main class if omitted)</td></tr>
+    <tr><td>Full command</td>
+      <td><code>java -cp app.jar com.example.Main</code></td>
+      <td><code>java -p mods -m com.example.app/com.example.Main</code></td></tr>
+    <tr><td>Inside a <code>jlink</code> image</td>
+      <td><code>./image/bin/java -cp app.jar com.example.Main</code> — app.jar ships alongside the
+      image, isn't linked in (§3, non-modular path above)</td>
+      <td><code>./image/bin/java -m com.example.app/com.example.Main</code> — no jar needed; the module
+      is already inside <code>image/lib/modules</code></td></tr>
+  </table>
+  <div class="warn">The two flag families don't compose: <code>-cp</code> puts a jar on the classpath as
+  the unnamed module (erasing any <code>module-info.class</code> it has), while <code>-p</code> puts it
+  on the module path as a real or automatic module. Same jar, two different runtime identities,
+  depending entirely on which flag you launch it with.</div>
+
   <p>That restriction only applies to linking your code <em>in</em>. Building the slimmed-down runtime
   and running your existing non-modular JAR <em>on top of it</em> is unaffected — this is the real-world
   pattern almost every non-modular project actually uses, verified end-to-end:</p>
