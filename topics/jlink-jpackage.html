@@ -194,6 +194,28 @@ ModApp.cfg                       # no jar here at all —
   yourself with <code>jlink</code> (§2/§3), instead of letting <code>jpackage</code> invoke
   <code>jlink</code> internally.</div>
 
+  <h3>Quick reference — the <code>jpackage</code> flags themselves differ</h3>
+  <p>Same split as the <code>java</code> launcher table in §3, one level up the toolchain:</p>
+  <table class="data">
+    <tr><th></th><th>Non-modular jar</th><th>Modular jar</th></tr>
+    <tr><td>Where the app lives</td>
+      <td><code>-i</code> / <code>--input</code> (a directory whose contents are copied wholesale)</td>
+      <td><code>-p</code> / <code>--module-path</code> (a directory of modules/modular jars)</td></tr>
+    <tr><td>What to run</td>
+      <td><code>--main-jar</code> + <code>--main-class</code></td>
+      <td><code>-m</code> / <code>--module module[/Main]</code></td></tr>
+    <tr><td>Full command</td>
+      <td><code>jpackage -n MyApp -i dist/input --main-jar app.jar --main-class com.example.Main</code></td>
+      <td><code>jpackage -n MyApp -p mods -m com.example.app/com.example.Main</code></td></tr>
+    <tr><td>What ends up inside the package</td>
+      <td>Your jar, copied as-is into <code>Contents/app</code>, run on the classpath — verified above</td>
+      <td>No jar at all — linked straight into <code>Contents/runtime</code> by jpackage's internal
+      <code>jlink</code> call — verified above</td></tr>
+  </table>
+  <div class="warn"><code>--main-jar</code> and <code>--module</code> are mutually exclusive, straight
+  from <code>jpackage --help</code>: <em>"Either --module or --main-jar option can be specified but not
+  both."</em> There's no combined form — pick the row that matches your jar.</div>
+
   <h3>Per-OS installer types &amp; flags</h3>
   <p><code>--type</code>'s valid values are platform-dependent — <code>jpackage --help</code> only lists
   the types the <em>host</em> OS can actually build. Run on macOS, it reports
