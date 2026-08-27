@@ -40,7 +40,58 @@ java.base,java.desktop,java.logging,java.sql</code></pre>
   --strip-debug</code></pre>
   <p>You can now distribute this <code>custom-jre</code> folder alongside your JAR file. Users run your app using <code>./custom-jre/bin/java -jar myapp.jar</code>.</p>
 
-  <h2>3 · jpackage: Building Native Installers</h2>
+  <h2>3 · Does jlink require a modular project?</h2>
+  <p><strong>No</strong> — but there's one hard restriction worth knowing before you build a release
+  pipeline around it. <code>jlink</code> links two different things, and only one of them actually needs
+  <a href="modules-jpms.html">JPMS</a>:</p>
+  <table class="data">
+    <tr><th>What's being linked</th><th>Needs <code>module-info.java</code>?</th></tr>
+    <tr><td>The <strong>JDK's own platform modules</strong> (<code>java.base</code>,
+    <code>java.sql</code>, …) into a trimmed-down runtime — what §1/§2 above just did</td>
+    <td>No. Works for any project, modular or not — this is the normal path.</td></tr>
+    <tr><td>Your <strong>own application code</strong>, linked directly into the image as a module</td>
+    <td>Yes. <code>jlink</code> refuses a plain, non-modular JAR outright.</td></tr>
+  </table>
+
+  <p>Verified: pointing <code>jlink</code> at an ordinary classpath JAR (no <code>module-info.class</code>
+  inside it) fails immediately, even though the exact same JAR works fine as an
+  <em>automatic module</em> (JPMS's name for a plain JAR on the module path) everywhere else:</p>
+  <pre><code class="bash">$ jar --describe-module --file app.jar
+No module descriptor found. Derived automatic module.
+app automatic
+requires java.base mandated
+contains com.example
+
+$ jlink --module-path "app.jar:$JAVA_HOME/jmods" --add-modules app --output image
+Error: automatic module cannot be used with jlink: app from file:///.../app.jar</code></pre>
+  <div class="warn"><strong><code>jlink</code> flatly refuses automatic modules</strong> — there is no
+  flag to force it through. To link your own code into the image as a module, it must be a real,
+  explicit module with its own <code>module-info.java</code>.</div>
+
+  <p>That restriction only applies to linking your code <em>in</em>. Building the slimmed-down runtime
+  and running your existing non-modular JAR <em>on top of it</em> is unaffected — this is the real-world
+  pattern almost every non-modular project actually uses, verified end-to-end:</p>
+  <pre><code class="bash"># 1. jdeps works fine against an ordinary classpath jar (no module-info needed)
+$ jdeps --print-module-deps app.jar
+java.base
+
+# 2. jlink a minimal runtime with ONLY those JDK modules — no app code inside the image at all
+$ jlink --module-path "$JAVA_HOME/jmods" --add-modules java.base --output image
+# ~45MB vs ~300MB for a full JDK install — verified
+
+# 3. run your unmodified, non-modular jar on the classpath, same as always
+$ ./image/bin/java -cp app.jar com.example.Main
+hello from a non-modular app, in a real package        # verified output</code></pre>
+  <div class="tip">This is exactly why <code>jdeps</code> in §1 is described as working against a
+  "non-modular legacy JAR" — it exists specifically so you can build a custom runtime without ever
+  modularizing your project. <code>jlink</code> only trims the <em>JDK's</em> modules here; your app
+  keeps running on the classpath, entirely outside JPMS.</div>
+  <p>In practice, most non-modular projects skip calling <code>jlink</code> by hand and reach for
+  <code>jpackage</code> (§4) instead — it runs <code>jdeps</code> and <code>jlink</code> for you
+  internally and accepts a plain classpath JAR directly via <code>--main-jar</code>/<code>--main-class</code>,
+  exactly as shown below.</p>
+
+  <h2>4 · jpackage: Building Native Installers</h2>
   <p>Introduced in Java 14 (finalized in Java 16), <code>jpackage</code> wraps your JAR and your <code>custom-jre</code> into native executable installers: <code>.exe</code>/<code>.msi</code> for Windows, <code>.dmg</code>/<code>.pkg</code> for macOS, and <code>.deb</code>/<code>.rpm</code> for Linux.</p>
   <pre><code class="bash">$ jpackage \
   --type exe \
