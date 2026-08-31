@@ -2334,6 +2334,113 @@ Config get() {
     </div>
   </div>
 
+  <p><strong>Error handling — failure doesn't stick.</strong> Straight from the
+  <code>LazyConstant</code> Javadoc: <em>"If the computing function throws, the throwable is relayed to
+  the caller and the lazy constant remains uninitialized; a subsequent call to <code>get()</code> may
+  then attempt the computation again."</em> No wrapping, no caching of the failure — every failed
+  <code>get()</code> is a fresh attempt:</p>
+  <pre><code class="java">LazyConstant&lt;String&gt; risky = LazyConstant.of(() -&gt; {
+  attempts++;
+  if (attempts &lt; 3) throw new RuntimeException("transient failure #" + attempts);
+  return "success on attempt " + attempts;
+});
+
+for (int i = 1; i &lt;= 4; i++) {
+  try {
+    System.out.println("call " + i + ": got \"" + risky.get() + "\"");
+  } catch (RuntimeException e) {
+    System.out.println("call " + i + ": threw " + e.getMessage());
+  }
+}
+// verified real output:
+// call 1: threw transient failure #1
+// call 2: threw transient failure #2
+// call 3: got "success on attempt 3"
+// call 4: got "success on attempt 3"      &lt;- 4th call reuses the successful result, doesn't recompute</code></pre>
+  <div class="warn"><strong>A computing function that returns <code>null</code> also counts as
+  failure</strong> — verified: it throws <code>NullPointerException</code> at that <code>get()</code>
+  call, and, same rule as above, the constant stays uninitialized. <em>"Hence, a lazy constant can
+  never hold a <code>null</code> value."</em></div>
+
+  <p><strong>Cycle detection.</strong> If the computing function — directly, or indirectly through
+  another <code>LazyConstant</code> — ends up calling <code>get()</code> on the very constant it's
+  computing, that's a real bug (there's no value yet to return), and the JDK catches it immediately
+  rather than deadlocking or recursing forever:</p>
+  <pre><code class="java">class A {
+  static final LazyConstant&lt;B&gt; b = LazyConstant.of(B::new);
+  A() { b.get(); }   // needs a B before A can finish constructing
+}
+class B {
+  static final LazyConstant&lt;A&gt; a = LazyConstant.of(A::new);
+  B() { a.get(); }   // needs an A before B can finish constructing — cycle
+}
+
+new A();
+// verified real output:
+// java.lang.IllegalStateException: Recursive invocation of a LazyConstant's computing function</code></pre>
+  <div class="tip">The same exception fires for the simplest possible case too — a
+  <code>LazyConstant</code> whose own computing function calls its own <code>get()</code> — verified.
+  This is the built-in safety net double-checked locking never had: hand-rolled DCL with a genuine
+  self-referential dependency just deadlocks or infinite-loops instead of failing fast.</div>
+
+  <p><strong>Identity, not value, equality.</strong> Two separate <code>LazyConstant</code>s that end up
+  holding the exact same content are still <em>not</em> equal — verified against the actual Javadoc
+  wording: <em>"equals compares the identity of this lazy constant and obj... two distinct lazy
+  constants with the same contents are not equal."</em> <code>hashCode()</code> is the identity hash.
+  Crucially, none of <code>equals</code>/<code>hashCode</code>/<code>toString</code> ever trigger
+  initialization — calling them is always safe, even on a constant you never intend to compute:</p>
+  <pre><code class="java">LazyConstant&lt;String&gt; a = LazyConstant.of(() -&gt; "same value");
+LazyConstant&lt;String&gt; b = LazyConstant.of(() -&gt; "same value");
+a.get(); b.get();   // both now hold "same value"
+
+a.equals(b);   // verified: false — same content, different instances
+a.equals(a);   // verified: true  — same instance</code></pre>
+
+  <p><strong>Where it's applicable.</strong> Documented and verified working in both static fields and
+  instance fields (the two forms this page already shows); as a plain <code>Supplier&lt;T&gt;</code>
+  under the hood, it composes with anything that takes one. The whole point of holding it in a
+  <code>final</code> field is what makes JIT constant-folding possible in the first place — a
+  non-<code>final</code> field defeats that.</p>
+
+  <h3>Lazy collections — <code>List.ofLazy</code> &amp; <code>Map.ofLazy</code></h3>
+  <p><em>Why it matters:</em> the same "compute once, on first access" idea as
+  <code>LazyConstant</code>, scaled to a whole collection — each element gets its own independent lazy
+  constant under the hood, computed the first time <em>that</em> index or key is touched, not when the
+  collection itself is created.</p>
+  <p><code>List.ofLazy(int size, IntFunction&lt;E&gt; computingFunction)</code> — an unmodifiable list
+  of a fixed size, each element computed from its index on first access:</p>
+  <pre><code class="java">List&lt;Integer&gt; squares = List.ofLazy(5, i -&gt; expensiveSquare(i));
+
+squares.get(3);   // computeCalls: 0 -&gt; 1 (computed now, not at list-creation time)
+squares.get(3);   // computeCalls stays at 1 — cached, not recomputed
+squares.get(1);   // computeCalls: 1 -&gt; 2 (a different index, computed independently)
+squares.set(0, 100);   // verified: throws UnsupportedOperationException — it's unmodifiable</code></pre>
+  <div class="warn"><strong>Verified real output</strong> (with a counter inside
+  <code>expensiveSquare</code>):
+  <pre><code class="java">list created, computeCalls so far = 0
+squares.get(3) = 9, computeCalls = 1
+squares.get(3) again = 9, computeCalls = 1
+squares.get(1) = 1, computeCalls = 2
+set() rejected: unmodifiable, as documented</code></pre></div>
+  <p><code>Map.ofLazy(Set&lt;K&gt; keys, Function&lt;K,V&gt; computingFunction)</code> — same idea keyed
+  by an explicit, fixed key set instead of an index range:</p>
+  <pre><code class="java">Set&lt;Locale&gt; supported = Set.of(Locale.US, Locale.FRANCE, Locale.GERMANY);
+Map&lt;Locale, String&gt; bundles = Map.ofLazy(supported, loc -&gt; loadResourceBundle(loc));
+
+bundles.get(Locale.US);       // computed now, on first access
+bundles.get(Locale.US);       // cached, not recomputed
+bundles.get(Locale.JAPAN);    // JAPAN was never in the declared key set — returns null, no crash</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">bundles.get(US) = bundle-for-en_US, computeCalls = 1
+bundles.get(US) again = bundle-for-en_US, computeCalls = 1
+bundles.get(FRANCE) = bundle-for-fr_FR, computeCalls = 2
+bundles.get(JAPAN) = null, computeCalls = 2
+bundles.containsKey(JAPAN) = false</code></pre></div>
+  <div class="note">Verified on this JDK 26 build: <code>List.ofLazy</code>/<code>Map.ofLazy</code> exist
+  (both preview along with <code>LazyConstant</code> itself), but <strong><code>Set.ofLazy</code> does
+  not yet</strong> — <code>javap java.util.Set</code> shows no such method here. It's planned for a
+  future release, not this one.</div>
+
   <h3>PEM encodings of cryptographic objects <span class="badge preview">Preview (2nd)</span> <span class="badge jep">JEP 524</span></h3>
   <p><em>Why it matters:</em> read/write keys &amp; certificates in the standard PEM text format
   (<code>-----BEGIN...-----</code>) directly — no hand-rolled Base64/DER parsing, no third-party library
@@ -2412,6 +2519,12 @@ java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
       <li><strong>Startup:</strong> AOT object caching works with any GC (Project Leyden)</li>
       <li><strong>Perf:</strong> faster G1 (less synchronization); Applet API removed</li>
       <li><strong>Preview:</strong> primitive patterns (4th), structured concurrency (6th), lazy constants (2nd), PEM encodings (2nd)</li>
+      <li><strong>LazyConstant:</strong> failed <code>get()</code> retries next call (not cached);
+      recursive <code>get()</code> throws <code>IllegalStateException</code>; <code>equals</code> is
+      identity-only; <code>null</code> content is never allowed.</li>
+      <li><strong>Lazy collections:</strong> <code>List.ofLazy(size, IntFunction)</code>,
+      <code>Map.ofLazy(keys, Function)</code> — per-element lazy constants; no
+      <code>Set.ofLazy</code> yet.</li>
     </ul>
   </div>
 </section>
