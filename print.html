@@ -7786,11 +7786,77 @@ try {
 
   <!-- ============================================================ -->
   <h2>Advanced Topics</h2>
-  <h3>StructuredTaskScope.Config</h3>
-  <p>In the new Java 25+ API, scopes can be customized via <code>StructuredTaskScope.Config</code>. You can set timeouts and thread factories directly on the configuration, providing a cleaner way to apply constraints without subclassing.</p>
+  <h3>Configuring a scope — <code>StructuredTaskScope.Configuration</code></h3>
+  <p>Worth being precise about the name: it's <code>Configuration</code>, not "<code>Config</code>" —
+  confirmed with <code>javap -p 'java.util.concurrent.StructuredTaskScope$Configuration'</code> against
+  a real JDK 26. The <code>cf</code> you see in every <code>withTimeout(...)</code> example on this page
+  is just a conventional lambda parameter name for it — the actual interface has exactly three
+  configuration methods, chainable, each verified below:</p>
+  <pre><code class="java">ThreadFactory factory = Thread.ofVirtual().name("worker-", 0).factory();
 
-  <h3>Structural Confinement Rule</h3>
-  <p>Structured tasks enforce strict structural confinement. A child subtask cannot outlive the lexical scope of its parent <code>StructuredTaskScope</code>. If a parent exits its scope while subtasks are still running, those subtasks are automatically cancelled (interrupted), preventing orphaned threads.</p>
+try (var scope = StructuredTaskScope.open(
+    Joiner.&lt;String&gt;allSuccessfulOrThrow(),
+    cf -> cf.withName("checkout-scope")
+            .withThreadFactory(factory)
+            .withTimeout(Duration.ofSeconds(5)))) {
+  var s = scope.fork(() -> Thread.currentThread().getName());
+  scope.join();
+  System.out.println("subtask ran on thread named: " + s.get());
+}</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — the subtask genuinely ran on a thread from
+  the custom factory, not a default-named virtual thread:
+  <pre><code class="java">subtask ran on thread named: worker-0</code></pre></div>
+  <table class="data">
+    <tr><th>Method</th><th>Verified effect</th></tr>
+    <tr><td><code>withTimeout(Duration)</code></td><td>Whole-scope deadline — see §5 and §4.4
+    (<code>onTimeout()</code>).</td></tr>
+    <tr><td><code>withThreadFactory(ThreadFactory)</code></td><td>Controls how each subtask's thread is
+    created — verified above with a named virtual-thread factory. Swap in a platform-thread factory the
+    same way if a subtask genuinely needs one.</td></tr>
+    <tr><td><code>withName(String)</code></td><td>Names the <em>scope itself</em> for diagnostics —
+    verified via <code>scope.toString()</code>: <code>"checkout-scope"</code> with
+    <code>withName</code>, versus the default <code>java.util.concurrent.StructuredTaskScopeImpl@73d16e93</code>
+    without it. This is what shows up in a thread dump or a debugger, not the thread names.</td></tr>
+  </table>
+
+  <h3>Structural confinement — verified, not just asserted</h3>
+  <p>"A child subtask cannot outlive its parent scope" is the headline claim; here's what actually
+  enforces it, each verified against a real JDK 26 run.</p>
+  <p><strong>Forking from any thread other than the one that opened the scope fails immediately:</strong></p>
+  <pre><code class="java">try (var scope = StructuredTaskScope.open(Joiner.&lt;String&gt;allSuccessfulOrThrow())) {
+  Thread other = new Thread(() -> {
+    try {
+      scope.fork(() -> "should not be allowed");
+    } catch (Throwable t) {
+      System.out.println("forking from another thread threw: " + t.getClass().getName());
+    }
+  });
+  other.start();
+  other.join();
+  scope.join();
+}</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">forking from another thread threw: java.lang.WrongThreadException</code></pre></div>
+  <p><strong>Exiting the block without calling <code>join()</code> first also fails immediately</strong> —
+  it does not silently wait for stragglers, and it does not silently leak them either:</p>
+  <pre><code class="java">long start = System.currentTimeMillis();
+try (var scope = StructuredTaskScope.open(Joiner.&lt;String&gt;allSuccessfulOrThrow())) {
+  scope.fork(() -> { Thread.sleep(300); return "slow"; });
+  // deliberately NOT calling scope.join() before the block exits
+} catch (Throwable t) {
+  System.out.println("close() without join() threw: " + t.getClass().getName());
+}
+System.out.println("elapsed ms: " + (System.currentTimeMillis() - start));</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — <code>close()</code> fails fast in 8ms; it
+  does <em>not</em> block for the subtask's 300ms sleep:
+  <pre><code class="java">close() without join() threw: java.lang.IllegalStateException
+elapsed ms: 8</code></pre></div>
+  <div class="tip">The subtask isn't abandoned just because <code>close()</code> threw immediately — it
+  still gets interrupted in the background. Verified by having the subtask catch
+  <code>InterruptedException</code> and flag an <code>AtomicBoolean</code>: after the
+  <code>IllegalStateException</code> above, the flag reads <code>true</code>. "No leaked threads" holds
+  even in this misuse case — you get a loud failure <em>and</em> the cleanup still happens, rather than
+  a silent background leak.</div>
 </section>
 <section id="pg-topics-scoped-values-html" class="print-page">
   <p class="sec-tag">Deep dive · concurrency · complete guide</p>
