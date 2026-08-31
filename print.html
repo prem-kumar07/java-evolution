@@ -2128,9 +2128,25 @@ $ java -XX:+UseCompactObjectHeaders -jar app.jar</code></pre>
     <tr><td>Two <code>int</code> fields</td><td>24 bytes</td><td>16 bytes</td><td><strong>33%</strong></td></tr>
     <tr><td>One <code>int</code> field</td><td>16 bytes</td><td>16 bytes</td><td>0% — absorbed by alignment padding</td></tr>
   </table>
-  <p>The one-field case is the honest catch: 12 bytes of raw header shrinks to 8 either way once you
-  add a 4-byte field and round up to the next 8-byte boundary, so that particular shape sees nothing.
-  The savings are real and often substantial, but per-class, not a flat guarantee.</p>
+  <p>The one-field case is the honest catch — and the arithmetic behind all three rows makes it clear
+  why. Every object's <em>true</em> size is <code>raw header + fields</code>, rounded <strong>up</strong>
+  to the next multiple of 8 (this alignment requirement is what lets compressed oops address an object
+  with a 32-bit shifted pointer instead of a full 64-bit one). The default header is 12 bytes (8-byte
+  mark word + 4-byte compressed class pointer); the compact header packs both into a single 8-byte word:</p>
+  <table class="data">
+    <tr><th>Class shape</th><th>Default: raw</th><th>→ padded (actual)</th><th>Compact: raw</th><th>→ padded (actual)</th></tr>
+    <tr><td>Empty (no fields)</td><td>12 + 0 = 12</td><td><strong>16</strong></td><td>8 + 0 = 8</td><td><strong>8</strong></td></tr>
+    <tr><td>Two <code>int</code>s</td><td>12 + 8 = 20</td><td><strong>24</strong></td><td>8 + 8 = 16</td><td><strong>16</strong></td></tr>
+    <tr><td>One <code>int</code></td><td>12 + 4 = 16</td><td><strong>16</strong></td><td>8 + 4 = 12</td><td><strong>16</strong></td></tr>
+  </table>
+  <p><code>Empty</code> is 16 bytes with the default header for exactly this reason: 12 raw bytes isn't
+  a multiple of 8, so the JVM pads it up to 16 whether or not there's a single field to justify it. The
+  compact header's 8 raw bytes is already aligned, so nothing gets added — the full saving survives.
+  <code>Point</code> gets the same lucky alignment on the compact side (16, already aligned) while the
+  default side pads 20 up to 24. The one-<code>int</code> shape is where the padding cancels the saving
+  out entirely: both 16 (default, already aligned) and 12→16 (compact, padded) land on the same number.
+  The savings are real and often substantial, but per-class, not a flat guarantee — it depends on
+  whether your field layout happens to sit right at an alignment boundary already.</p>
   <pre><code class="java">// how the table above was measured — a tiny java.lang.instrument agent
 public class Agent {
   public static Instrumentation inst;
