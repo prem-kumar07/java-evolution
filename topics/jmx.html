@@ -43,10 +43,11 @@
     <a href="#mxbeans">2. Platform MXBeans — built in, zero setup</a>
     <a href="#tools">3. Tools for inspecting MBeans</a>
     <a href="#custom">4. Writing your own MBean — complete example</a>
-    <a href="#remote">5. Remote JMX — complete example</a>
-    <a href="#notifications">6. Notifications — complete example</a>
-    <a href="#jfr-integration">7. JMX + JFR — controlling recordings over JMX</a>
-    <a href="#cheat">8. Cheat sheet</a>
+    <a href="#dynamic">5. DynamicMBean, operations, attributes &amp; descriptors</a>
+    <a href="#remote">6. Remote JMX — complete example</a>
+    <a href="#notifications">7. Notifications — complete example</a>
+    <a href="#jfr-integration">8. JMX + JFR — controlling recordings over JMX</a>
+    <a href="#cheat">9. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -273,7 +274,290 @@ $ java -cp . ArbitraryNameTest</code></pre>
   <pre><code class="java">registered with @MXBean, arbitrary interface name -> 42</code></pre></div>
 
   <!-- ============================================================ -->
-  <h2 id="remote">5 · Remote JMX — Complete Example</h2>
+  <h2 id="dynamic">5 · DynamicMBean, Operations, Attributes &amp; Descriptors</h2>
+  <p>Both patterns in §4 are <strong>static</strong>: JMX reflects over your interface once, at
+  registration time, and derives the attribute/operation list from its method signatures. A
+  <code>DynamicMBean</code> is the third pattern — you implement the introspection yourself, so the set
+  of attributes and operations can be decided <em>at runtime</em> (config-driven MBeans, plugin
+  systems, proxies over something that isn't a Java interface at all), and so you can attach rich
+  metadata — <strong>descriptors</strong> — that the naming-convention patterns have no way to express.</p>
+
+  <h3>5.1 · The <code>DynamicMBean</code> interface</h3>
+  <p>Six methods, straight from the <code>javax.management.DynamicMBean</code> Javadoc — implement all
+  six and any object becomes manageable, with no naming convention and no annotation at all:</p>
+  <table class="data">
+    <tr><th>Method</th><th>What it's for</th></tr>
+    <tr><td><code>Object getAttribute(String)</code></td><td>"Obtain the value of a specific attribute
+    of the Dynamic MBean."</td></tr>
+    <tr><td><code>void setAttribute(Attribute)</code></td><td>"Set the value of a specific attribute of
+    the Dynamic MBean."</td></tr>
+    <tr><td><code>AttributeList getAttributes(String[])</code></td><td>"Get the values of several
+    attributes" in one round trip — what <code>jconsole</code> actually calls to refresh its whole
+    attribute table at once.</td></tr>
+    <tr><td><code>AttributeList setAttributes(AttributeList)</code></td><td>"Sets the values of several
+    attributes" — the bulk counterpart to <code>setAttribute</code>.</td></tr>
+    <tr><td><code>Object invoke(String, Object[], String[])</code></td><td>"Allows an action to be
+    invoked on the Dynamic MBean" — the operation name, its arguments, and their type signature, all
+    passed as plain data.</td></tr>
+    <tr><td><code>MBeanInfo getMBeanInfo()</code></td><td>"Provides the exposed attributes and actions
+    of the Dynamic MBean using an <code>MBeanInfo</code> object" — the metadata every other method above
+    must stay consistent with.</td></tr>
+  </table>
+  <div class="warn"><strong>Nothing here is checked against real fields or methods at compile time.</strong>
+  <code>getAttribute("Typo")</code> compiles fine and only fails at
+  <em>runtime</em>, by contract, with <code>AttributeNotFoundException</code> — the trade-off for
+  runtime flexibility is that the compiler can no longer catch a mismatch between what
+  <code>getMBeanInfo()</code> advertises and what <code>getAttribute</code>/<code>invoke</code> actually
+  handle. Keeping those in sync is entirely on you.</div>
+
+  <h3>5.2 · <code>MBeanAttributeInfo</code> &amp; <code>MBeanOperationInfo</code> — what metadata actually declares</h3>
+  <p>These are the building blocks <code>getMBeanInfo()</code> hands back. An attribute's constructor
+  takes three booleans that together describe its shape:</p>
+  <table class="data">
+    <tr><th>Flag</th><th>Means</th></tr>
+    <tr><td><code>isReadable</code></td><td>Has a getter — appears when a client reads the attribute.</td></tr>
+    <tr><td><code>isWritable</code></td><td>Has a setter — appears when a client calls
+    <code>setAttribute</code>.</td></tr>
+    <tr><td><code>isIs</code></td><td>It's a boolean using the JavaBeans <code>is</code> convention
+    (<code>isEnabled()</code> rather than <code>getEnabled()</code>) — must be paired with
+    <code>isReadable=true</code> and a <code>boolean</code>/<code>Boolean</code> type, or JMX throws
+    <code>IllegalArgumentException</code> immediately.</td></tr>
+  </table>
+  <p>An operation's constructor takes an <strong>impact</strong> flag — purely descriptive metadata for
+  tools (nothing enforces it), but it's what lets <code>jconsole</code> decide whether to show a
+  confirmation dialog before invoking something:</p>
+  <table class="data">
+    <tr><th>Impact constant</th><th>Means</th></tr>
+    <tr><td><code>MBeanOperationInfo.INFO</code></td><td>"Read-like: it returns information but does
+    not change any state" — safe to call without asking.</td></tr>
+    <tr><td><code>MBeanOperationInfo.ACTION</code></td><td>"Write-like: it has an effect but does not
+    return any information" — e.g. <code>reset()</code>.</td></tr>
+    <tr><td><code>MBeanOperationInfo.ACTION_INFO</code></td><td>"Both read-like and write-like: it has
+    an effect, and it also returns information" — e.g. <code>tryAcquire()</code> below, which mutates a
+    counter <em>and</em> returns whether the request was granted.</td></tr>
+    <tr><td><code>MBeanOperationInfo.UNKNOWN</code></td><td>"The impact... is unknown or cannot be
+    expressed using one of the other values."</td></tr>
+  </table>
+
+  <h3>5.3 · Descriptors — attaching metadata the naming convention can't express</h3>
+  <p>A <code>Descriptor</code> is a simple name→value bag attached to an <code>MBeanInfo</code>,
+  <code>MBeanAttributeInfo</code>, <code>MBeanOperationInfo</code>, or even a single
+  <code>MBeanParameterInfo</code> — the Javadoc's own words: "additional metadata for a JMX element...
+  a collection of fields. A field is a name and an associated value." JMX pre-defines a set of
+  "well-known" field names tools already know how to render; anything else you invent is fine too, as
+  long as it contains a period so it can't collide with a future standard one.</p>
+  <table class="data">
+    <tr><th>Well-known field</th><th>Meaning</th></tr>
+    <tr><td><code>units</code></td><td>"The units in which an attribute, parameter, or operation return
+    value is measured" — e.g. <code>"bytes"</code>, <code>"requests/sec"</code>.</td></tr>
+    <tr><td><code>minValue</code> / <code>maxValue</code></td><td>"Minimum/maximum legal value for an
+    attribute or parameter" — advisory; nothing in the API enforces it for you (your
+    <code>setAttribute</code> still has to check).</td></tr>
+    <tr><td><code>defaultValue</code></td><td>"Default value for an attribute or parameter."</td></tr>
+    <tr><td><code>since</code></td><td>"The version of the information model in which this element was
+    introduced."</td></tr>
+    <tr><td><code>deprecated</code></td><td>Convention: version first deprecated, a space, then an
+    explanation — e.g. <code>"1.3 Replaced by the Capacity attribute"</code>.</td></tr>
+    <tr><td><code>immutableInfo</code></td><td>"true"/"false" — whether this MBean's whole
+    <code>MBeanInfo</code> is guaranteed never to change over its lifetime; lets a client cache it
+    instead of re-fetching every time.</td></tr>
+  </table>
+  <p>The simplest way to build one is <code>ImmutableDescriptor</code>, taking
+  <code>"field=value"</code> strings — and descriptors attach at every level: the whole MBean, one
+  attribute, one operation, or one parameter of an operation, verified for all four below.</p>
+  <pre><code class="java">Descriptor limitDescriptor = new ImmutableDescriptor(new String[] {
+    "units=requests/sec", "minValue=1", "defaultValue=100", "since=1.0"
+});
+MBeanAttributeInfo limitInfo = new MBeanAttributeInfo(
+    "Limit", "int", "Maximum requests allowed per window",
+    true, true, false, limitDescriptor);   // descriptor is the 7th constructor argument</code></pre>
+  <div class="tip">Reading one back is just as direct —
+  <code>attributeInfo.getDescriptor().getFieldValue("units")</code> — which is exactly how a generic
+  tool like <code>jconsole</code> renders a tooltip or a unit suffix next to a value it has never seen
+  the Java type of before.</div>
+
+  <h3>5.4 · Complete example — a hand-rolled rate limiter, all four pieces together</h3>
+  <p>Everything above, in one working MBean: a <code>DynamicMBean</code> with a writable
+  <strong>attribute</strong> (<code>Limit</code>, carrying a <strong>descriptor</strong> with
+  <code>units</code>/<code>minValue</code>/<code>defaultValue</code>), two read-only attributes, and two
+  <strong>operations</strong> with different impact flags — registered and driven purely through the
+  <code>MBeanServer</code>, exactly as a remote JMX client or <code>jconsole</code> would.</p>
+  <pre><code class="java">import javax.management.*;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class RateLimiterDynamicMBean implements DynamicMBean {
+  private final AtomicInteger limit = new AtomicInteger(100);
+  private final AtomicLong allowed = new AtomicLong();
+  private final AtomicLong rejected = new AtomicLong();
+
+  // ---- application logic the MBean is wrapping ----
+  boolean tryAcquire() {
+    if (allowed.get() &lt; limit.get()) { allowed.incrementAndGet(); return true; }
+    rejected.incrementAndGet();
+    return false;
+  }
+
+  // ---- DynamicMBean: attribute reads ----
+  @Override
+  public Object getAttribute(String attribute) throws AttributeNotFoundException {
+    return switch (attribute) {
+      case "Limit" -&gt; limit.get();
+      case "Allowed" -&gt; allowed.get();
+      case "Rejected" -&gt; rejected.get();
+      default -&gt; throw new AttributeNotFoundException(attribute);
+    };
+  }
+
+  // ---- DynamicMBean: attribute writes (only "Limit" is writable) ----
+  @Override
+  public void setAttribute(Attribute attribute) throws AttributeNotFoundException, InvalidAttributeValueException {
+    if (!attribute.getName().equals("Limit"))
+      throw new AttributeNotFoundException(attribute.getName() + " is not writable");
+    if (!(attribute.getValue() instanceof Integer v) || v &lt; 1)
+      throw new InvalidAttributeValueException("Limit must be a positive Integer");
+    limit.set(v);
+  }
+
+  @Override
+  public AttributeList getAttributes(String[] names) {
+    AttributeList list = new AttributeList();
+    for (String n : names) {
+      try { list.add(new Attribute(n, getAttribute(n))); }
+      catch (AttributeNotFoundException ignored) { }
+    }
+    return list;
+  }
+
+  @Override
+  public AttributeList setAttributes(AttributeList attributes) {
+    AttributeList done = new AttributeList();
+    for (Object o : attributes) {
+      Attribute a = (Attribute) o;
+      try { setAttribute(a); done.add(a); } catch (Exception ignored) { }
+    }
+    return done;
+  }
+
+  // ---- DynamicMBean: operations ----
+  @Override
+  public Object invoke(String actionName, Object[] params, String[] signature) throws MBeanException {
+    if (actionName.equals("reset")) {
+      allowed.set(0); rejected.set(0);
+      return null;
+    }
+    if (actionName.equals("tryAcquire")) {
+      return tryAcquire();
+    }
+    throw new MBeanException(new IllegalArgumentException("no such operation: " + actionName));
+  }
+
+  // ---- DynamicMBean: metadata, built by hand with Descriptors ----
+  @Override
+  public MBeanInfo getMBeanInfo() {
+    Descriptor limitDescriptor = new ImmutableDescriptor(new String[] {
+        "units=requests/sec", "minValue=1", "defaultValue=100", "since=1.0"
+    });
+
+    MBeanAttributeInfo limitInfo = new MBeanAttributeInfo(
+        "Limit", "int", "Maximum requests allowed per window",
+        true, true, false, limitDescriptor);
+    MBeanAttributeInfo allowedInfo = new MBeanAttributeInfo(
+        "Allowed", "long", "Total requests allowed so far", true, false, false);
+    MBeanAttributeInfo rejectedInfo = new MBeanAttributeInfo(
+        "Rejected", "long", "Total requests rejected so far", true, false, false);
+
+    MBeanOperationInfo resetOp = new MBeanOperationInfo(
+        "reset", "Reset the allowed/rejected counters to zero",
+        new MBeanParameterInfo[0], "void", MBeanOperationInfo.ACTION);
+
+    MBeanOperationInfo tryAcquireOp = new MBeanOperationInfo(
+        "tryAcquire", "Attempt to acquire one permit; returns whether it was granted",
+        new MBeanParameterInfo[0], "boolean", MBeanOperationInfo.ACTION_INFO);
+
+    Descriptor mbeanDescriptor = new ImmutableDescriptor(new String[] {
+        "immutableInfo=false", "since=1.0"
+    });
+
+    return new MBeanInfo(
+        this.getClass().getName(),
+        "A hand-rolled DynamicMBean rate limiter",
+        new MBeanAttributeInfo[] { limitInfo, allowedInfo, rejectedInfo },
+        null,   // no custom constructors exposed
+        new MBeanOperationInfo[] { resetOp, tryAcquireOp },
+        null,   // no notifications
+        mbeanDescriptor);
+  }
+}</code></pre>
+  <p>Driving it purely through the <code>MBeanServer</code> — the same calls a remote client or
+  <code>jconsole</code> would make, none of them touching the class directly:</p>
+  <pre><code class="java">import javax.management.*;
+import java.lang.management.ManagementFactory;
+
+public class DynamicMBeanDemo {
+  public static void main(String[] args) throws Exception {
+    MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+    ObjectName name = new ObjectName("com.example:type=RateLimiter,name=OrdersApi");
+
+    RateLimiterDynamicMBean limiter = new RateLimiterDynamicMBean();
+    server.registerMBean(limiter, name);
+
+    // read the descriptor on the "Limit" attribute, exactly as jconsole would to render a tooltip
+    MBeanInfo info = server.getMBeanInfo(name);
+    for (MBeanAttributeInfo attr : info.getAttributes()) {
+      if (attr.getName().equals("Limit")) {
+        Descriptor d = attr.getDescriptor();
+        System.out.println("Limit descriptor: units=" + d.getFieldValue("units")
+            + " minValue=" + d.getFieldValue("minValue")
+            + " defaultValue=" + d.getFieldValue("defaultValue"));
+      }
+    }
+
+    // exercise it purely through the MBeanServer -- attributes AND operations
+    System.out.println("initial Limit = " + server.getAttribute(name, "Limit"));
+    server.setAttribute(name, new Attribute("Limit", 3));
+    System.out.println("after setAttribute, Limit = " + server.getAttribute(name, "Limit"));
+
+    int granted = 0, denied = 0;
+    for (int i = 0; i &lt; 5; i++) {
+      boolean ok = (boolean) server.invoke(name, "tryAcquire", new Object[0], new String[0]);
+      if (ok) granted++; else denied++;
+    }
+    System.out.println("granted=" + granted + " denied=" + denied);
+    System.out.println("Allowed=" + server.getAttribute(name, "Allowed")
+        + " Rejected=" + server.getAttribute(name, "Rejected"));
+
+    server.invoke(name, "reset", new Object[0], new String[0]);
+    System.out.println("after reset, Allowed=" + server.getAttribute(name, "Allowed"));
+
+    // rejected write: bad value type/range must throw, verified
+    try {
+      server.setAttribute(name, new Attribute("Limit", -5));
+      System.out.println("BUG: should have thrown");
+    } catch (InvalidAttributeValueException e) {
+      System.out.println("rejected bad value as expected: " + e.getMessage());
+    }
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac RateLimiterDynamicMBean.java DynamicMBeanDemo.java
+$ java -cp . DynamicMBeanDemo</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — descriptor fields, attribute reads/writes,
+  both operation impact styles, and the rejected bad value, all in one run:
+  <pre><code class="java">Limit descriptor: units=requests/sec minValue=1 defaultValue=100
+initial Limit = 100
+after setAttribute, Limit = 3
+granted=3 denied=2
+Allowed=3 Rejected=2
+after reset, Allowed=0
+rejected bad value as expected: Limit must be a positive Integer</code></pre></div>
+  <div class="note">Note what <em>didn't</em> need a naming convention or an annotation anywhere: the
+  attribute list, which ones are writable, their descriptors, and the operations are all just data
+  <code>getMBeanInfo()</code> hands back — this is exactly the shape a config-driven or plugin-based
+  management layer reaches for, where the set of manageable attributes isn't known until the plugin
+  loads.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="remote">6 · Remote JMX — Complete Example</h2>
   <p>The whole point of JSR 160: reach an <code>MBeanServer</code> running in a <em>different</em> JVM,
   potentially on a different machine. Below, a server process registers the same <code>CacheStats</code>
   MBean and exposes JMX remotely; a completely separate client process connects and reads it — real
@@ -323,7 +607,7 @@ REMOTE Memory MBean reachable: true</code></pre></div>
   shortcut used here for a local demo.</div>
 
   <!-- ============================================================ -->
-  <h2 id="notifications">6 · Notifications — Complete Example</h2>
+  <h2 id="notifications">7 · Notifications — Complete Example</h2>
   <p>MBeans aren't purely poll-based — an MBean that implements
   <code>NotificationEmitter</code>/<code>NotificationBroadcaster</code> can push events to listeners.
   The platform's own <code>MemoryMXBean</code> does exactly this for heap usage thresholds, which is
@@ -384,7 +668,7 @@ done, notified=true</code></pre></div>
   burning CPU.</div>
 
   <!-- ============================================================ -->
-  <h2 id="jfr-integration">7 · JMX + JFR — Controlling Recordings Over JMX</h2>
+  <h2 id="jfr-integration">8 · JMX + JFR — Controlling Recordings Over JMX</h2>
   <p>This is the direct answer to "how do JMX and JFR relate": since <strong>Java 8</strong>, every
   <code>jcmd</code> diagnostic command — including all of JFR's — is <em>also</em> exposed as an MBean,
   <code>com.sun.management:type=DiagnosticCommand</code>. That means you can start, check, dump, and
@@ -467,7 +751,7 @@ jfrStop -> Stopped recording "jmxdemo", 373.1 kB written to:
   general-purpose <code>DiagnosticCommand</code> bridge every <code>jcmd</code> command uses.</div>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">8 · Cheat Sheet</h2>
+  <h2 id="cheat">9 · Cheat Sheet</h2>
   <div class="cheat">
     <h3>JMX in one glance</h3>
     <ul>
@@ -476,9 +760,16 @@ jfrStop -> Stopped recording "jmxdemo", 373.1 kB written to:
       adopted on their own.</li>
       <li><strong>Zero-setup data:</strong> <code>ManagementFactory.getMemoryMXBean()</code>,
       <code>getThreadMXBean()</code>, <code>getGarbageCollectorMXBeans()</code>, etc. — no flags needed.</li>
-      <li><strong>Custom MBean, two ways:</strong> Standard MBean (interface must be named
-      <code>&lt;Class&gt;MBean</code> exactly) or <code>@MXBean</code> (any interface name, richer type
-      conversion) — register both with <code>MBeanServer.registerMBean(obj, ObjectName)</code>.</li>
+      <li><strong>Custom MBean, three ways:</strong> Standard MBean (interface must be named
+      <code>&lt;Class&gt;MBean</code> exactly), <code>@MXBean</code> (any interface name, richer type
+      conversion), or <code>DynamicMBean</code> (attributes/operations decided at runtime, no
+      convention at all) — register all three with
+      <code>MBeanServer.registerMBean(obj, ObjectName)</code>.</li>
+      <li><strong>Descriptors:</strong> a name→value bag on an <code>MBeanInfo</code>,
+      <code>MBeanAttributeInfo</code>, <code>MBeanOperationInfo</code>, or
+      <code>MBeanParameterInfo</code> — build one with <code>new ImmutableDescriptor("field=value", ...)</code>,
+      well-known fields include <code>units</code>, <code>minValue</code>/<code>maxValue</code>,
+      <code>defaultValue</code>, <code>since</code>, <code>deprecated</code>.</li>
       <li><strong>Enable remotely:</strong> <code>-Dcom.sun.management.jmxremote.port=...</code> at
       launch, or <code>jcmd &lt;PID&gt; ManagementAgent.start ...</code> on an already-running JVM.</li>
       <li><strong>Connect remotely:</strong> <code>JMXConnectorFactory.connect(new
