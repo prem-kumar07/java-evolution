@@ -37,6 +37,10 @@
         <code>System.setSecurityManager</code> now throws. Rework any code still using it.</li>
       <li><strong><code>sun.misc.Unsafe</code> memory-access methods warn</strong> and are being removed —
         migrate to the <a href="../topics/ffm-api.html">FFM API</a> / <code>VarHandle</code>.</li>
+      <li><strong>JNI use restricted, same as native FFM calls</strong> <span class="badge added">24</span>
+        <span class="badge jep">JEP 472</span> — the JVM now warns on unrestricted JNI, mirroring the
+        <code>--enable-native-access</code> requirement <a href="../topics/ffm-api.html#access">FFM
+        downcalls</a> already have.</li>
       <li><strong>32-bit x86 port removed</strong>; <strong>compact object headers</strong> change object sizes (tools may need updating).</li>
       <li>Upside: <strong>virtual threads no longer pin on <code>synchronized</code></strong>
         <span class="badge added">24</span> — drop the 21-era <code>ReentrantLock</code> workarounds.</li>
@@ -201,6 +205,33 @@ try (Arena arena = Arena.ofConfined()) {                            // Memory AP
 }</code></pre>
   <p>A complete, runnable program (off-heap memory + downcall + upcall) →
   <a href="../topics/ffm-api.html">FFM deep-dive</a>.</p>
+  <div class="note"><strong>Still cooking, same neighborhood:</strong> the <strong>Vector API</strong>
+  (portable SIMD — one API, vectorized on whatever the CPU supports) has been incubating since Java 16
+  and is still not final <span class="badge jep">JEP 508</span> — its <strong>tenth</strong> incubator
+  round by Java 25. Verified: it still requires
+  <code>--add-modules jdk.incubator.vector</code> to even compile against on this JDK; leave the flag
+  off and <code>javac</code> reports <code>package jdk.incubator.vector is not visible</code>. No
+  finalization timeline has been announced.</div>
+
+  <h3>Class-File API <span class="badge added">Final in 24</span> <span class="badge jep">JEP 484</span></h3>
+  <p><em>Why it matters:</em> parsing, generating, or transforming <code>.class</code> files in pure
+  Java used to mean pulling in a third-party bytecode library (ASM, BCEL) — now the JDK ships its own,
+  guaranteed to stay in sync with whatever class-file format <code>javac</code> itself just emitted.</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Before — needs a third-party library (e.g. ASM)</div>
+      <pre><code class="java">ClassReader reader = new ClassReader(bytes);
+ClassNode node = new ClassNode();
+reader.accept(node, 0);
+for (MethodNode m : node.methods) System.out.println(m.name);</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">After (Java 24) — java.lang.classfile, built in</div>
+      <pre><code class="java">byte[] bytes = Files.readAllBytes(Path.of("Hello.class"));
+ClassModel cm = ClassFile.of().parse(bytes);
+for (MethodModel m : cm.methods())
+  System.out.println(m.methodName().stringValue());
+// verified: prints "&lt;init&gt;" and "main" for a simple compiled Hello.class</code></pre>
+    </div>
+  </div>
 
   <h3>Cryptography</h3>
   <!-- KDF API: JEP 510 (Java 25) -->
@@ -229,6 +260,18 @@ SecretKey key = hkdf.deriveKey("AES", params);   // a 32-byte AES key
   <pre><code class="java">// Quantum-resistant algorithms (Added in 24) — see the KEM walkthrough on the Java 21 page
 KeyPairGenerator kem = KeyPairGenerator.getInstance("ML-KEM");   // JEP 496
 Signature       dsa = Signature.getInstance("ML-DSA");          // JEP 497</code></pre>
+
+  <p><strong>PEM Encodings of Cryptographic Objects</strong> <span class="badge preview">Preview</span>
+  <span class="badge jep">JEP 470</span> — <em>why it matters:</em> encoding a key or certificate to
+  PEM (the <code>-----BEGIN ...-----</code> Base64 text format) used to mean hand-rolling Base64 +
+  header/footer lines yourself; now it's one call, symmetric with a matching decoder:</p>
+  <pre><code class="java">KeyPair kp = KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+String pem = PEMEncoder.of().encodeToString(kp.getPublic());
+System.out.println(pem);
+// verified real output:
+// -----BEGIN PUBLIC KEY-----
+// MCowBQYDK2VwAyEA9bbY44UgGhCcK0/EObhK6iPSlhBHgazUndIzl7ztfNY=
+// -----END PUBLIC KEY-----</code></pre>
 
   <!-- ============ TOOLING ============ -->
   <h2 id="tooling">3 · Tooling</h2>
@@ -273,6 +316,15 @@ class Greeter {
       walkthrough with verified before/after timing → <a href="../topics/aot-cache.html">AOT Cache deep-dive</a>.</li>
     <li><strong>JFR upgrades</strong> <span class="badge added">25</span> — CPU-time profiling,
       cooperative sampling, method timing &amp; tracing.</li>
+    <li><strong><code>jlink</code> no longer needs a <code>jmods/</code> directory</strong>
+      <span class="badge added">24</span> <span class="badge jep">JEP 493</span> — a JDK distribution
+      can now be "linkable" straight from its own installed image. Verified on this machine: this
+      JDK 25 install has <strong>no <code>jmods/</code> directory at all</strong>
+      (<code>$JAVA_HOME/jmods</code> doesn't exist), yet
+      <code>jlink --add-modules java.base --output myruntime</code> still runs and produces a working
+      image — impossible pre-24, where <code>jlink</code> always required the on-disk <code>.jmod</code>
+      files as its source. Full <code>jlink</code>/<code>jpackage</code> walkthrough →
+      <a href="../topics/jlink-jpackage.html">deep-dive</a>.</li>
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
@@ -294,11 +346,13 @@ class Greeter {
     <h3>Java 25 (LTS) in one glance</h3>
     <ul>
       <li><strong>Simpler programs:</strong> <code>void main()</code> + <code>IO.println</code>, <code>import module java.base</code></li>
-      <li><strong>Final:</strong> scoped values, stream gatherers (24), FFM (22), flexible constructors, unnamed <code>_</code> (22)</li>
-      <li><strong>Crypto:</strong> KDF API, ML-KEM / ML-DSA (post-quantum)</li>
+      <li><strong>Final:</strong> scoped values, stream gatherers (24), FFM (22), Class-File API (24), flexible constructors, unnamed <code>_</code> (22)</li>
+      <li><strong>Crypto:</strong> KDF API, ML-KEM / ML-DSA (post-quantum), PEM encodings (preview)</li>
       <li><strong>Javadoc:</strong> Markdown comments (23); <strong>startup:</strong> Project Leyden AOT</li>
       <li><strong>Memory:</strong> compact object headers; <strong>reliability:</strong> VTs no longer pin</li>
-      <li><strong>Preview:</strong> primitive patterns, structured concurrency, stable values</li>
+      <li><strong>Tooling:</strong> <code>jlink</code> works with no <code>jmods/</code> dir (24)</li>
+      <li><strong>Preview:</strong> primitive patterns, structured concurrency, stable values, PEM encodings</li>
+      <li><strong>Still incubating:</strong> Vector API (10th round — no ship date yet)</li>
     </ul>
   </div>
 </main>
