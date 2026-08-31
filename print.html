@@ -10630,7 +10630,7 @@ $ java -cp . ArbitraryNameTest</code></pre>
     expressed using one of the other values."</td></tr>
   </table>
 
-  <h3>5.3 · Descriptors — attaching metadata the naming convention can't express</h3>
+  <h3>5.3 · Descriptors — attaching metadata beyond name and type</h3>
   <p>A <code>Descriptor</code> is a simple name→value bag attached to an <code>MBeanInfo</code>,
   <code>MBeanAttributeInfo</code>, <code>MBeanOperationInfo</code>, or even a single
   <code>MBeanParameterInfo</code> — the Javadoc's own words: "additional metadata for a JMX element...
@@ -10666,6 +10666,39 @@ MBeanAttributeInfo limitInfo = new MBeanAttributeInfo(
   <code>attributeInfo.getDescriptor().getFieldValue("units")</code> — which is exactly how a generic
   tool like <code>jconsole</code> renders a tooltip or a unit suffix next to a value it has never seen
   the Java type of before.</div>
+
+  <div class="warn"><strong>Descriptors are not a <code>DynamicMBean</code>-exclusive feature</strong> —
+  §4's Standard MBean and <code>@MXBean</code> patterns can carry them too, via the
+  <code>@DescriptorKey</code> meta-annotation. Define a small custom annotation once, tag it
+  <code>@DescriptorKey("fieldName")</code>, then use <em>that</em> annotation on any interface method —
+  JMX folds its value straight into the reflection-derived <code>Descriptor</code>, no
+  <code>DynamicMBean</code>, no hand-built <code>MBeanInfo</code>, required:
+  <pre><code class="java">// define once — a reusable, typed wrapper around one descriptor field
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Units {
+  @DescriptorKey("units")
+  String value();
+}
+
+// then use it directly on an ordinary Standard MBean interface
+public interface CacheControlMBean {
+  @Units("bytes")
+  long getCacheSize();
+}
+
+public class CacheControl implements CacheControlMBean {
+  public long getCacheSize() { return 1024; }
+}</code></pre>
+  <pre><code class="java">server.registerMBean(new CacheControl(), name);   // plain Standard MBean registration — nothing special
+MBeanInfo info = server.getMBeanInfo(name);
+for (MBeanAttributeInfo attr : info.getAttributes())
+  System.out.println(attr.getName() + " units=" + attr.getDescriptor().getFieldValue("units"));
+// verified real output: CacheSize units=bytes</code></pre>
+  Verified identically on an <code>@MXBean</code> interface too — <code>@DescriptorKey</code> doesn't
+  care which of the two static patterns it's attached to. The only real difference from §5.1–§5.2 is
+  <em>who builds the <code>Descriptor</code></em>: you, by hand, for a <code>DynamicMBean</code>; JMX
+  itself, by reading your annotations, for a Standard MBean or <code>@MXBean</code>.</div>
 
   <h3>5.4 · Complete example — a hand-rolled rate limiter, all four pieces together</h3>
   <p>Everything above, in one working MBean: a <code>DynamicMBean</code> with a writable
@@ -11058,8 +11091,10 @@ jfrStop -> Stopped recording "jmxdemo", 373.1 kB written to:
       <code>MBeanServer.registerMBean(obj, ObjectName)</code>.</li>
       <li><strong>Descriptors:</strong> a name→value bag on an <code>MBeanInfo</code>,
       <code>MBeanAttributeInfo</code>, <code>MBeanOperationInfo</code>, or
-      <code>MBeanParameterInfo</code> — build one with <code>new ImmutableDescriptor("field=value", ...)</code>,
-      well-known fields include <code>units</code>, <code>minValue</code>/<code>maxValue</code>,
+      <code>MBeanParameterInfo</code> — not <code>DynamicMBean</code>-only: build one directly with
+      <code>new ImmutableDescriptor("field=value", ...)</code>, or attach one to a Standard MBean/
+      <code>@MXBean</code> via a custom <code>@DescriptorKey</code>-annotated annotation. Well-known
+      fields include <code>units</code>, <code>minValue</code>/<code>maxValue</code>,
       <code>defaultValue</code>, <code>since</code>, <code>deprecated</code>.</li>
       <li><strong>Enable remotely:</strong> <code>-Dcom.sun.management.jmxremote.port=...</code> at
       launch, or <code>jcmd &lt;PID&gt; ManagementAgent.start ...</code> on an already-running JVM.</li>
