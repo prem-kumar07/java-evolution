@@ -26,7 +26,19 @@
     Profiling Java applications in production historically required attaching heavyweight agents that skewed performance metrics and slowed down the application. JFR is deeply embedded into the JVM, allowing continuous, always-on "black box" flight recording without impacting user latencies.
   </div>
 
-  <h2>1 · Starting Recordings</h2>
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#starting">1. Starting recordings</a>
+    <a href="#cli">2. The jfr command-line tool</a>
+    <a href="#detecting">3. Detecting real problems — worked examples</a>
+    <a href="#jmc">4. JDK Mission Control (JMC)</a>
+    <a href="#custom">5. Custom application events — complete example</a>
+    <a href="#streaming">6. JFR event streaming — complete example</a>
+    <a href="#custom-streaming">7. Complete example: streaming your own events live</a>
+    <a href="#cheat">8. Cheat sheet</a>
+  </div>
+
+  <h2 id="starting">1 · Starting Recordings</h2>
   <p>You can start JFR at launch using JVM flags, or dynamically at runtime using the <code>jcmd</code> CLI.</p>
 
   <h3>Via JVM Flags</h3>
@@ -36,18 +48,262 @@ $ java -XX:StartFlightRecording=disk=true,maxage=1h,settings=default -jar app.ja
 # Start a highly detailed 60-second profile
 $ java -XX:StartFlightRecording=filename=startup.jfr,duration=60s,settings=profile -jar app.jar</code></pre>
 
-  <h3>Via <code>jcmd</code> (Dynamically)</h3>
-  <p>Find your Java PID using <code>jcmd -l</code>, then issue commands to the running JVM:</p>
-  <pre><code class="bash"># Start recording
-$ jcmd &lt;PID&gt; JFR.start name=ProdTrace settings=profile duration=60s filename=/tmp/prod.jfr
+  <h3>Via <code>jcmd</code> (Dynamically) — verified end-to-end on a live process</h3>
+  <p>The whole point of <code>jcmd</code> is that you don't restart anything — you attach to a JVM
+  that's <em>already running in production</em> and turn recording on and off from the outside. Find
+  your Java PID with <code>jcmd -l</code> (or <code>jps</code>), then issue commands to it. Run below
+  against a real long-lived process, output unedited:</p>
+  <pre><code class="bash">$ java -cp . LongRunner &amp;
+[1] 9496
 
-# Dump active recording without stopping it
-$ jcmd &lt;PID&gt; JFR.dump name=ProdTrace filename=/tmp/snapshot.jfr
+$ jcmd 9496 JFR.check
+9496:
+No available recordings.
+Use jcmd 9496 JFR.start to start a recording.
 
-# Stop recording
-$ jcmd &lt;PID&gt; JFR.stop name=ProdTrace</code></pre>
+$ jcmd 9496 JFR.start name=demo settings=profile duration=60s filename=/tmp/jcmd-demo.jfr
+9496:
+Started recording 1. The result will be written to:
+/tmp/jcmd-demo.jfr
 
-  <h2>2 · JDK Mission Control (JMC)</h2>
+$ jcmd 9496 JFR.check
+9496:
+Recording 1: name=demo duration=1m (running)
+
+$ jcmd 9496 JFR.dump name=demo filename=/tmp/jcmd-snapshot.jfr
+9496:
+Dumped recording "demo", 406.9 kB written to:
+/tmp/jcmd-snapshot.jfr
+
+$ jcmd 9496 JFR.stop name=demo
+9496:
+Stopped recording "demo", 792.4 kB written to:
+/tmp/jcmd-demo.jfr</code></pre>
+  <div class="tip"><strong><code>JFR.dump</code> doesn't stop the recording</strong> — it copies
+  everything captured so far to a file while the recording keeps running. This is what lets you pull a
+  snapshot from a production JVM mid-incident without losing the rest of the recording window.</div>
+
+  <h2 id="cli">2 · The <code>jfr</code> Command-Line Tool</h2>
+  <p>Once you have a <code>.jfr</code> file, you don't need JMC's GUI to read it — the <code>jfr</code>
+  CLI (bundled with the JDK since Java 8u, standardized alongside JFR's open-sourcing in Java 11) can
+  print, summarize, and query it directly from a terminal or a CI pipeline. Every command below is
+  <code>jfr &lt;subcommand&gt; --help</code>'s real output, condensed:</p>
+  <table class="data">
+    <tr><th>Command</th><th>What it's for</th></tr>
+    <tr><td><code>jfr summary file.jfr</code></td><td>Fast overview: recording duration, and every
+    event type present with its count &amp; size — your first stop on any unfamiliar recording.</td></tr>
+    <tr><td><code>jfr view &lt;view-name&gt; file.jfr</code></td><td>Pretty-printed, pre-aggregated
+    tables for ~70 built-in questions (hot methods, GC pauses, contention, allocation pressure, …) —
+    <code>jfr view all-views file.jfr</code> lists every one.</td></tr>
+    <tr><td><code>jfr print --events &lt;name&gt; file.jfr</code></td><td>Raw, per-event dump (text/XML/
+    JSON) with full field values and stack traces — use once <code>view</code> has pointed you at a
+    specific event type.</td></tr>
+    <tr><td><code>jfr metadata --events &lt;name&gt; file.jfr</code></td><td>Shows an event type's field
+    layout, labels, and description — works on any <code>.jfr</code> file or the running JDK, useful
+    when you don't remember a custom event's exact field names.</td></tr>
+    <tr><td><code>jfr configure [options] --output custom.jfc</code></td><td>Builds a reusable
+    <code>.jfc</code> settings file — e.g. turn on full (non-throttled) exception capture or maximum
+    allocation profiling — instead of a long inline <code>settings=...</code> flag string.</td></tr>
+    <tr><td><code>jfr scrub --exclude-categories '...' in.jfr out.jfr</code></td><td>Strips events
+    matching a filter and writes a smaller file — handy for sharing a recording without, say, system
+    properties or thread dumps.</td></tr>
+    <tr><td><code>jfr assemble &lt;repository-dir&gt; out.jfr</code></td><td>Stitches together the raw
+    chunk files JFR writes when a JVM crashes mid-recording (found under
+    <code>-XX:FlightRecorderOptions=repository=...</code>) into one loadable <code>.jfr</code>.</td></tr>
+    <tr><td><code>jfr disassemble file.jfr</code></td><td>The inverse — splits one recording into its
+    per-chunk files, useful for isolating a time window from a very large recording.</td></tr>
+  </table>
+
+  <h3><code>jfr view</code> — every category, verified against a real JDK 25 install</h3>
+  <p><code>jfr view all-views file.jfr</code> lists every available view; running it here groups into
+  three real categories:</p>
+  <table class="data">
+    <tr><th>Category</th><th>Sample views</th></tr>
+    <tr><td>JVM internals</td><td><code>gc</code>, <code>gc-pauses</code>,
+    <code>heap-configuration</code>, <code>safepoints</code>, <code>compiler-statistics</code>,
+    <code>tlabs</code></td></tr>
+    <tr><td>Environment</td><td><code>cpu-load</code>, <code>system-information</code>,
+    <code>jvm-flags</code>, <code>active-recordings</code>, <code>native-library-failures</code></td></tr>
+    <tr><td>Application</td><td><code>hot-methods</code>, <code>allocation-by-class</code>,
+    <code>contention-by-site</code>, <code>exception-by-type</code>,
+    <code>method-timing</code></td></tr>
+  </table>
+  <pre><code class="bash"># see everything at once, or drill into one event type by name
+$ jfr view all-views recording.jfr
+$ jfr view hot-methods recording.jfr
+$ jfr view jdk.GarbageCollection recording.jfr   # any event type name works as a "view" too</code></pre>
+
+  <h2 id="detecting">3 · Detecting Real Problems — Worked Examples</h2>
+  <p>Four scenarios below, each with a small self-contained Java program you can compile and run
+  locally, plus the actual <code>jfr</code> command output that JFR captured from it — unedited, on this
+  machine, JDK 25. This is the workflow: record with <code>settings=profile</code>, then let
+  <code>jfr view</code>'s pre-built aggregations point you straight at the offending method/site instead
+  of reading thousands of raw events by hand.</p>
+
+  <h3>3.1 · Finding a CPU hotspot</h3>
+  <p>The program below deliberately builds a string with <code>+=</code> in a loop (quadratic — a classic
+  accidental hotspot) alongside two cheaper helper methods, so <code>hot-methods</code> has to actually
+  pick the right one out:</p>
+  <pre><code class="java">import java.util.*;
+import java.util.concurrent.*;
+
+public class BuggyApp {
+  static final Object LOCK = new Object();
+  static long sharedCounter = 0;
+
+  // deliberately inefficient CPU hotspot: string concatenation in a loop
+  static String buildReport(int n) {
+    String s = "";
+    for (int i = 0; i &lt; n; i++) {
+      s += "row-" + i + ";";   // hot: quadratic string building
+    }
+    return s;
+  }
+
+  // deliberately generates a lot of short-lived garbage
+  static void churnGarbage(int iterations) {
+    List&lt;byte[]&gt; junk = new ArrayList&lt;&gt;();
+    for (int i = 0; i &lt; iterations; i++) {
+      junk.add(new byte[1024]);
+      if (junk.size() &gt; 500) junk.clear();
+    }
+  }
+
+  // deliberately contended lock, held too long
+  static void contendedIncrement() {
+    synchronized (LOCK) {
+      sharedCounter++;
+      try { Thread.sleep(2); } catch (InterruptedException ignored) {}
+    }
+  }
+
+  public static void main(String[] args) throws Exception {
+    ExecutorService pool = Executors.newFixedThreadPool(8);
+    List&lt;Future&lt;?&gt;&gt; futures = new ArrayList&lt;&gt;();
+    for (int t = 0; t &lt; 8; t++) {
+      futures.add(pool.submit(() -&gt; {
+        for (int i = 0; i &lt; 40; i++) {
+          buildReport(3000);
+          churnGarbage(2000);
+          contendedIncrement();
+        }
+      }));
+    }
+    for (Future&lt;?&gt; f : futures) f.get();
+    pool.shutdown();
+    System.out.println("done, counter=" + sharedCounter);
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac BuggyApp.java
+$ java -XX:StartFlightRecording=filename=demo.jfr,settings=profile -cp . BuggyApp
+done, counter=320
+
+$ jfr view --width 140 hot-methods demo.jfr</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — the deliberately-bad method is identified
+  immediately, no manual code reading required:
+  <pre><code class="java">                                       Java Methods that Execute the Most
+
+Method                                                                    Samples Percent
+-------------------------------------------------------------------------- ------- -------
+BuggyApp.buildReport(int)                                                      36  65.45%
+BuggyApp.churnGarbage(int)                                                      7  12.73%
+jdk.internal.util.DecimalDigits.uncheckedGetCharsLatin1(int, int, byte[])       6  10.91%
+jdk.internal.misc.Unsafe.allocateUninitializedArray(Class, int)                 2   3.64%</code></pre></div>
+
+  <h3>3.2 · Finding lock contention</h3>
+  <p>Same recording, different view — <code>contention-by-site</code> ranks every
+  <code>synchronized</code> block by total time other threads spent waiting to get in:</p>
+  <pre><code class="bash">$ jfr view --width 160 contention-by-site demo.jfr</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">                                        Contention by Site
+
+StackTrace                                Count    Avg.    Max.
+------------------------------------------ ----- ------- -------
+BuggyApp.contendedIncrement()               314 16.1 ms 18.9 ms</code></pre></div>
+  <p>For the individual events behind that aggregate — including which thread was blocking which —
+  drop to <code>jfr print</code>:</p>
+  <pre><code class="bash">$ jfr print --events jdk.JavaMonitorEnter --stack-depth 3 demo.jfr</code></pre>
+  <pre><code class="java">jdk.JavaMonitorEnter {
+  startTime = 12:49:04.920 (2026-08-31)
+  duration = 10.8 ms
+  monitorClass = java.lang.Object (classLoader = bootstrap)
+  previousOwner = "pool-1-thread-2" (javaThreadId = 30)
+  eventThread = "pool-1-thread-6" (javaThreadId = 34)
+  stackTrace = [
+    BuggyApp.contendedIncrement() line: 29
+    BuggyApp.lambda$main$0() line: 44
+    java.util.concurrent.Executors$RunnableAdapter.call() line: 545
+  ]
+}</code></pre>
+
+  <h3>3.3 · Finding allocation pressure &amp; GC impact</h3>
+  <p><code>allocation-by-class</code> ranks which types are generating the most garbage;
+  <code>gc</code> shows the actual pause cost that garbage created:</p>
+  <pre><code class="bash">$ jfr view --width 140 allocation-by-class demo.jfr
+$ jfr view --width 140 gc demo.jfr</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">                                     Allocation by Class
+
+Object Type                                                        Allocation Pressure
+-------------------------------------------------------------------------------------
+byte[]                                                                            90.13%
+jdk.internal.event.ThreadSleepEvent                                               9.84%
+java.lang.String                                                                  0.03%
+
+                                          Garbage Collections
+
+Start    GC ID Type                              Heap Before GC Heap After GC Longest Pause
+-------- ----- --------------------------------- -------------- ------------- -------------
+12:49:04     0 Young Garbage Collection                 49.1 MB        4.0 MB       1.24 ms
+12:49:04     1 Young Garbage Collection                332.0 MB        4.1 MB       1.02 ms
+12:49:05     6 Young Garbage Collection                580.0 MB        4.0 MB      0.911 ms
+12:49:05    14 Young Garbage Collection                852.1 MB        4.0 MB       1.10 ms</code></pre></div>
+  <p>Fifteen young GCs in roughly one second, heap climbing back to ~850MB between collections —
+  <code>byte[]</code> at 90% of allocation pressure points straight at <code>churnGarbage</code> without
+  needing a heap dump.</p>
+
+  <h3>3.4 · Finding an exception storm — and the throttling gotcha</h3>
+  <p>This one has a sharp edge worth knowing before you trust a raw count. The program below throws
+  (and catches) a <code>NumberFormatException</code> on exactly 1 in 3 of 50,000 iterations —
+  <strong>16,667 real exceptions</strong>:</p>
+  <pre><code class="java">public class ExceptionStorm {
+  public static void main(String[] args) {
+    int caught = 0;
+    for (int i = 0; i &lt; 50000; i++) {
+      try {
+        parseMaybeBad(i);
+      } catch (NumberFormatException e) {
+        caught++;
+      }
+    }
+    System.out.println("caught=" + caught);
+  }
+  static int parseMaybeBad(int i) {
+    String s = (i % 3 == 0) ? "not-a-number" : String.valueOf(i);
+    return Integer.parseInt(s);
+  }
+}</code></pre>
+  <pre><code class="bash">$ java -XX:StartFlightRecording=filename=ex.jfr,settings=profile -cp . ExceptionStorm
+caught=16667
+$ jfr view --width 140 exception-by-type ex.jfr</code></pre>
+  <div class="warn"><strong>Verified real output — the count is wrong on purpose:</strong>
+  <pre><code class="java">                                Exceptions by Type
+
+Class                                                                 Count
+---------------------------------------------------------------------------
+java.lang.NumberFormatException                                         60</code></pre>
+  <strong>60, not 16,667.</strong> <code>profile.jfc</code> throttles
+  <code>jdk.JavaExceptionThrow</code> to <code>300/s</code> by default (verified in the JDK's own
+  <code>lib/jfr/profile.jfc</code>) — a deliberate trade-off so a genuine exception storm can't flood the
+  recording buffer and drown out everything else. The view still correctly identifies <em>which</em>
+  exception type and site are the problem; just don't read the number as a literal count under load.</div>
+  <p>To capture the real count when you need it, override the throttle explicitly:</p>
+  <pre><code class="bash">$ java -XX:StartFlightRecording=filename=ex2.jfr,settings=profile,exceptions=all -cp . ExceptionStorm
+caught=16667
+$ jfr summary ex2.jfr | grep JavaExceptionThrow
+ jdk.JavaExceptionThrow                  16667        216703        # verified — all 16,667 captured</code></pre>
+
+  <h2 id="jmc">4 · JDK Mission Control (JMC)</h2>
   <p><strong>JDK Mission Control (JMC)</strong> is the official desktop GUI for analyzing <code>.jfr</code> dump files. It provides:</p>
   <ul>
     <li><strong>Automated Analysis:</strong> Rule-based scorecard with tuning recommendations (e.g., GC pauses, memory leaks).</li>
@@ -56,66 +312,223 @@ $ jcmd &lt;PID&gt; JFR.stop name=ProdTrace</code></pre>
     <li><strong>Memory Profiling:</strong> Allocation pressure, object lifetimes, and heap fragmentation.</li>
   </ul>
 
-  <h2>3 · Custom Application Events</h2>
-  <p>You can emit your own application telemetry directly into the JFR pipeline alongside JVM events.</p>
+  <h2 id="custom">5 · Custom Application Events — complete example</h2>
+  <p>You can emit your own application telemetry directly into the JFR pipeline, right alongside JVM
+  events — same file, same <code>jfr print</code>/<code>jfr view</code> tooling. Two files, both
+  compiled and run for real below.</p>
+
+  <p><strong>1. The event class</strong> — extend <code>jdk.jfr.Event</code>; every public field
+  becomes a captured value:</p>
   <pre><code class="java">import jdk.jfr.*;
 
 @Name("com.example.OrderProcessed")
 @Label("Order Processed")
-@Category({"E-Commerce", "Orders"})
+@Category({"Demo", "Orders"})
+@Description("Fired whenever an order finishes processing")
+@StackTrace(false)                 // this event doesn't need a stack trace — cheaper to record
 public class OrderEvent extends Event {
-    @Label("Order ID")
-    String orderId;
+  @Label("Order ID")
+  public String orderId;
 
-    @Label("Amount")
-    double amount;
-}
+  @Label("Amount")
+  public double amount;
 
-// Usage in application code
-public void processOrder(String id, double amt) {
+  @Label("Item Count")
+  public int itemCount;
+}</code></pre>
+
+  <p><strong>2. Emitting it</strong> — <code>begin()</code>/<code>end()</code> capture a duration
+  automatically; <code>commit()</code> writes the event only if JFR is actually recording (near-zero
+  cost when it isn't):</p>
+  <pre><code class="java">import java.util.Random;
+
+public class OrderDemo {
+  public static void main(String[] args) throws Exception {
+    Random rnd = new Random(42);
+    for (int i = 0; i &lt; 5; i++) {
+      processOrder("ORD-" + (1000 + i), rnd.nextDouble() * 200, rnd.nextInt(5) + 1);
+    }
+    System.out.println("processed 5 orders");
+  }
+
+  static void processOrder(String id, double amount, int items) throws InterruptedException {
     OrderEvent event = new OrderEvent();
     event.begin();
-    try {
-        // ... business logic ...
-    } finally {
-        event.orderId = id;
-        event.amount = amt;
-        event.end();
-        event.commit(); // Writes to the JFR buffer
-    }
+    Thread.sleep(10 + (long) (Math.random() * 40));   // simulate work
+    event.end();
+    event.orderId = id;
+    event.amount = amount;
+    event.itemCount = items;
+    event.commit();
+  }
 }</code></pre>
 
-  <h2>4 · JFR Event Streaming <span class="badge added">Java 14</span></h2>
-  <p>Introduced in Java 14 (JEP 349), <strong>Event Streaming</strong> allows applications to consume JFR events continuously in real-time, completely bypassing the need to dump <code>.jfr</code> files to disk.</p>
+  <pre><code class="bash">$ javac OrderEvent.java OrderDemo.java
+$ java -XX:StartFlightRecording=filename=orders.jfr -cp . OrderDemo
+processed 5 orders
+
+$ jfr print --events com.example.OrderProcessed orders.jfr</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — your custom event, printed exactly like a
+  built-in one:
+  <pre><code class="java">com.example.OrderProcessed {
+  startTime = 12:50:13.893 (2026-08-31)
+  duration = 50.1 ms
+  orderId = "ORD-1000"
+  amount = 145.51273600657362
+  itemCount = 4
+  eventThread = "main" (javaThreadId = 3)
+}
+
+com.example.OrderProcessed {
+  startTime = 12:50:13.943 (2026-08-31)
+  duration = 12.6 ms
+  orderId = "ORD-1001"
+  amount = 9.58786102747753
+  itemCount = 1
+  eventThread = "main" (javaThreadId = 3)
+}
+// ... 3 more, one per processOrder() call</code></pre></div>
+  <div class="note">Forgot a field name? <code>jfr metadata --events com.example.OrderProcessed
+  orders.jfr</code> prints the event's full layout (labels, types, descriptions) straight from the
+  recording — no need to go dig up the source file.</div>
+
+  <h2 id="streaming">6 · JFR Event Streaming — complete example <span class="badge added">Java 14</span></h2>
+  <p>Introduced in Java 14 (JEP 349), <strong>Event Streaming</strong> lets an application consume JFR
+  events continuously, in-process, in real time — completely bypassing the need to dump
+  <code>.jfr</code> files to disk. This is the mechanism behind live dashboards and self-monitoring
+  alerts that react to JVM behavior as it happens.</p>
+  <p>Below is the complete, compilable program — it starts a live <code>RecordingStream</code>, does a
+  bit of real CPU work so <code>jdk.CPULoad</code> has something to report, and waits (via a
+  <code>CountDownLatch</code>, not a guess-and-sleep) until it has actually received two events before
+  shutting down cleanly:</p>
   <pre><code class="java">import jdk.jfr.consumer.RecordingStream;
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
 
-public class JfrStreamer {
-    public static void main(String[] args) throws Exception {
-        try (var stream = new RecordingStream()) {
-            
-            // Sample built-in CPU load every 1 second
-            stream.enable("jdk.CPULoad").withPeriod(Duration.ofSeconds(1));
-            
-            stream.onEvent("jdk.CPULoad", event -&gt; {
-                float machineCpu = event.getFloat("machineTotal") * 100;
-                float jvmCpu = event.getFloat("jvmUser") * 100;
-                System.out.printf("CPU - Machine: %.1f%% | JVM: %.1f%%%n", machineCpu, jvmCpu);
-            });
+public class StreamDemo {
+  public static void main(String[] args) throws Exception {
+    CountDownLatch seenCpu = new CountDownLatch(2);
 
-            // Listen to your custom application events instantly
-            stream.onEvent("com.example.OrderProcessed", event -&gt; {
-                System.out.println("Order completed: $" + event.getDouble("amount"));
-            });
+    try (RecordingStream rs = new RecordingStream()) {
+      rs.enable("jdk.CPULoad").withPeriod(Duration.ofMillis(500));
 
-            // Start asynchronously
-            stream.startAsync();
-            
-            // Keep app alive
-            Thread.sleep(Long.MAX_VALUE);
-        }
+      rs.onEvent("jdk.CPULoad", event -&gt; {
+        float jvmCpu = event.getFloat("jvmUser") + event.getFloat("jvmSystem");
+        System.out.printf("[stream] jvmCpu=%.1f%% machineTotal=%.1f%%%n",
+            jvmCpu * 100, event.getFloat("machineTotal") * 100);
+        seenCpu.countDown();
+      });
+
+      rs.startAsync();
+
+      // simulate a bit of CPU work so CPULoad has something to report
+      long x = 0;
+      for (int i = 0; i &lt; 200_000_000; i++) x += i;
+      System.out.println("busy-work result=" + x);
+
+      seenCpu.await();   // wait until we've actually received 2 CPULoad events
+      rs.close();
     }
+    System.out.println("stream closed cleanly");
+  }
 }</code></pre>
+  <pre><code class="bash">$ javac StreamDemo.java
+$ java -cp . StreamDemo</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">busy-work result=19999999900000000
+[stream] jvmCpu=0.7% machineTotal=16.4%
+[stream] jvmCpu=0.0% machineTotal=19.0%
+stream closed cleanly</code></pre></div>
+  <div class="tip"><code>RecordingStream</code> is a <em>new, temporary, in-memory</em> recording, not
+  a view into one you started elsewhere. To tap into an already-running
+  <code>-XX:StartFlightRecording</code> session's live events instead, use
+  <code>EventStream.openRepository()</code>, which reads the same on-disk repository files the running
+  recording is already writing.</div>
+
+  <h2 id="custom-streaming">7 · Complete example: streaming your own custom events live</h2>
+  <p>The natural next step: combine §5 and §6 — stream your <em>own</em> event type the instant it's
+  committed, instead of writing it to a file and reading it back later. Reuses the exact
+  <code>OrderEvent</code> class from §5, unchanged:</p>
+  <pre><code class="java">import jdk.jfr.consumer.RecordingStream;
+import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+
+public class OrderStreamDemo {
+  public static void main(String[] args) throws Exception {
+    CountDownLatch latch = new CountDownLatch(5);
+
+    try (RecordingStream rs = new RecordingStream()) {
+      rs.enable("com.example.OrderProcessed");   // our own event, enabled by name
+
+      rs.onEvent("com.example.OrderProcessed", event -&gt; {
+        System.out.printf("[live] order=%s amount=$%.2f items=%d took=%dms%n",
+            event.getString("orderId"),
+            event.getDouble("amount"),
+            event.getInt("itemCount"),
+            event.getDuration().toMillis());
+        latch.countDown();
+      });
+
+      rs.startAsync();
+
+      Random rnd = new Random(7);
+      for (int i = 0; i &lt; 5; i++) {
+        processOrder("LIVE-" + (2000 + i), rnd.nextDouble() * 300, rnd.nextInt(5) + 1);
+      }
+
+      latch.await();   // block until all 5 orders have actually streamed through
+    }
+    System.out.println("all 5 orders observed live");
+  }
+
+  static void processOrder(String id, double amount, int items) throws InterruptedException {
+    OrderEvent event = new OrderEvent();
+    event.begin();
+    Thread.sleep(10 + (long) (Math.random() * 30));
+    event.end();
+    event.orderId = id;
+    event.amount = amount;
+    event.itemCount = items;
+    event.commit();
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac OrderStreamDemo.java   # OrderEvent.class from §5 must be on the classpath
+$ java -cp . OrderStreamDemo</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — each order shows up the moment
+  <code>commit()</code> runs, not after the program exits:
+  <pre><code class="java">[live] order=LIVE-2000 amount=$219.21 items=1 took=34ms
+[live] order=LIVE-2001 amount=$2.89 items=5 took=39ms
+[live] order=LIVE-2002 amount=$269.18 items=1 took=22ms
+[live] order=LIVE-2003 amount=$170.74 items=3 took=36ms
+[live] order=LIVE-2004 amount=$36.22 items=1 took=40ms
+all 5 orders observed live</code></pre></div>
+  <div class="note">Notice <code>rs.enable("com.example.OrderProcessed")</code> needed no
+  <code>settings=profile</code> flag, no <code>-XX:StartFlightRecording</code>, nothing on the command
+  line at all — <code>RecordingStream</code> creates and controls its own recording purely from Java
+  code, which is exactly what makes it usable for an in-app health dashboard or alerting hook.</div>
+
+  <h2 id="cheat">8 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>JFR in one glance</h3>
+    <ul>
+      <li><strong>Start:</strong> <code>-XX:StartFlightRecording=...</code> at launch, or
+      <code>jcmd &lt;PID&gt; JFR.start</code> on a running JVM — no restart needed.</li>
+      <li><strong>Snapshot without stopping:</strong> <code>jcmd &lt;PID&gt; JFR.dump</code> copies
+      what's captured so far; the recording keeps running.</li>
+      <li><strong>Read a file fast:</strong> <code>jfr summary</code> (overview) →
+      <code>jfr view &lt;name&gt;</code> (pre-built tables: <code>hot-methods</code>,
+      <code>contention-by-site</code>, <code>allocation-by-class</code>, <code>gc</code>,
+      <code>exception-by-type</code>, …) → <code>jfr print --events &lt;name&gt;</code> (raw events).</li>
+      <li><strong>Don't know a field name?</strong> <code>jfr metadata --events &lt;name&gt;</code>.</li>
+      <li><strong>Custom events:</strong> extend <code>jdk.jfr.Event</code>, annotate fields,
+      <code>begin()</code>/<code>end()</code>/<code>commit()</code> — same tooling reads them.</li>
+      <li><strong>Live, in-process:</strong> <code>RecordingStream</code> — <code>enable()</code> +
+      <code>onEvent()</code> + <code>startAsync()</code>, zero files, zero JVM flags.</li>
+      <li><strong>Gotcha:</strong> <code>settings=profile</code> throttles noisy events like
+      <code>jdk.JavaExceptionThrow</code> (300/s default) — override with
+      <code>exceptions=all</code> when you need the exact count.</li>
+    </ul>
+  </div>
 
 </main>
 <script src="../assets/nav.js"></script>
