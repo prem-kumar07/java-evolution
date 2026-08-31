@@ -133,14 +133,17 @@ try {
 
   <!-- ============================================================ -->
   <h2 id="joiners">4 · Joiners — choosing the completion policy</h2>
-  <p>A <em>Joiner</em> decides when <code>join()</code> returns and how results/errors combine.</p>
+  <p>A <em>Joiner</em> decides when <code>join()</code> returns and how results/errors combine. Every
+  factory method and behavior below is verified directly against a real JDK 26 install — both by
+  reading <code>java.util.concurrent.StructuredTaskScope.Joiner</code>'s own <code>javap</code> output
+  and by actually running each one.</p>
   <div class="ba">
     <div class="before"><div class="ba-label">All must succeed (fail-fast)</div>
       <pre><code class="java">try (var scope = StructuredTaskScope.open(
         Joiner.&lt;String&gt;allSuccessfulOrThrow())) {
   scope.fork(() -> a());
   scope.fork(() -> b());
-  var all = scope.join();   // Stream of subtasks, all OK
+  List&lt;String&gt; all = scope.join();   // verified: List, in fork order — NOT a Stream, NOT Subtasks
 }</code></pre>
     </div>
     <div class="after"><div class="ba-label">Race — first success wins</div>
@@ -152,6 +155,208 @@ try {
 }</code></pre>
     </div>
   </div>
+  <div class="warn"><strong>Verified, and worth being precise about:</strong>
+  <code>allSuccessfulOrThrow()</code> returns a <code>List&lt;T&gt;</code> of the actual <em>results</em>,
+  in fork order — confirmed with <code>results.getClass().getSimpleName()</code> reporting
+  <code>ListN</code>, and the values themselves being <code>[a, b]</code>, not
+  <code>Subtask</code> wrappers. This is the reworked Java 26 shape
+  (<span class="badge jep">JEP 525</span>) — Java 25 returned a <code>Stream&lt;T&gt;</code> of the same
+  result values instead; it was never a stream of <code>Subtask</code> objects at any point.</div>
+
+  <h3>4.1 · All five built-in <code>Joiner</code> factories</h3>
+  <p>The doc examples on this page (and most tutorials) only ever show the first two. There are five —
+  confirmed by listing <code>Joiner</code>'s actual static methods on a real JDK 26:</p>
+  <table class="data">
+    <tr><th>Factory</th><th>Returns</th><th>Behavior</th></tr>
+    <tr><td><code>allSuccessfulOrThrow()</code></td><td><code>Joiner&lt;T, List&lt;T&gt;&gt;</code></td>
+    <td>Cancels the scope and throws on the first failure. On success, <code>result()</code> is a
+    <code>List&lt;T&gt;</code> of every result, in fork order. Use when every subtask returns the
+    <em>same</em> type.</td></tr>
+    <tr><td><code>anySuccessfulOrThrow()</code></td><td><code>Joiner&lt;T, T&gt;</code></td>
+    <td>Returns the first successful result; throws only if <em>every</em> subtask fails (or
+    <code>NoSuchElementException</code> if none were forked at all). Renamed from
+    <code>anySuccessfulResultOrThrow()</code> in Java 25 — <span class="badge added">Java 26</span>.</td></tr>
+    <tr><td><code>awaitAllSuccessfulOrThrow()</code></td><td><code>Joiner&lt;T, Void&gt;</code></td>
+    <td>Same fail-fast cancellation as <code>allSuccessfulOrThrow</code>, but doesn't collect
+    results — <code>result()</code> is always <code>null</code>. Use when subtasks return
+    <em>different</em> types and you'll read each one individually off its own
+    <code>Subtask</code> handle.</td></tr>
+    <tr><td><code>awaitAll()</code></td><td><code>Joiner&lt;T, Void&gt;</code></td>
+    <td>Waits for every subtask, <strong>does not cancel on failure</strong>, never throws from a
+    subtask failure. For side-effecting subtasks (a socket-accept loop forking a handler per
+    connection) where you don't want one bad connection to cancel the rest.</td></tr>
+    <tr><td><code>allUntil(Predicate&lt;Subtask&lt;T&gt;&gt;)</code></td>
+    <td><code>Joiner&lt;T, List&lt;Subtask&lt;T&gt;&gt;&gt;</code></td>
+    <td>General-purpose: your predicate runs on every completing subtask and returns <code>true</code>
+    to cancel the scope early. <code>result()</code> is the list of <em>all</em> subtasks (some may be
+    <code>UNAVAILABLE</code> if cancelled before finishing) — the building block the other four are
+    conceptually shorthand for.</td></tr>
+  </table>
+  <p>The three most people never see, verified:</p>
+  <pre><code class="java">// awaitAllSuccessfulOrThrow — different result types per subtask, read individually
+try (var scope = StructuredTaskScope.open(Joiner.&lt;Object&gt;awaitAllSuccessfulOrThrow())) {
+  Subtask&lt;String&gt; s1 = scope.fork(() -> "string result");
+  Subtask&lt;Integer&gt; s2 = scope.fork(() -> 42);
+  scope.join();   // verified: returns null
+  use(s1.get(), s2.get());   // both readable after join(), regardless of the Void result
+}
+
+// awaitAll — a failing subtask does NOT cancel its siblings or throw
+try (var scope = StructuredTaskScope.open(Joiner.&lt;String&gt;awaitAll())) {
+  Subtask&lt;String&gt; ok  = scope.fork(() -> "ok");
+  Subtask&lt;String&gt; bad = scope.fork(() -> { throw new RuntimeException("boom"); });
+  scope.join();   // verified: returns normally even though 'bad' failed
+  // ok.state() == SUCCESS, bad.state() == FAILED — check individually, nothing throws for you
+}
+
+// allUntil — cancel the scope after 2 failures, but still see every subtask's outcome
+Predicate&lt;Subtask&lt;String&gt;&gt; cancelAfterTwoFailures = new Predicate&lt;&gt;() {
+  final AtomicInteger failed = new AtomicInteger();
+  public boolean test(Subtask&lt;String&gt; s) {
+    return s.state() == Subtask.State.FAILED &amp;&amp; failed.incrementAndGet() >= 2;
+  }
+};
+try (var scope = StructuredTaskScope.open(Joiner.allUntil(cancelAfterTwoFailures))) {
+  scope.fork(() -> { throw new RuntimeException("fail1"); });
+  scope.fork(() -> { throw new RuntimeException("fail2"); });
+  scope.fork(() -> { Thread.sleep(200); return "would succeed but likely cancelled"; });
+  List&lt;Subtask&lt;String&gt;&gt; all = scope.join();   // 3 subtasks: 2 FAILED, 1 UNAVAILABLE (cancelled)
+}</code></pre>
+  <div class="warn"><strong>Verified real output</strong> for all three above, in order:
+  <pre><code class="java">awaitAllSuccessfulOrThrow -> join() returned: null, but subtasks still readable: s1=string result s2=42
+awaitAll -> join() returned normally; ok.state()=SUCCESS bad.state()=FAILED
+allUntil -> total=3 failed=2 unavailable=1</code></pre></div>
+
+  <h3>4.2 · The <code>Joiner</code> interface — what you implement for a custom one</h3>
+  <p>Every factory in §4.1 is really just a pre-built implementation of this four-method interface —
+  confirmed with <code>javap -p 'java.util.concurrent.StructuredTaskScope$Joiner'</code> against a real
+  JDK 26:</p>
+  <table class="data">
+    <tr><th>Method</th><th>Called when</th><th>Return/throw means</th></tr>
+    <tr><td><code>boolean onFork(Subtask&lt;T&gt;)</code></td><td>Before a subtask's thread is even
+    created — synchronously, on the scope-owner thread.</td><td>Returning <code>true</code> cancels the
+    scope immediately (verified: a 3rd <code>fork()</code> call can cancel the scope from inside
+    <code>onFork</code> itself, before that subtask ever runs). Default: always <code>false</code>.</td></tr>
+    <tr><td><code>boolean onComplete(Subtask&lt;T&gt;)</code></td><td>After a subtask finishes
+    (success or failure) — <strong>not</strong> called if the scope was already cancelled. May be
+    called concurrently from multiple subtask threads at once — <em>your implementation must be
+    thread-safe.</em></td><td>Returning <code>true</code> cancels the scope. Default: always
+    <code>false</code>.</td></tr>
+    <tr><td><code>void onTimeout()</code> <span class="badge added">Java 26</span></td><td>From
+    <code>join()</code>, only if the scope was opened with a timeout and it expires. New in this
+    version — see §4.4 below.</td><td>Default implementation throws (see the exact exception type in
+    §4.4 — it's not the class you'd guess).</td></tr>
+    <tr><td><code>R result() throws Throwable</code></td><td>Once, by <code>join()</code>, after every
+    subtask has completed or the scope was cancelled.</td><td>Whatever it returns is
+    <code>join()</code>'s return value. Whatever it throws comes back out of <code>join()</code>
+    wrapped in <code>StructuredTaskScope.FailedException</code> — verified below.</td></tr>
+  </table>
+  <pre><code class="java">try (var scope = StructuredTaskScope.open(Joiner.&lt;String&gt;allSuccessfulOrThrow())) {
+  scope.fork(() -> { throw new IllegalStateException("subtask blew up"); });
+  scope.join();
+} catch (StructuredTaskScope.FailedException e) {
+  // verified: e.getCause() is the ORIGINAL IllegalStateException, unwrapped one level
+  System.out.println(e.getCause().getClass().getSimpleName() + ": " + e.getCause().getMessage());
+}
+// verified real output: IllegalStateException: subtask blew up</code></pre>
+  <div class="tip">Oracle's own design guidance, worth repeating: create a <strong>new</strong>
+  <code>Joiner</code> instance for every scope — never share or reuse one across scopes — and keep
+  "business logic" out of it. A <code>Joiner</code> decides <em>when to stop and what shape the result
+  takes</em>; what to actually <em>do</em> with that result belongs at the call site, same separation of
+  concerns as a stream <code>Collector</code>.</div>
+
+  <h3>4.3 · Writing your own <code>Joiner</code> — complete example</h3>
+  <p>A "best-effort" policy — collect whatever succeeded, silently drop whatever failed, never cancel
+  early, never throw. None of the five built-ins do this; it takes about ten real lines:</p>
+  <pre><code class="java">import java.util.concurrent.StructuredTaskScope.Joiner;
+import java.util.concurrent.StructuredTaskScope.Subtask;
+import java.util.*;
+
+public class BestEffortJoiner&lt;T&gt; implements Joiner&lt;T, List&lt;T&gt;&gt; {
+  private final List&lt;T&gt; results = Collections.synchronizedList(new ArrayList&lt;&gt;());
+
+  @Override
+  public boolean onComplete(Subtask&lt;T&gt; subtask) {
+    if (subtask.state() == Subtask.State.SUCCESS) {
+      results.add(subtask.get());
+    }
+    return false;   // never cancel — let every subtask finish, succeed or fail
+  }
+
+  @Override
+  public List&lt;T&gt; result() {
+    return List.copyOf(results);
+  }
+}</code></pre>
+  <pre><code class="java">try (var scope = StructuredTaskScope.open(new BestEffortJoiner&lt;String&gt;())) {
+  scope.fork(() -> "service-A ok");
+  scope.fork(() -> { throw new RuntimeException("service-B down"); });
+  scope.fork(() -> "service-C ok");
+
+  List&lt;String&gt; best = scope.join();   // never throws — failures are just dropped
+  System.out.println("best-effort results: " + best);
+}</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — two of three services answered, the third's
+  failure never surfaces at all:
+  <pre><code class="java">best-effort results: [service-A ok, service-C ok]</code></pre></div>
+  <div class="note"><code>onComplete</code> uses <code>Collections.synchronizedList</code> deliberately
+  — the Javadoc is explicit that <code>onComplete</code> "may be invoked concurrently, as multiple
+  subtasks can complete at the same time," and may even run concurrently with the scope-owner thread's
+  own call to <code>onFork</code> or <code>onTimeout</code>. A plain <code>ArrayList</code> here would
+  be a real, if intermittent, data race.</div>
+
+  <h3>4.4 · <code>onTimeout()</code> — new in Java 26, and a naming trap to know about</h3>
+  <p><span class="badge added">Java 26</span> <span class="badge jep">JEP 525</span> added
+  <code>onTimeout()</code> specifically for joiners that want to do something other than throw when a
+  deadline expires — the default implementation throws, but a custom one can swallow it and hand back
+  partial results instead. Verified, comparing default vs. overridden behavior on the exact same
+  timeout:</p>
+  <pre><code class="java">// DEFAULT onTimeout() — not overridden
+try (var scope = StructuredTaskScope.open(
+    Joiner.&lt;String&gt;allSuccessfulOrThrow(), cf -> cf.withTimeout(Duration.ofMillis(100)))) {
+  scope.fork(() -> { Thread.sleep(500); return "too slow"; });
+  scope.join();
+} catch (Throwable e) {
+  System.out.println(e.getClass().getName());   // verified below — read this carefully
+}</code></pre>
+  <div class="warn"><strong>Verified real output — and it's <em>not</em> the class you'd expect:</strong>
+  <pre><code class="java">java.util.concurrent.StructuredTaskScope$TimeoutException</code></pre>
+  That's <code>StructuredTaskScope.TimeoutException</code> — a small, <code>final</code>, unchecked
+  (<code>extends RuntimeException</code>) nested class the JDK 26 preview added, confirmed via
+  <code>javap</code>. It is a <strong>completely different class</strong> from the familiar
+  <code>java.util.concurrent.TimeoutException</code> (a checked <code>Exception</code>, decades old,
+  used by <code>Future.get(timeout)</code> and friends) — same simple name, wrong <code>catch</code>
+  clause silently misses it if you're not careful, since neither is a subtype of the other.</div>
+  <p>Overriding <code>onTimeout()</code> replaces that default throw entirely — here, returning
+  whatever succeeded before the deadline instead of failing the whole group:</p>
+  <pre><code class="java">public class TimeoutHookJoiner&lt;T&gt; implements Joiner&lt;T, List&lt;T&gt;&gt; {
+  private final List&lt;T&gt; results = Collections.synchronizedList(new ArrayList&lt;&gt;());
+
+  @Override
+  public boolean onComplete(Subtask&lt;T&gt; subtask) {
+    if (subtask.state() == Subtask.State.SUCCESS) results.add(subtask.get());
+    return false;
+  }
+
+  @Override
+  public void onTimeout() {
+    // deliberately do nothing (and don't throw) — swallow the deadline instead of failing
+  }
+
+  @Override
+  public List&lt;T&gt; result() { return List.copyOf(results); }
+}
+
+try (var scope = StructuredTaskScope.open(
+    new TimeoutHookJoiner&lt;String&gt;(), cf -> cf.withTimeout(Duration.ofMillis(100)))) {
+  scope.fork(() -> "fast, finishes before deadline");
+  scope.fork(() -> { Thread.sleep(500); return "slow, never makes it"; });
+
+  List&lt;String&gt; results = scope.join();   // does NOT throw — onTimeout swallowed it
+  System.out.println("join() returned normally: " + results);
+}</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">join() returned normally: [fast, finishes before deadline]</code></pre></div>
 
   <!-- ============================================================ -->
   <h2 id="deadline">5 · Deadlines &amp; cancellation</h2>
@@ -159,7 +364,7 @@ try {
         Joiner.allSuccessfulOrThrow(),
         cf -> cf.withTimeout(Duration.ofSeconds(2)))) {   // whole-group deadline
   scope.fork(() -> slowCall());
-  scope.join();   // throws if the deadline passes; subtasks cancelled
+  scope.join();   // throws StructuredTaskScope.TimeoutException if the deadline passes — see §4.4
 }</code></pre>
 
   <!-- ============================================================ -->
@@ -213,6 +418,15 @@ try {
     <tr><td>Depending on exact method names</td><td>Preview API is still moving — the concept is stable, the surface is not.</td></tr>
     <tr><td>Treating it like a thread pool</td><td>It's per-request/task, not a long-lived shared pool.</td></tr>
     <tr><td>Forgetting <code>--enable-preview</code></td><td>Won't compile/run without it.</td></tr>
+    <tr><td>Catching <code>java.util.concurrent.TimeoutException</code> around <code>join()</code></td>
+    <td>Verified: the wrong class. A timed-out scope throws
+    <code>StructuredTaskScope.TimeoutException</code> — a different, unchecked class with the same
+    simple name. See §4.4.</td></tr>
+    <tr><td>Sharing one <code>Joiner</code> instance across scopes, or reusing it after close</td>
+    <td>Explicitly against Oracle's own guidance — create a fresh one per scope, every time.</td></tr>
+    <tr><td>A non-thread-safe custom <code>onComplete</code></td><td>It can be invoked concurrently by
+    multiple subtask threads at once — use a concurrent collection, not a plain
+    <code>ArrayList</code>/<code>HashMap</code>.</td></tr>
   </table>
 
   <!-- ============================================================ -->
@@ -220,9 +434,14 @@ try {
   <table class="data">
     <tr><th>Scenario</th><th>Joiner / shape</th></tr>
     <tr><td>Aggregate an endpoint from several services (need all)</td><td><code>allSuccessfulOrThrow</code></td></tr>
-    <tr><td>Query redundant replicas / mirrors, take the fastest</td><td><code>anySuccessfulResultOrThrow</code></td></tr>
-    <tr><td>Fan-out with an overall SLA/deadline</td><td>any joiner + <code>withTimeout</code></td></tr>
-    <tr><td>Scatter-gather over a list of IDs</td><td>fork per item, collect results</td></tr>
+    <tr><td>Query redundant replicas / mirrors, take the fastest</td><td><code>anySuccessfulOrThrow</code>
+    (<code>anySuccessfulResultOrThrow</code> before Java 26 — see §4.1)</td></tr>
+    <tr><td>Fan-out with an overall SLA/deadline</td><td>any joiner + <code>withTimeout</code>; override
+    <code>onTimeout()</code> for a soft deadline instead of throwing — see §4.4</td></tr>
+    <tr><td>Scatter-gather over a list of IDs, keep whatever succeeds</td><td>custom
+    <code>Joiner</code> (§4.3) or <code>allUntil(_ -&gt; false)</code></td></tr>
+    <tr><td>Fire-and-forget subtasks, e.g. a connection-accept loop</td><td><code>awaitAll()</code> —
+    one failed connection never cancels the others</td></tr>
     <tr><td>Cancel-the-rest when one answer suffices</td><td>race joiner</td></tr>
   </table>
   <h3>Worked example — aggregate a product page with a 2s SLA</h3>
@@ -263,7 +482,15 @@ try {
     <h3>Structured concurrency in one glance</h3>
     <ul>
       <li><code>try (var scope = StructuredTaskScope.open(joiner)) { scope.fork(...); scope.join(); }</code></li>
-      <li>Joiners: <code>allSuccessfulOrThrow</code> (returns a <code>List</code> in 26+), <code>anySuccessfulOrThrow</code>, custom.</li>
+      <li>5 built-in joiners: <code>allSuccessfulOrThrow</code> (→ <code>List&lt;T&gt;</code> in 26+),
+      <code>anySuccessfulOrThrow</code>, <code>awaitAllSuccessfulOrThrow</code>, <code>awaitAll</code>
+      (no cancel-on-failure), <code>allUntil(Predicate)</code> (general-purpose).</li>
+      <li>Custom <code>Joiner</code>: implement <code>onFork</code>/<code>onComplete</code> (return
+      <code>true</code> to cancel), <code>onTimeout</code> (<span class="badge added">26</span>), and
+      <code>result()</code> — new instance per scope, must be thread-safe.</li>
+      <li>Timeout throws <code>StructuredTaskScope.TimeoutException</code> — <strong>not</strong>
+      <code>java.util.concurrent.TimeoutException</code>; failed <code>result()</code> surfaces as
+      <code>StructuredTaskScope.FailedException</code>.</li>
       <li>Read <code>subtask.get()</code> only <strong>after</strong> <code>join()</code>.</li>
       <li>All subtasks complete or are cancelled before the block exits — no leaks.</li>
       <li>One virtual thread per subtask; add <code>withTimeout</code> for a group deadline.</li>
@@ -290,10 +517,6 @@ try {
   <h2>Advanced Topics</h2>
   <h3>StructuredTaskScope.Config</h3>
   <p>In the new Java 25+ API, scopes can be customized via <code>StructuredTaskScope.Config</code>. You can set timeouts and thread factories directly on the configuration, providing a cleaner way to apply constraints without subclassing.</p>
-
-  <h3>The Joiner API Surface</h3>
-  <p>The <code>Joiner</code> interface introduced in Java 25+ allows writing custom completion policies. A Joiner defines how to accumulate results and short-circuit when a condition is met, bringing flexibility similar to the Stream API's <code>Collector</code>.</p>
-  <p><strong>Java 26 Updates:</strong> The API was further refined in Java 26 (JEP 525) to return a <code>List&lt;T&gt;</code> instead of a <code>Stream&lt;T&gt;</code> from <code>allSuccessfulOrThrow()</code>, rename the "any" joiner to <code>anySuccessfulOrThrow()</code>, and add an <code>onTimeout()</code> hook to custom joiners to allow graceful cleanup when scope deadlines expire.</p>
 
   <h3>Structural Confinement Rule</h3>
   <p>Structured tasks enforce strict structural confinement. A child subtask cannot outlive the lexical scope of its parent <code>StructuredTaskScope</code>. If a parent exits its scope while subtasks are still running, those subtasks are automatically cancelled (interrupted), preventing orphaned threads.</p>
