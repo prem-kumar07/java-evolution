@@ -2402,7 +2402,24 @@ a.equals(a);   // verified: true  — same instance</code></pre>
   <code>final</code> field is what makes JIT constant-folding possible in the first place — a
   non-<code>final</code> field defeats that.</p>
 
-  <h3>Lazy collections — <code>List.ofLazy</code> &amp; <code>Map.ofLazy</code></h3>
+  <h3>Lazy collections — <code>List.ofLazy</code> &amp; <code>Map.ofLazy</code>
+  <span class="badge preview">Preview (2nd)</span> <span class="badge jep">JEP 526</span></h3>
+  <div class="warn"><strong>Yes — same preview as <code>LazyConstant</code>, same JEP 526, same flag.</strong>
+  These aren't a separate feature riding along; they're part of the same preview API surface. Verified
+  directly against <code>javac</code>'s own error message when the flag is left off:
+  <pre><code class="java">$ javac PreviewCheck.java
+PreviewCheck.java:5: error: &lt;E&gt;ofLazy(int,IntFunction&lt;? extends E&gt;) is a preview API and is disabled by default.
+    List&lt;Integer&gt; squares = List.ofLazy(3, i -&gt; i * i);
+                                ^
+  (use --enable-preview to enable preview APIs)</code></pre>
+  It doesn't stop at compile time either — a class file compiled <em>with</em> the flag still refuses to
+  run without it, verified:
+  <pre><code class="java">$ java -cp . PreviewCheck
+Error: LinkageError occurred while loading main class PreviewCheck
+	java.lang.UnsupportedClassVersionError: Preview features are not enabled for PreviewCheck
+	(class file version 70.65535). Try running with '--enable-preview'</code></pre>
+  Same rule as every other example on this page: compile <em>and</em> run with
+  <code>--release 26 --enable-preview</code>, or it doesn't work at all.</div>
   <p><em>Why it matters:</em> the same "compute once, on first access" idea as
   <code>LazyConstant</code>, scaled to a whole collection — each element gets its own independent lazy
   constant under the hood, computed the first time <em>that</em> index or key is touched, not when the
