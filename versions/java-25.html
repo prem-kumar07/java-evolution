@@ -329,9 +329,60 @@ class Greeter {
 
   <!-- ============ JVM / OTHER ============ -->
   <h2 id="jvm">4 · JVM / performance / other</h2>
+
+  <h3>Compact Object Headers <span class="badge added">Final in 25</span> <span class="badge jep">JEP 519</span></h3>
+  <p><em>Why it matters:</em> every single object on the Java heap carries a header the application
+  never sees — a "mark word" (8 bytes: hash code, lock state, GC age) plus a pointer to the object's
+  <code>Class</code> (4 bytes, with compressed class pointers on). That's <strong>12 bytes of
+  bookkeeping before your first field</strong>, on every object, always. Project Lilliput
+  (<span class="badge jep">JEP 450</span> experimental in 24) packs the mark word and class pointer into
+  a single 8-byte word instead — a real ~33% cut to per-object overhead, which matters enormously for
+  workloads with millions of small objects (graphs, caches, parsers).</p>
+
+  <p><strong>Enabling it:</strong></p>
+  <pre><code class="bash"># now a plain product flag — Java 24's experimental build required
+# -XX:+UnlockExperimentalVMOptions first; Java 25 does not
+$ java -XX:+UseCompactObjectHeaders -jar app.jar</code></pre>
+  <div class="warn"><strong>Still opt-in, not default</strong> — verified with
+  <code>-XX:+PrintFlagsFinal</code> on this JDK 25 install:
+  <pre><code class="java">bool UseCompactObjectHeaders = false   {product lp64_product} {default}</code></pre>
+  "Final" here means the JEP shipped and the flag is production-supported — not that it's on by
+  default. You still have to ask for it explicitly.</div>
+
+  <p><strong>The actual byte savings — measured, not estimated:</strong></p>
+  <p>Header shrinkage doesn't always translate 1:1 into a smaller object, because every object's total
+  size is rounded up to an 8-byte alignment boundary anyway. Measured directly with
+  <code>Instrumentation.getObjectSize()</code> on three different field layouts:</p>
+  <table class="data">
+    <tr><th>Class shape</th><th>Default header</th><th>Compact header</th><th>Saved</th></tr>
+    <tr><td>No fields (<code>class Empty {}</code>)</td><td>16 bytes</td><td>8 bytes</td><td><strong>50%</strong></td></tr>
+    <tr><td>Two <code>int</code> fields</td><td>24 bytes</td><td>16 bytes</td><td><strong>33%</strong></td></tr>
+    <tr><td>One <code>int</code> field</td><td>16 bytes</td><td>16 bytes</td><td>0% — absorbed by alignment padding</td></tr>
+  </table>
+  <p>The one-field case is the honest catch: 12 bytes of raw header shrinks to 8 either way once you
+  add a 4-byte field and round up to the next 8-byte boundary, so that particular shape sees nothing.
+  The savings are real and often substantial, but per-class, not a flat guarantee.</p>
+  <pre><code class="java">// how the table above was measured — a tiny java.lang.instrument agent
+public class Agent {
+  public static Instrumentation inst;
+  public static void premain(String args, Instrumentation instrumentation) { inst = instrumentation; }
+}
+
+class Empty {}
+class Point { int x, y; }
+
+// -javaagent:agent.jar, then:
+System.out.println(Agent.inst.getObjectSize(new Empty()));  // 16, or 8 with -XX:+UseCompactObjectHeaders
+System.out.println(Agent.inst.getObjectSize(new Point()));  // 24, or 16 with -XX:+UseCompactObjectHeaders</code></pre>
+
+  <div class="tip"><strong>Works with every collector</strong> — verified running the same measurement
+  under <code>-XX:+UseG1GC</code>, <code>-XX:+UseParallelGC</code>, <code>-XX:+UseSerialGC</code>,
+  <code>-XX:+UseZGC</code>, and <code>-XX:+UseShenandoahGC</code>: all five report the same 8-byte
+  <code>Empty</code> object. Compact headers were tied to specific collectors during early development;
+  by the final Java 25 form, that restriction is gone. It also keeps working even when
+  <code>UseCompressedOops</code> gets disabled (heap ≥ ~32GB) — verified with <code>-Xmx40g</code>.</div>
+
   <ul>
-    <li><strong>Compact Object Headers</strong> <span class="badge added">Final in 25</span> (experimental in 24) —
-      shrinks every object header from 12/16 to 8 bytes, meaningfully cutting heap use.</li>
     <li><strong>Virtual threads no longer pinned on <code>synchronized</code></strong>
       <span class="badge added">Added in 24</span> — a major reliability fix.</li>
     <li><strong>Generational Shenandoah</strong> <span class="badge added">25</span>; <strong>ZGC
