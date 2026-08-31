@@ -311,6 +311,11 @@ $ jfr summary ex2.jfr | grep JavaExceptionThrow
     <li><strong>Thread &amp; Lock Contention:</strong> Swimlanes for thread states, lock wait times, and deadlocks.</li>
     <li><strong>Memory Profiling:</strong> Allocation pressure, object lifetimes, and heap fragmentation.</li>
   </ul>
+  <div class="note">JMC (and <code>jconsole</code>) both connect over <strong>JMX</strong> — the same
+  general-purpose management protocol the JVM has exposed since Java 5. Recording control
+  (start/stop/dump) can be driven purely through JMX too, without JMC's GUI at all — see the
+  <a href="jmx.html#jfr-integration">JMX + JFR deep dive</a> for a working example that starts and stops
+  a recording via <code>com.sun.management:type=DiagnosticCommand</code>.</div>
 
   <h2 id="custom">5 · Custom Application Events — complete example</h2>
   <p>You can emit your own application telemetry directly into the JFR pipeline, right alongside JVM

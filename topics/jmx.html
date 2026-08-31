@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JMX — complete guide</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="topics/jmx.html" data-title="JMX">
+<main>
+  <p class="sec-tag">Deep dive · management &amp; monitoring</p>
+  <h1>Java Management Extensions (JMX) &amp; JConsole <span class="badge added">Java 5</span></h1>
+  <p class="lead">
+    JMX is the JVM's built-in framework for exposing an application's internals — configuration,
+    statistics, operations — as manageable objects called <strong>MBeans</strong>, reachable both
+    in-process and over the network. Every JVM has been running a management agent since Java 5, whether
+    you've ever touched it or not: <code>java.lang.management</code>'s <code>MemoryMXBean</code>,
+    <code>ThreadMXBean</code>, and friends are JMX, already wired up, with zero configuration.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">2004</span><span class="lbl">bundled into J2SE 5.0 (JSR 3, 160, 174)</span></div>
+    <div class="stat"><span class="num">MBean</span><span class="lbl">the unit of manageability</span></div>
+    <div class="stat"><span class="num">0</span><span class="lbl">config needed for platform MXBeans</span></div>
+    <div class="stat"><span class="num">RMI</span><span class="lbl">default remote transport</span></div>
+    <div class="stat"><span class="num">Java 8</span><span class="lbl">jcmd/JFR reachable over JMX too</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Before JMX, "managing" a running Java application meant something different in every codebase — a
+    telnet admin port here, a properties file polled on a timer there, a custom socket protocol
+    somewhere else. Application servers like early WebLogic bolted on their own JMX 1.0 implementation
+    for exactly this reason, years before it shipped in the JDK. JMX standardized it: one API to expose
+    an attribute or an operation, one protocol to reach it locally or remotely, and one set of tools
+    (<code>jconsole</code>, JMC, any JMX client) that work against <em>any</em> compliant application
+    without knowing anything about it in advance.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#history">1. What JMX is, and why it was added</a>
+    <a href="#mxbeans">2. Platform MXBeans — built in, zero setup</a>
+    <a href="#tools">3. Tools for inspecting MBeans</a>
+    <a href="#custom">4. Writing your own MBean — complete example</a>
+    <a href="#remote">5. Remote JMX — complete example</a>
+    <a href="#notifications">6. Notifications — complete example</a>
+    <a href="#jfr-integration">7. JMX + JFR — controlling recordings over JMX</a>
+    <a href="#cheat">8. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="history">1 · What JMX Is, and Why It Was Added</h2>
+  <p>JMX (<strong>Java Management Extensions</strong>) predates its place in the JDK. The core
+  specification — JMX 1.0, then 1.2 — was published by Sun as a standalone download, and application
+  servers of the era adopted it independently for their own admin consoles; WebLogic Server, for
+  instance, implemented the JMX 1.0 spec for its management services well before JMX shipped in any
+  JDK. Every vendor building "manage my running server" tooling was solving the same problem separately.</p>
+  <p>That changed with <strong>J2SE 5.0 (2004)</strong>, which bundled three related JSRs directly into
+  the platform:</p>
+  <table class="data">
+    <tr><th>JSR</th><th>What it defined</th></tr>
+    <tr><td>JSR 3 — Java Management Extensions</td><td>The core <code>javax.management</code> API:
+    MBeans, the <code>MBeanServer</code>, <code>ObjectName</code> — JMX 1.2.</td></tr>
+    <tr><td>JSR 160 — JMX Remote API</td><td>How to reach an <code>MBeanServer</code> from outside the
+    process: connectors, the RMI transport, <code>service:jmx:...</code> URLs.</td></tr>
+    <tr><td>JSR 174 — Monitoring and Management for the JVM</td><td>The <code>java.lang.management</code>
+    package: a standard set of platform MBeans (memory, threads, GC, class loading, …) every JVM exposes
+    automatically.</td></tr>
+  </table>
+  <p><code>jconsole</code> shipped alongside as the reference GUI client. The result: instead of every
+  app inventing its own admin protocol, a Java application gets a standard, remotely-reachable
+  management surface the instant it starts — for the JVM itself, and for anything the application
+  chooses to expose the same way.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="mxbeans">2 · Platform MXBeans — Built In, Zero Setup</h2>
+  <p>Before writing a single line of JMX code yourself, every JVM already exposes a standard set of
+  MBeans through <code>java.lang.management.ManagementFactory</code> — no flags, no registration, no
+  network setup. This is the same data <code>jconsole</code>'s "VM Summary" tab and JMC's overview
+  pull from.</p>
+  <pre><code class="java">import java.lang.management.*;
+import java.util.List;
+
+public class PlatformMXBeanDemo {
+  public static void main(String[] args) {
+    RuntimeMXBean runtime = ManagementFactory.getRuntimeMXBean();
+    System.out.println("JVM name: " + runtime.getVmName());
+    System.out.println("Uptime: " + runtime.getUptime() + "ms");
+
+    MemoryMXBean memory = ManagementFactory.getMemoryMXBean();
+    MemoryUsage heap = memory.getHeapMemoryUsage();
+    System.out.printf("Heap used: %.1f MB / max %.1f MB%n",
+        heap.getUsed() / 1_048_576.0, heap.getMax() / 1_048_576.0);
+
+    ThreadMXBean threads = ManagementFactory.getThreadMXBean();
+    System.out.println("Live threads: " + threads.getThreadCount());
+    System.out.println("Peak threads: " + threads.getPeakThreadCount());
+
+    List&lt;GarbageCollectorMXBean&gt; gcs = ManagementFactory.getGarbageCollectorMXBeans();
+    for (GarbageCollectorMXBean gc : gcs) {
+      System.out.println("GC[" + gc.getName() + "] collections=" + gc.getCollectionCount()
+          + " time=" + gc.getCollectionTime() + "ms");
+    }
+
+    OperatingSystemMXBean os = ManagementFactory.getOperatingSystemMXBean();
+    System.out.println("Available processors: " + os.getAvailableProcessors());
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac PlatformMXBeanDemo.java
+$ java -cp . PlatformMXBeanDemo</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">JVM name: OpenJDK 64-Bit Server VM
+Uptime: 20ms
+Heap used: 0.0 MB / max 12288.0 MB
+Live threads: 6
+Peak threads: 6
+GC[G1 Young Generation] collections=0 time=0ms
+GC[G1 Concurrent GC] collections=0 time=0ms
+GC[G1 Old Generation] collections=0 time=0ms
+Available processors: 15</code></pre></div>
+  <table class="data">
+    <tr><th>Platform MXBean</th><th>Exposes</th></tr>
+    <tr><td><code>MemoryMXBean</code></td><td>Heap/non-heap usage, pending finalization count</td></tr>
+    <tr><td><code>ThreadMXBean</code></td><td>Live/peak/daemon thread counts, deadlock detection,
+    per-thread CPU time</td></tr>
+    <tr><td><code>GarbageCollectorMXBean</code></td><td>Per-collector collection count &amp; total
+    time — one instance per GC algorithm component</td></tr>
+    <tr><td><code>RuntimeMXBean</code></td><td>Uptime, input JVM arguments, system properties, VM
+    name/vendor/version</td></tr>
+    <tr><td><code>OperatingSystemMXBean</code></td><td>Available processors, system load average
+    (cast to <code>com.sun.management.OperatingSystemMXBean</code> for process CPU load)</td></tr>
+    <tr><td><code>ClassLoadingMXBean</code>, <code>CompilationMXBean</code></td><td>Loaded/unloaded
+    class counts; JIT compilation time</td></tr>
+  </table>
+  <div class="note">This is the exact API <a href="jvm-memory-gc.html">JVM Memory &amp; GC</a> and
+  <a href="virtual-threads.html">Virtual threads</a> content elsewhere on this site would reach for
+  programmatically — JMX platform MXBeans are the stable, standard alternative to parsing
+  <code>-Xlog</code> output.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="tools">3 · Tools for Inspecting MBeans</h2>
+  <table class="data">
+    <tr><th>Tool</th><th>What it's for</th></tr>
+    <tr><td><code>jconsole</code></td><td>The original JMX GUI client, bundled with the JDK since Java
+    5. Connects to a local or remote <code>MBeanServer</code>, browses every registered MBean's
+    attributes/operations, plots memory/thread/CPU graphs live.</td></tr>
+    <tr><td>JDK Mission Control (JMC)</td><td>The modern successor — same MBean browser plus JFR
+    integration, triggers, and rule-based analysis (see the <a href="jfr.html">JFR &amp; Mission
+    Control deep dive</a>).</td></tr>
+    <tr><td><code>jcmd &lt;PID&gt; ManagementAgent.start</code></td><td>Turns on remote JMX for an
+    <em>already-running</em> JVM that was launched with no <code>jmxremote</code> flags at all — verified
+    below.</td></tr>
+    <tr><td>Any <code>javax.management.remote.JMXConnector</code> client</td><td>Your own code — see §5.
+    This is how monitoring agents (Prometheus JMX exporter, Datadog, New Relic) read JVM metrics.</td></tr>
+  </table>
+
+  <h3>Enabling JMX on a JVM that's already running</h3>
+  <p>Mirrors the same "no restart needed" story as JFR's <code>jcmd JFR.start</code> — attach to a live
+  process and turn on remote management from the outside:</p>
+  <pre><code class="bash">$ java -cp . PlainServer &amp;
+[1] 31834
+
+$ jcmd 31834 ManagementAgent.start jmxremote.port=19100 jmxremote.authenticate=false jmxremote.ssl=false
+31834:
+Command executed successfully
+
+$ jcmd 31834 ManagementAgent.status
+31834:
+Agent: enabled
+
+Connection Type: remote
+Protocol       : rmi
+Properties     :
+  com.sun.management.jmxremote.authenticate = false
+  com.sun.management.jmxremote.ssl = false
+  com.sun.management.jmxremote.port = 19100</code></pre>
+  <div class="tip">The output above is unedited except for trimming the (very long) serialized RMI stub
+  string on the <code>URL</code> line. Note <code>jmxremote.local.only</code> defaults to
+  <code>true</code> — for genuinely remote access, pass
+  <code>jmxremote.local.only=false</code> too.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="custom">4 · Writing Your Own MBean — Complete Example</h2>
+  <p>There are two ways to make your own class manageable, both verified below with the same
+  <code>CacheStats</code> example — a hit/miss counter you might attach to an actual cache.</p>
+
+  <h3>4.1 · The Standard MBean pattern — naming-convention based</h3>
+  <p>The interface's name must be the implementing class's name with <code>MBean</code> appended —
+  this is a compile-time-invisible convention the JMX runtime checks by reflection, not an annotation.
+  Every public getter/setter/method on the interface becomes an attribute or operation.</p>
+  <pre><code class="java">// CacheStatsMBean.java — MUST be named "&lt;ClassName&gt;MBean" exactly
+public interface CacheStatsMBean {
+  long getHitCount();
+  long getMissCount();
+  double getHitRatio();
+  void reset();
+}
+
+// CacheStats.java
+import java.util.concurrent.atomic.AtomicLong;
+
+public class CacheStats implements CacheStatsMBean {
+  private final AtomicLong hits = new AtomicLong();
+  private final AtomicLong misses = new AtomicLong();
+
+  public void recordHit() { hits.incrementAndGet(); }
+  public void recordMiss() { misses.incrementAndGet(); }
+
+  @Override public long getHitCount() { return hits.get(); }
+  @Override public long getMissCount() { return misses.get(); }
+  @Override public double getHitRatio() {
+    long total = hits.get() + misses.get();
+    return total == 0 ? 0.0 : (double) hits.get() / total;
+  }
+  @Override public void reset() { hits.set(0); misses.set(0); }
+}</code></pre>
+  <p>Registering it puts it on the <em>same</em> <code>MBeanServer</code> platform MXBeans live on —
+  one <code>ObjectName</code> namespace for everything:</p>
+  <pre><code class="java">import javax.management.*;
+import java.lang.management.ManagementFactory;
+
+public class MBeanDemo {
+  public static void main(String[] args) throws Exception {
+    MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+    ObjectName name = new ObjectName("com.example:type=CacheStats,name=OrderCache");
+
+    CacheStats cache = new CacheStats();
+    server.registerMBean(cache, name);
+
+    cache.recordHit(); cache.recordHit(); cache.recordHit(); cache.recordMiss();
+
+    // read it back purely through the MBeanServer, exactly as jconsole/a remote client would
+    long hits = (long) server.getAttribute(name, "HitCount");
+    long misses = (long) server.getAttribute(name, "MissCount");
+    double ratio = (double) server.getAttribute(name, "HitRatio");
+    System.out.printf("via MBeanServer -&gt; hits=%d misses=%d ratio=%.2f%n", hits, misses, ratio);
+
+    server.invoke(name, "reset", new Object[0], new String[0]);
+    System.out.println("after reset, hits=" + server.getAttribute(name, "HitCount"));
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac CacheStatsMBean.java CacheStats.java MBeanDemo.java
+$ java -cp . MBeanDemo</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">via MBeanServer -> hits=3 misses=1 ratio=0.75
+after reset, hits=0</code></pre></div>
+  <div class="warn"><strong>The naming convention is strictly enforced.</strong> Rename the interface
+  to anything other than <code>CacheStatsMBean</code> (with no <code>@MXBean</code>, below) and
+  registration fails immediately — verified:
+  <pre><code class="java">javax.management.NotCompliantMBeanException:
+  Class CacheStats is not a JMX compliant Standard MBean</code></pre></div>
+
+  <h3>4.2 · The <code>@MXBean</code> pattern — no naming convention required</h3>
+  <p>The simpler, more modern alternative: annotate the interface with <code>@MXBean</code> and name it
+  whatever you like. <code>@MXBean</code> also auto-converts complex return types (records, custom
+  classes) into <code>CompositeData</code> for you — this is the pattern every platform MXBean
+  (<code>MemoryMXBean</code>, <code>ThreadMXBean</code>) itself uses.</p>
+  <pre><code class="java">import javax.management.MXBean;
+
+@MXBean
+public interface Stats {   // any name at all — no "MBean" suffix required
+  long getHitCount();
+}
+
+public class StatsImpl implements Stats {
+  public long getHitCount() { return 42; }
+}</code></pre>
+  <pre><code class="bash">$ javac Stats.java StatsImpl.java ArbitraryNameTest.java
+$ java -cp . ArbitraryNameTest</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — registers and reads back fine, despite the
+  interface name matching neither the class name nor "MBean":
+  <pre><code class="java">registered with @MXBean, arbitrary interface name -> 42</code></pre></div>
+
+  <!-- ============================================================ -->
+  <h2 id="remote">5 · Remote JMX — Complete Example</h2>
+  <p>The whole point of JSR 160: reach an <code>MBeanServer</code> running in a <em>different</em> JVM,
+  potentially on a different machine. Below, a server process registers the same <code>CacheStats</code>
+  MBean and exposes JMX remotely; a completely separate client process connects and reads it — real
+  two-process, real network round trip on this machine.</p>
+  <p><strong>Server</strong> — three system properties turn on the remote agent at launch:</p>
+  <pre><code class="bash">$ java -Dcom.sun.management.jmxremote \
+       -Dcom.sun.management.jmxremote.port=19099 \
+       -Dcom.sun.management.jmxremote.authenticate=false \
+       -Dcom.sun.management.jmxremote.ssl=false \
+       -Djava.rmi.server.hostname=127.0.0.1 \
+       -cp . RemoteServer &amp;
+server up, pid=30378</code></pre>
+  <p><strong>Client</strong> — a separate process, separate JVM, using
+  <code>JMXConnectorFactory</code> and a <code>service:jmx:rmi:...</code> URL:</p>
+  <pre><code class="java">import javax.management.*;
+import javax.management.remote.*;
+import java.util.Map;
+
+public class RemoteClient {
+  public static void main(String[] args) throws Exception {
+    String url = "service:jmx:rmi:///jndi/rmi://127.0.0.1:19099/jmxrmi";
+    JMXServiceURL serviceUrl = new JMXServiceURL(url);
+    try (JMXConnector connector = JMXConnectorFactory.connect(serviceUrl, Map.of())) {
+      MBeanServerConnection conn = connector.getMBeanServerConnection();
+      ObjectName name = new ObjectName("com.example:type=CacheStats,name=OrderCache");
+
+      long hits = (long) conn.getAttribute(name, "HitCount");
+      long misses = (long) conn.getAttribute(name, "MissCount");
+      System.out.println("REMOTE read -> hits=" + hits + " misses=" + misses);
+
+      // platform MXBeans are reachable remotely too — no extra work
+      ObjectName memName = new ObjectName("java.lang:type=Memory");
+      System.out.println("REMOTE Memory MBean reachable: " +
+          (conn.getAttribute(memName, "HeapMemoryUsage") != null));
+    }
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac RemoteClient.java
+$ java -cp . RemoteClient</code></pre>
+  <div class="warn"><strong>Verified real output — genuinely two separate JVM processes:</strong>
+  <pre><code class="java">REMOTE read -> hits=2 misses=1
+REMOTE Memory MBean reachable: true</code></pre></div>
+  <div class="note"><code>service:jmx:rmi:///jndi/rmi://host:port/jmxrmi</code> is the default RMI
+  connector URL form — the same one <code>jconsole</code> builds internally when you type
+  <code>host:port</code> into its connect dialog. Production setups typically add
+  <code>ssl=true</code> and a password/access file instead of the <code>authenticate=false</code>
+  shortcut used here for a local demo.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="notifications">6 · Notifications — Complete Example</h2>
+  <p>MBeans aren't purely poll-based — an MBean that implements
+  <code>NotificationEmitter</code>/<code>NotificationBroadcaster</code> can push events to listeners.
+  The platform's own <code>MemoryMXBean</code> does exactly this for heap usage thresholds, which is
+  how tools show a live "memory pressure" alert without polling in a loop:</p>
+  <pre><code class="java">import java.lang.management.*;
+import javax.management.*;
+import javax.management.openmbean.CompositeData;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+public class MemoryThresholdDemo {
+  public static void main(String[] args) throws Exception {
+    List&lt;MemoryPoolMXBean&gt; pools = ManagementFactory.getMemoryPoolMXBeans();
+    MemoryPoolMXBean targetPool = null;
+    for (MemoryPoolMXBean p : pools) {
+      if (p.isUsageThresholdSupported() &amp;&amp; p.getType() == MemoryType.HEAP) {
+        targetPool = p;
+        break;
+      }
+    }
+    if (targetPool == null) { System.out.println("no supported pool found"); return; }
+
+    long threshold = targetPool.getUsage().getUsed() + 1;   // trips almost immediately, for the demo
+    targetPool.setUsageThreshold(threshold);
+    System.out.println("watching pool: " + targetPool.getName());
+
+    CountDownLatch latch = new CountDownLatch(1);
+    MemoryMXBean memBean = ManagementFactory.getMemoryMXBean();
+    NotificationEmitter emitter = (NotificationEmitter) memBean;
+    emitter.addNotificationListener((Notification notif, Object handback) -&gt; {
+      if (notif.getType().equals(MemoryNotificationInfo.MEMORY_THRESHOLD_EXCEEDED)) {
+        MemoryNotificationInfo info = MemoryNotificationInfo.from((CompositeData) notif.getUserData());
+        System.out.println("NOTIFICATION: pool=" + info.getPoolName()
+            + " used=" + info.getUsage().getUsed());
+        latch.countDown();
+      }
+    }, null, null);
+
+    // allocate until the threshold trips
+    List&lt;byte[]&gt; garbage = new ArrayList&lt;&gt;();
+    for (int i = 0; i &lt; 2000 &amp;&amp; latch.getCount() &gt; 0; i++) {
+      garbage.add(new byte[10_000]);
+    }
+    latch.await(5, TimeUnit.SECONDS);
+    System.out.println("done, notified=" + (latch.getCount() == 0));
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac MemoryThresholdDemo.java
+$ java -cp . MemoryThresholdDemo</code></pre>
+  <div class="warn"><strong>Verified real output — a push notification, not a poll:</strong>
+  <pre><code class="java">watching pool: G1 Old Gen
+NOTIFICATION: pool=G1 Old Gen used=1177912
+done, notified=true</code></pre></div>
+  <div class="tip">This is exactly the mechanism behind production "heap usage &gt; 90%" alerting agents
+  — set <code>setUsageThreshold</code> to something meaningful (e.g. 90% of max) instead of "used + 1",
+  and the notification fires once, asynchronously, the moment the JVM crosses it — no polling loop
+  burning CPU.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="jfr-integration">7 · JMX + JFR — Controlling Recordings Over JMX</h2>
+  <p>This is the direct answer to "how do JMX and JFR relate": since <strong>Java 8</strong>, every
+  <code>jcmd</code> diagnostic command — including all of JFR's — is <em>also</em> exposed as an MBean,
+  <code>com.sun.management:type=DiagnosticCommand</code>. That means you can start, check, dump, and
+  stop a JFR recording purely through JMX: no shell access to the target host at all, which matters a
+  great deal for a JVM inside a locked-down container where only a JMX port is reachable.</p>
+  <p>First, proof the operations are really there — inspecting the MBean's own metadata, filtered to
+  the JFR-related ones:</p>
+  <pre><code class="java">import javax.management.*;
+import java.lang.management.ManagementFactory;
+
+public class DiagCommandInspect {
+  public static void main(String[] args) throws Exception {
+    MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+    ObjectName name = new ObjectName("com.sun.management:type=DiagnosticCommand");
+    MBeanInfo info = server.getMBeanInfo(name);
+    for (MBeanOperationInfo op : info.getOperations()) {
+      if (op.getName().toLowerCase().contains("jfr")) {
+        System.out.println(op.getName() + " -> " + op.getDescription());
+      }
+    }
+  }
+}</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — the exact same commands
+  <code>jcmd &lt;PID&gt; JFR.*</code> exposes, listed straight off the running JVM's own MBean:
+  <pre><code class="java">jfrCheck -> Checks running JFR recording(s)
+jfrConfigure -> Configure JFR
+jfrDump -> Copies contents of a JFR recording to file. Either the name or the recording id must be specified.
+jfrStart -> Starts a new JFR recording
+jfrStop -> Stops a JFR recording
+jfrView -> Display event data in predefined views</code></pre></div>
+
+  <p>Now actually driving a full start → check → stop cycle — purely over JMX, invoking each operation
+  with a <code>String[]</code> of the same arguments you'd type after <code>jcmd &lt;PID&gt; JFR.start</code>:</p>
+  <pre><code class="java">import javax.management.*;
+import java.lang.management.ManagementFactory;
+
+public class DiagCommandJfr {
+  public static void main(String[] args) throws Exception {
+    MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+    ObjectName name = new ObjectName("com.sun.management:type=DiagnosticCommand");
+
+    String startResult = (String) server.invoke(name, "jfrStart",
+        new Object[]{ new String[]{ "name=jmxdemo", "settings=profile", "filename=/tmp/jmx-triggered.jfr" } },
+        new String[]{ String[].class.getName() });
+    System.out.println("jfrStart -> " + startResult.trim());
+
+    long x = 0;
+    for (int i = 0; i &lt; 100_000_000; i++) x += i;   // give the recording something to capture
+    System.out.println("work done, x=" + x);
+
+    String checkResult = (String) server.invoke(name, "jfrCheck",
+        new Object[]{ (Object) null }, new String[]{ String[].class.getName() });
+    System.out.println("jfrCheck -> " + checkResult.trim());
+
+    String stopResult = (String) server.invoke(name, "jfrStop",
+        new Object[]{ new String[]{ "name=jmxdemo" } },
+        new String[]{ String[].class.getName() });
+    System.out.println("jfrStop -> " + stopResult.trim());
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac DiagCommandJfr.java
+$ java -cp . DiagCommandJfr</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — every line below is a real
+  <code>String</code> returned from an MBean operation call, and the recording it produced was then
+  read back with <code>jfr summary</code> to confirm the file is genuine:
+  <pre><code class="java">jfrStart -> Started recording 1. No limit specified, using maxsize=250MB as default.
+work done, x=4999999950000000
+jfrCheck -> Recording 1: name=jmxdemo maxsize=250.0MB (running)
+jfrStop -> Stopped recording "jmxdemo", 373.1 kB written to:
+/tmp/jmx-triggered.jfr</code></pre></div>
+  <p>Combine this with §5's remote connector and you can trigger the exact same sequence against a JVM
+  on another host — the recipe production incident tooling actually uses: connect over JMX, call
+  <code>jfrDump</code> to pull a snapshot without stopping anything, then read the resulting
+  <code>.jfr</code> file with the <code>jfr</code> CLI or JMC, as covered in the
+  <a href="jfr.html">JFR &amp; Mission Control deep dive</a>.</p>
+  <div class="tip">Two independent things are true at once here: JFR events themselves are
+  <strong>not</strong> delivered over JMX (they're a separate, purpose-built binary format and streaming
+  API — see <a href="jfr.html#streaming">JFR Event Streaming</a>) — but JFR's <em>control plane</em>
+  (start/stop/dump/configure) is fully reachable through JMX, because it rides on the same
+  general-purpose <code>DiagnosticCommand</code> bridge every <code>jcmd</code> command uses.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">8 · Cheat Sheet</h2>
+  <div class="cheat">
+    <h3>JMX in one glance</h3>
+    <ul>
+      <li><strong>History:</strong> JSR 3 (core API) + JSR 160 (remote) + JSR 174 (platform MXBeans),
+      all bundled starting J2SE 5.0 (2004) — JMX itself predates that as a standalone spec app servers
+      adopted on their own.</li>
+      <li><strong>Zero-setup data:</strong> <code>ManagementFactory.getMemoryMXBean()</code>,
+      <code>getThreadMXBean()</code>, <code>getGarbageCollectorMXBeans()</code>, etc. — no flags needed.</li>
+      <li><strong>Custom MBean, two ways:</strong> Standard MBean (interface must be named
+      <code>&lt;Class&gt;MBean</code> exactly) or <code>@MXBean</code> (any interface name, richer type
+      conversion) — register both with <code>MBeanServer.registerMBean(obj, ObjectName)</code>.</li>
+      <li><strong>Enable remotely:</strong> <code>-Dcom.sun.management.jmxremote.port=...</code> at
+      launch, or <code>jcmd &lt;PID&gt; ManagementAgent.start ...</code> on an already-running JVM.</li>
+      <li><strong>Connect remotely:</strong> <code>JMXConnectorFactory.connect(new
+      JMXServiceURL("service:jmx:rmi:///jndi/rmi://host:port/jmxrmi"))</code>.</li>
+      <li><strong>Push, not poll:</strong> <code>NotificationEmitter</code> +
+      <code>addNotificationListener</code> — <code>MemoryMXBean</code>'s usage-threshold notifications
+      are the built-in example.</li>
+      <li><strong>JMX ↔ JFR:</strong> <code>com.sun.management:type=DiagnosticCommand</code> exposes
+      every <code>jcmd JFR.*</code> command as an MBean operation (since Java 8) — start/check/dump/stop
+      a recording with no shell access to the target host at all.</li>
+      <li><strong>Tools:</strong> <code>jconsole</code> (bundled since Java 5), JDK Mission Control
+      (modern successor, also does JFR).</li>
+    </ul>
+  </div>
+
+</main>
+<script src="../assets/nav.js"></script>
+<script src="../assets/highlight.js"></script>
+</body>
+</html>

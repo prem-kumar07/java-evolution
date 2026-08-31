@@ -57,6 +57,7 @@
       { href: "topics/jshell.html",                 label: "JShell (REPL)" },
       { href: "topics/jlink-jpackage.html",         label: "Custom runtime & packaging (jlink)" },
       { href: "topics/jfr.html",                    label: "JFR & Mission Control" },
+      { href: "topics/jmx.html",                    label: "JMX & JConsole" },
       { href: "topics/jwebserver.html",             label: "Simple Web Server" }
     ]}
   ];

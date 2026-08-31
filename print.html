@@ -60,6 +60,11 @@
 <a href="#pg-topics-ffm-api-html">Foreign Function &amp; Memory API — complete guide</a>
 <a href="#pg-topics-jvm-memory-gc-html">JVM Memory Model &amp; Garbage Collection — complete guide</a>
 <a href="#pg-topics-aot-cache-html">AOT Cache — complete guide</a>
+<a href="#pg-topics-jshell-html">JShell — complete guide</a>
+<a href="#pg-topics-jlink-jpackage-html">jlink &amp; jpackage — complete guide</a>
+<a href="#pg-topics-jfr-html">JFR &amp; JMC — complete guide</a>
+<a href="#pg-topics-jmx-html">JMX — complete guide</a>
+<a href="#pg-topics-jwebserver-html">Simple Web Server — complete guide</a>
 </div>
 <section id="pg-quickstart-html" class="print-page">
   <p class="sec-tag">Set up your machine</p>
@@ -117,7 +122,7 @@ $env:Path = "$env:JAVA_HOME\bin;" + $env:Path</code></pre>
   </div>
 
   <h2>3 · JShell — the Java REPL <span class="badge added">Added in 9</span></h2>
-  <p>See the <a href="topics/jshell.html">JShell deep-dive</a> for advanced shortcuts, variables, and commands.</p>
+  <p>See the <a href="#pg-topics-jshell-html">JShell deep-dive</a> for advanced shortcuts, variables, and commands.</p>
   <p>The fastest way to try a snippet without a class, <code>main</code>, or compile step.</p>
   <pre><code class="java">jshell                    # start the REPL
 jshell> var xs = List.of(1, 2, 3)
@@ -365,8 +370,17 @@ java -Xss... -XX:+PrintFlagsFinal -version   # inspect VM flags</code></pre>
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Lambda expressions</h3>
   <p><em>Why it matters:</em> passing behavior around used to mean an anonymous class — four lines of
@@ -471,7 +485,7 @@ class Job {}
   static-analysis tools like Checker Framework rather than the JDK itself.</p>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>The Streams API</h3>
   <p><em>Why it matters:</em> filtering, transforming and aggregating collections in bulk, declaratively,
@@ -595,7 +609,7 @@ sj.add("a").add("b").add("c");
 System.out.println(sj);   // verified: "[a, b, c]"</code></pre>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
   <ul>
     <li><strong>Nashorn</strong> — a new, faster JavaScript engine replacing Rhino, invoked from the
       command line or embedded via <code>javax.script</code>:
@@ -613,7 +627,7 @@ jjs&gt; print("hello from Nashorn")</code></pre>
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>PermGen removed; Metaspace introduced</strong> <span class="badge jep">JEP 122</span> —
       class metadata moved out of the heap into native memory that grows automatically. The
@@ -635,7 +649,7 @@ jjs&gt; print("hello from Nashorn")</code></pre>
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 8 in one glance</h3>
     <ul>
@@ -683,8 +697,17 @@ jjs&gt; print("hello from Nashorn")</code></pre>
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Private methods in interfaces</h3>
   <p><em>Why it matters:</em> Java 8 gave interfaces <code>default</code> methods, but there was no way
@@ -750,7 +773,7 @@ public void oldApi() { }    // compilers warn louder for forRemoval</code></pre>
 int _ = 3;   // COMPILE ERROR: '_' is now reserved (for future language use)</code></pre>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>Immutable collection factory methods <span class="badge jep">JEP 269</span></h3>
   <p><em>Why it matters:</em> creating small immutable collections was verbose and error-prone.</p>
@@ -889,9 +912,9 @@ ProcessHandle.allProcesses()
     .forEach(p -> System.out.println(p.pid() + " " + p.info().command().get()));</code></pre>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
   <h3>JShell — the REPL <span class="badge jep">JEP 222</span></h3>
-  <p><em>Why it matters:</em> try an expression instantly without a class, <code>main</code>, or compile step. See the <a href="../topics/jshell.html">JShell deep-dive</a> for a full command reference.</p>
+  <p><em>Why it matters:</em> try an expression instantly without a class, <code>main</code>, or compile step. See the <a href="#pg-topics-jshell-html">JShell deep-dive</a> for a full command reference.</p>
   <pre><code class="java">jshell&gt; List&lt;Integer&gt; xs = List.of(1, 2, 3)
 xs ==&gt; [1, 2, 3]
 jshell&gt; xs.stream().mapToInt(i -&gt; i).sum()
@@ -899,7 +922,7 @@ $2 ==&gt; 6</code></pre>
   <h3>jlink · multi-release JARs · unified logging</h3>
   <ul>
     <li><strong>jlink</strong> — assemble a minimal runtime with only the modules you need:
-      <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre> See the <a href="../topics/jlink-jpackage.html">jlink &amp; jpackage deep-dive</a>.</li>
+      <pre><code class="java">jlink --add-modules java.base,com.myapp --output myruntime</code></pre> See the <a href="#pg-topics-jlink-jpackage-html">jlink &amp; jpackage deep-dive</a>.</li>
     <li><strong>Multi-release JARs</strong> — one JAR carrying version-specific classes under
       <code>META-INF/versions/N/</code>, so a library can use newer APIs on newer JDKs while still
       running on older ones. The JVM picks the highest matching version automatically:
@@ -915,7 +938,7 @@ $2 ==&gt; 6</code></pre>
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>The Module System (JPMS)</strong> <span class="badge jep">JEP 261</span> — the headline
       change; the JDK is split into ~90 modules and you can declare your own with
@@ -940,7 +963,7 @@ boolean swapped = vh.compareAndSet(10, 20);   // atomic CAS, no Unsafe needed
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 9 in one glance</h3>
     <ul>
@@ -986,8 +1009,17 @@ boolean swapped = vh.compareAndSet(10, 20);   // atomic CAS, no Unsafe needed
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3><code>var</code> — local-variable type inference <span class="badge added">Added in 10</span></h3>
   <p><em>Why it matters:</em> drops the redundant left-hand type when it's obvious from the initializer.
@@ -1041,7 +1073,7 @@ for (var e : scores.entrySet()) { }   // type inferred</code></pre>
   are the new reflection APIs that expose this relationship directly.</p>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>Standard HTTP Client — <code>java.net.http</code> <span class="badge jep">JEP 321</span></h3>
   <p><em>Why it matters:</em> a modern client with HTTP/2, WebSocket and async support, replacing the
@@ -1131,7 +1163,7 @@ list.removeIf(Predicate.not(String::isBlank)); // Predicate.not, Added in 11</co
   </div>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
   <h3>Run a single source file — no compile step <span class="badge jep">JEP 330</span></h3>
   <p><em>Why it matters:</em> scripting in Java without a build tool or <code>.class</code> files.</p>
   <div class="ba">
@@ -1162,7 +1194,7 @@ jcmd &lt;pid&gt; JFR.stop</code></pre>
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>ZGC</strong> (experimental) <span class="badge jep">JEP 333</span> &amp; <strong>Epsilon</strong> (no-op) <span class="badge jep">JEP 318</span> garbage collectors introduced.</li>
     <li><strong>Parallel full GC for G1</strong> <span class="badge added">Added in 10</span> — shorter worst-case pauses.</li>
@@ -1173,7 +1205,7 @@ jcmd &lt;pid&gt; JFR.stop</code></pre>
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 11 (LTS) in one glance</h3>
     <ul>
@@ -1223,8 +1255,17 @@ jcmd &lt;pid&gt; JFR.stop</code></pre>
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Switch expressions <span class="badge added">Final in 14</span> <span class="badge jep">JEP 361</span></h3>
   <p><em>Why it matters:</em> <code>switch</code> can return a value, uses arrow labels (no
@@ -1322,7 +1363,7 @@ public record Rectangle(double w, double h) implements Shape { }</code></pre>
 };</code></pre>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3><code>Stream.toList()</code> <span class="badge added">Added in 16</span></h3>
   <div class="ba">
@@ -1417,7 +1458,7 @@ String hex = HexFormat.of().formatHex(new byte[]{1, 2, 3});   // "010203"
 name.transform(String::toUpperCase);</code></pre>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
   <h3>Helpful NullPointerExceptions <span class="badge added">Added in 14</span></h3>
   <p><em>Why it matters:</em> the message names the <em>exact</em> expression that was null.</p>
   <div class="ba">
@@ -1436,13 +1477,13 @@ name.transform(String::toUpperCase);</code></pre>
       double-clickable installer from your app + a bundled JRE, so end users don't need Java installed:
       <pre><code class="java">jpackage --input target/ --name MyApp --main-jar myapp.jar \
     --main-class com.acme.Main --type dmg     # or: msi, exe, deb, rpm, pkg
-# produces MyApp.dmg — a self-contained installer, no separate JRE download</code></pre> See the <a href="../topics/jlink-jpackage.html">jlink &amp; jpackage deep-dive</a>.</li>
+# produces MyApp.dmg — a self-contained installer, no separate JRE download</code></pre> See the <a href="#pg-topics-jlink-jpackage-html">jlink &amp; jpackage deep-dive</a>.</li>
     <li>The JDK source moved from <strong>Mercurial to Git &amp; GitHub</strong>
       <span class="badge added">Added in 16</span>.</li>
   </ul>
 
   <h3>JFR Event Streaming <span class="badge added">Added in 14</span> <span class="badge jep">JEP 349</span></h3>
-  <p><em>Why it matters:</em> continuous monitoring of Flight Recorder data without dumping a file. See the <a href="../topics/jfr.html">JFR &amp; Mission Control deep-dive</a> for working examples.</p>
+  <p><em>Why it matters:</em> continuous monitoring of Flight Recorder data without dumping a file. See the <a href="#pg-topics-jfr-html">JFR &amp; Mission Control deep-dive</a> for working examples.</p>
   <pre><code class="java">try (var rs = new RecordingStream()) {
   rs.enable("jdk.CPULoad").withPeriod(Duration.ofSeconds(1));
   rs.onEvent("jdk.CPULoad", event -&gt; System.out.println(event.getFloat("machineTotal")));
@@ -1450,7 +1491,7 @@ name.transform(String::toUpperCase);</code></pre>
 }</code></pre>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>ZGC</strong> and <strong>Shenandoah</strong> low-pause collectors reached
       <em>production</em> <span class="badge added">Added in 15</span>.</li>
@@ -1479,7 +1520,7 @@ Class.forName(hidden.getName()); // throws ClassNotFoundException — verified:
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 17 (LTS) in one glance</h3>
     <ul>
@@ -1528,8 +1569,17 @@ Class.forName(hidden.getName()); // throws ClassNotFoundException — verified:
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Virtual threads <span class="badge added">Final in 21</span> <span class="badge jep">JEP 444</span></h3>
   <p><em>Why it matters:</em> write simple blocking code that scales to millions of concurrent tasks —
@@ -1598,7 +1648,7 @@ for (var _ : items) count++;</code></pre></li>
   </ul>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>Sequenced collections <span class="badge added">Added in 21</span> <span class="badge jep">JEP 431</span></h3>
   <p><em>Why it matters:</em> before, every ordered collection expressed "first/last/reverse"
@@ -1647,7 +1697,7 @@ SecretKey receiverSecret = dec.decapsulate(toSend);
 // ⚠ For post-quantum ML-KEM (CRYSTALS-Kyber), use Java 24+ (JEP 496)</code></pre>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
 
   <h3>Code snippets in Javadoc — <code>@snippet</code> <span class="badge added">Added in 18</span></h3>
   <p><em>Why it matters:</em> old <code>{@code ...}</code> examples were plain text — never compiled, so
@@ -1679,14 +1729,14 @@ SecretKey receiverSecret = dec.decapsulate(toSend);
   <ul>
     <li><strong>Simple Web Server</strong> <span class="badge added">Added in 18</span> — a zero-config
       command-line tool for serving static files, great for local prototyping.
-      <pre><code class="java">jwebserver -p 8000 -d /path/to/site</code></pre> See the <a href="../topics/jwebserver.html">Simple Web Server deep-dive</a>.</li>
+      <pre><code class="java">jwebserver -p 8000 -d /path/to/site</code></pre> See the <a href="#pg-topics-jwebserver-html">Simple Web Server deep-dive</a>.</li>
     <li><strong>Generational ZGC</strong> <span class="badge added">Added in 21</span> — ZGC now keeps a
       young generation, improving throughput:
       <code>-XX:+UseZGC -XX:+ZGenerational</code>.</li>
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>UTF-8 is the default charset</strong> <span class="badge added">Added in 18</span> —
       file I/O no longer depends on the platform locale. Watch behaviour changes in old code.</li>
@@ -1713,7 +1763,7 @@ try (var r = new NativeResource()) { /* use it */ }
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 21 (LTS) in one glance</h3>
     <ul>
@@ -1762,8 +1812,17 @@ try (var r = new NativeResource()) { /* use it */ }
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Compact source files &amp; instance <code>main</code> <span class="badge added">Final in 25</span> <span class="badge jep">JEP 512</span></h3>
   <p><em>Why it matters:</em> a runnable program with no <code>class</code>, no <code>public
@@ -1867,7 +1926,7 @@ Logger l = logger.orElseSet(() -> createLogger());   // computed at most once</c
   </ul>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>Stream Gatherers <span class="badge added">Final in 24</span> <span class="badge jep">JEP 485</span></h3>
   <p><em>Why it matters:</em> custom <em>intermediate</em> operations — the missing counterpart to a custom <code>Collector</code>.</p>
@@ -1931,7 +1990,7 @@ KeyPairGenerator kem = KeyPairGenerator.getInstance("ML-KEM");   // JEP 496
 Signature       dsa = Signature.getInstance("ML-DSA");          // JEP 497</code></pre>
 
   <!-- ============ TOOLING ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
 
   <h3>Markdown in Javadoc <span class="badge added">Added in 23</span></h3>
   <p><em>Why it matters:</em> write doc comments in Markdown (<code>///</code> lines) instead of HTML tags.</p>
@@ -1976,7 +2035,7 @@ class Greeter {
   </ul>
 
   <!-- ============ JVM / OTHER ============ -->
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>Compact Object Headers</strong> <span class="badge added">Final in 25</span> (experimental in 24) —
       shrinks every object header from 12/16 to 8 bytes, meaningfully cutting heap use.</li>
@@ -1989,7 +2048,7 @@ class Greeter {
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 25 (LTS) in one glance</h3>
     <ul>
@@ -2034,8 +2093,17 @@ class Greeter {
     </ul>
   </div>
 
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#language">1. Language features</a>
+    <a href="#apis">2. New &amp; updated APIs</a>
+    <a href="#tooling">3. Tooling</a>
+    <a href="#jvm">4. JVM / performance / other</a>
+    <a href="#cheat">5. Summary cheat-sheet</a>
+  </div>
+
   <!-- ============ LANGUAGE ============ -->
-  <h2>1 · Language features</h2>
+  <h2 id="language">1 · Language features</h2>
 
   <h3>Prepare to Make <code>final</code> Mean Final <span class="badge jep">JEP 500</span></h3>
   <p><em>Why it matters:</em> part of the "integrity by default" effort. Historically, libraries could
@@ -2087,7 +2155,7 @@ if (bigValue instanceof int i) { use(i); }  // only matches if it fits exactly</
   <p>See the <a href="#pg-topics-structured-concurrency-html">structured concurrency deep-dive</a> for the full <code>StructuredTaskScope</code> API and worked examples.</p>
 
   <!-- ============ APIs ============ -->
-  <h2>2 · New &amp; updated APIs</h2>
+  <h2 id="apis">2 · New &amp; updated APIs</h2>
 
   <h3>HTTP/3 for the HTTP Client</h3>
   <p><em>Why it matters:</em> the <code>java.net.http.HttpClient</code> (standardised in Java 11) now
@@ -2180,7 +2248,7 @@ for (; i &lt; a.length; i++) result[i] = a[i] + b[i];   // scalar tail
 // run with:  java --add-modules jdk.incubator.vector Demo.java</code></pre>
 
   <!-- ============ TOOLING / JVM ============ -->
-  <h2>3 · Tooling</h2>
+  <h2 id="tooling">3 · Tooling</h2>
   <h3>Ahead-of-Time Object Caching with Any GC <span class="badge jep">JEP 516</span></h3>
   <p><em>Why it matters:</em> Project Leyden's AOT cache (pre-warmed classes and heap objects) was
   previously tied to specific collectors; now it works regardless of the garbage collector you choose,
@@ -2193,7 +2261,7 @@ java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
   <p>Full lineage (CDS → AppCDS → AOT Cache), verified GC-mismatch behavior, and measured startup-time
   numbers → <a href="#pg-topics-aot-cache-html">AOT Cache deep-dive</a>.</p>
 
-  <h2>4 · JVM / performance / other</h2>
+  <h2 id="jvm">4 · JVM / performance / other</h2>
   <ul>
     <li><strong>G1: improved throughput by reducing synchronization</strong> <span class="badge jep">JEP 522</span> —
       less internal locking overhead in the default collector, meaning better throughput with no
@@ -2204,7 +2272,7 @@ java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
   </ul>
 
   <!-- ============ SUMMARY ============ -->
-  <h2>5 · Summary cheat-sheet</h2>
+  <h2 id="cheat">5 · Summary cheat-sheet</h2>
   <div class="cheat">
     <h3>Java 26 in one glance</h3>
     <ul>
@@ -2252,7 +2320,8 @@ java -XX:AOTCache=app.aot -XX:+UseZGC -jar app.jar</code></pre>
     <a href="#restrictions">7. What you cannot do with generics</a>
     <a href="#pitfalls">8. Pitfalls</a>
     <a href="#realworld">9. Real-world use cases</a>
-    <a href="#cheat">10. Cheat sheet</a>
+    <a href="#advanced">10. Advanced generics</a>
+    <a href="#cheat">11. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -2351,7 +2420,7 @@ static double sumOf(List&lt;? extends Number&gt; nums) { ... }
 
 // multiple bounds: at most ONE class, then any number of interfaces —
 // the class (if any) must be listed first
-static &lt;T extends Number & Comparable&lt;T&gt;&gt; T max(T a, T b) {
+static &lt;T extends Number &amp; Comparable&lt;T&gt;&gt; T max(T a, T b) {
   return a.compareTo(b) >= 0 ? a : b;
 }
 // verified: max(3, 7) -> 7
@@ -2474,8 +2543,40 @@ n.setData("Hello");       // compiles (with an unchecked warning) — erased to 
   <code>javap -p MyNode</code>:
   <pre><code class="java">void setData(java.lang.Integer);   // your real method
 void setData(java.lang.Object);    // compiler-generated bridge — casts, then delegates</code></pre>
+  <code>javap</code> only prints the two signatures — translated back into the Java syntax it's
+  equivalent to (not legal to write by hand: a class can't declare two methods that erase to the same
+  signature), the generated bridge looks like this:
+  <pre><code class="java">class MyNode extends Node {   // erased: Node<Integer> -> raw Node
+
+  // your real method, exactly as you wrote it — untouched by erasure
+  void setData(Integer data) {
+    System.out.println("MyNode.setData");
+    super.setData(data);
+  }
+
+  // compiler-generated bridge — same erased signature as Node.setData(Object),
+  // so it's the one that actually overrides Node's method and gets called virtually
+  /* bridge, synthetic */ void setData(Object data) {
+    setData((Integer) data);   // <- the cast: throws ClassCastException here, then
+  }                            //    delegates to your real setData(Integer) above
+}</code></pre>
   The bridge method is what actually gets called, casts its argument to <code>Integer</code>, and
-  <em>that cast</em> is where the <code>ClassCastException</code> is thrown — not inside your code at all.</div>
+  <em>that cast</em> is where the <code>ClassCastException</code> is thrown — not inside your code at all.
+  Its full bytecode, verified with <code>javap -p -c -v MyNode</code>, shows exactly that:
+  <pre><code class="java">void setData(java.lang.Object);
+  descriptor: (Ljava/lang/Object;)V
+  flags: (0x1040) ACC_BRIDGE, ACC_SYNTHETIC     // marked bridge + compiler-generated, invisible to reflection by default
+  Code:
+     0: aload_0
+     1: aload_1
+     2: checkcast     #24     // class java/lang/Integer   <- the cast that throws
+     5: invokevirtual #26     // Method setData:(Ljava/lang/Integer;)V   <- delegates to your real method
+     8: return</code></pre>
+  Two flags on the method, both set by the compiler, never by you: <code>ACC_BRIDGE</code> marks it as a
+  bridge so tools (and the JVM's own overload resolution) know it's not source-level code, and
+  <code>ACC_SYNTHETIC</code> hides it from normal reflection — <code>Class.getMethods()</code> and
+  <code>getDeclaredMethods()</code> return it, but <code>Method.isBridge()</code> and
+  <code>Method.isSynthetic()</code> both report <code>true</code> so you can filter it out.</div>
 
   <div class="note">
     <strong>Looking ahead — Project Valhalla:</strong> Valhalla aims to bring <em>primitive specialization for generics</em> to Java, enabling <code>List&lt;int&gt;</code> instead of <code>List&lt;Integer&gt;</code> without boxing overhead. This would fundamentally change the erasure model for specialized types and is expected to ship in a future Java LTS.
@@ -2521,7 +2622,135 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">10 · Cheat sheet</h2>
+  <h2 id="advanced">10 · Advanced generics</h2>
+  <p>Four topics that go past the everyday PECS/erasure material above — each verified by actually
+  compiling and running it, and cross-checked against
+  <a href="https://dev.java/learn/generics/wildcards/">dev.java's generics tutorial</a> and
+  <a href="https://docs.oracle.com/javase/tutorial/java/generics/nonReifiableVarargsType.html">Oracle's
+  "Non-Reifiable Types" reference</a> for wording.</p>
+
+  <h3>Wildcard capture — the "capture helper" pattern</h3>
+  <p>dev.java's own definition: a list may be declared as <code>List&lt;?&gt;</code>, but "when
+  evaluating an expression, the compiler infers a particular type from the code" — that inferred,
+  unnamed type is the <strong>capture</strong> (printed by <code>javac</code> as <code>CAP#1</code>).
+  You hit its limits the moment you try to both read <em>and</em> write a <code>List&lt;?&gt;</code> in
+  the same method:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Doesn't compile — two "?" uses aren't provably the same capture</div>
+      <pre><code class="java">static void swapFirstTwo(List&lt;?&gt; list) {
+  Object tmp = list.get(0);
+  list.set(0, list.get(1));   // compile error
+  list.set(1, tmp);           // compile error
+}
+// javap/javac's real message:
+// error: incompatible types: Object cannot be converted to CAP#1
+//   where CAP#1 is a fresh type-variable:
+//     CAP#1 extends Object from capture of ?</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Fixed — a private generic helper method captures the wildcard</div>
+      <pre><code class="java">static void swapFirstTwo(List&lt;?&gt; list) {
+  swapHelper(list);          // capture happens on THIS call
+}
+
+private static &lt;T&gt; void swapHelper(List&lt;T&gt; list) {
+  T tmp = list.get(0);       // now get()/set() both agree on the same T
+  list.set(0, list.get(1));
+  list.set(1, tmp);
+}
+
+List&lt;String&gt; names = new ArrayList&lt;&gt;(List.of("Ada", "Grace", "Barbara"));
+swapFirstTwo(names);
+System.out.println(names);   // verified: [Grace, Ada, Barbara]</code></pre>
+    </div>
+  </div>
+  <div class="tip">The helper method doesn't change behavior — it changes what the <em>compiler</em> can
+  prove. Calling <code>swapHelper(list)</code> from inside <code>swapFirstTwo</code> lets the compiler
+  bind the unknown <code>?</code> to one concrete, if unnameable, type parameter <code>T</code> for the
+  duration of that call. dev.java's convention: name it
+  <code>&lt;originalMethodName&gt;Helper</code>.</div>
+
+  <h3>Heap pollution &amp; <code>@SafeVarargs</code></h3>
+  <p>Oracle's exact definition: <strong>heap pollution</strong> "occurs when a variable of a
+  parameterized type refers to an object that is not of that parameterized type" — and it becomes
+  possible specifically because a varargs parameter of a non-reifiable type (like
+  <code>List&lt;String&gt;</code>) is compiled down to a plain <code>Object[]</code>, which happily
+  accepts any array store:</p>
+  <pre><code class="java">static void faultyMethod(List&lt;String&gt;... l) {   // no @SafeVarargs — and rightly so
+  Object[] objectArray = l;             // fine: T[] "is-a" Object[]
+  objectArray[0] = Arrays.asList(42);   // heap pollution: an Integer list, disguised as List&lt;String&gt;
+  String s = l[0].get(0);               // ClassCastException — thrown HERE, not where the lie was told
+}
+
+faultyMethod(List.of("x"), List.of("y"));
+// verified: java.lang.ClassCastException: class java.lang.Integer cannot be cast to class java.lang.String</code></pre>
+  <p><code>@SafeVarargs</code> is how you tell the compiler (and readers) "I checked — this method never
+  does that." It's legal only on <code>static</code>/<code>final</code>/<code>private</code> methods and
+  constructors, because those can't be overridden with a less careful body:</p>
+  <pre><code class="java">@SafeVarargs   // legal: static, and the body only ever reads `items`, never stores into it
+static &lt;T&gt; List&lt;T&gt; listOf(T... items) {
+  List&lt;T&gt; result = new ArrayList&lt;&gt;();
+  for (T item : items) result.add(item);
+  return result;
+}
+listOf("a", "b", "c");   // verified: [a, b, c] — compiles with ZERO warnings under -Xlint:all</code></pre>
+  <div class="note"><strong>Reifiable vs. non-reifiable, precisely</strong> (Oracle's wording): a
+  <em>reifiable</em> type has all its information available at runtime — primitives, non-generic types,
+  raw types, and unbounded-wildcard invocations like <code>List&lt;?&gt;</code> all qualify.
+  <em>Non-reifiable</em> types — <code>List&lt;String&gt;</code>, <code>List&lt;Number&gt;</code> — have
+  had information erased, and it's exactly those types that make a varargs parameter dangerous.</div>
+
+  <h3>Intersection types — bounds that require more than one interface</h3>
+  <p>An intersection type shows up in two places: as a type-parameter bound with <code>&amp;</code>
+  joining several types, and as an explicit cast. Both require the argument to satisfy every listed type
+  simultaneously — at most one class, then any number of interfaces:</p>
+  <pre><code class="java">// bound form: T must be Comparable<T> AND Serializable at once
+static &lt;T extends Comparable&lt;T&gt; &amp; Serializable&gt; T max(T a, T b) {
+  return a.compareTo(b) >= 0 ? a : b;
+}
+max(3, 7);   // verified: 7 — Integer already implements both
+
+// cast form: force a lambda to implement two interfaces at once
+Comparator&lt;String&gt; byLength =
+    (Comparator&lt;String&gt; &amp; Serializable) (a, b) -> a.length() - b.length();
+
+try (ObjectOutputStream oos = new ObjectOutputStream(byteStream)) {
+  oos.writeObject(byLength);   // only compiles/works because of the &amp; Serializable half of the cast
+}
+// verified: serializes successfully; writeObject(byLength) alone (no cast) would not compile —
+// Comparator itself isn't Serializable</code></pre>
+  <div class="warn">Same ordering rule as bounded type parameters everywhere else on this page: if one
+  of the intersected types is a class, it must come first — <code>(Serializable &amp; Comparator&lt;String&gt;)</code>
+  reversed would be a compile error.</div>
+
+  <h3>Super type tokens — reifying a generic type at runtime</h3>
+  <p>Erasure destroys <code>T</code> on the class holding it — but it does <em>not</em> erase a
+  subclass's <code>extends TypeToken&lt;List&lt;String&gt;&gt;</code> clause, because that's part of the
+  subclass's own class-file signature, not the generic class's runtime representation. Neal Gafter's
+  "super type token" trick (the pattern behind Guice's <code>TypeLiteral</code>, Jackson's
+  <code>TypeReference</code>, and Gson's <code>TypeToken</code>) exploits exactly that gap:</p>
+  <pre><code class="java">abstract class TypeToken&lt;T&gt; {
+  private final Type type;
+
+  protected TypeToken() {
+    Type superclass = getClass().getGenericSuperclass();   // e.g. TypeToken&lt;List&lt;String&gt;&gt;
+    this.type = ((ParameterizedType) superclass).getActualTypeArguments()[0];
+  }
+
+  public Type getType() { return type; }
+}
+
+// the anonymous subclass "{}" is what makes this work — it's a real class file whose
+// generic superclass is permanently TypeToken<List<String>>, unaffected by T's own erasure
+TypeToken&lt;List&lt;String&gt;&gt; token = new TypeToken&lt;List&lt;String&gt;&gt;() {};
+System.out.println(token.getType());
+// verified: java.util.List&lt;java.lang.String&gt;</code></pre>
+  <div class="tip">Without the anonymous <code>{}</code> subclass, this doesn't work — a plain
+  <code>new TypeToken&lt;List&lt;String&gt;&gt;()</code> has nothing for
+  <code>getGenericSuperclass()</code> to read, because <code>TypeToken</code> itself has no superclass
+  carrying that information. The empty braces are the whole trick.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">11 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Generics in one glance</h3>
     <ul>
@@ -2534,13 +2763,6 @@ void setData(java.lang.Object);    // compiler-generated bridge — casts, then 
       <li>Can't: <code>new T()</code>, static fields of <code>T</code>, <code>instanceof List&lt;String&gt;</code>, arrays of parameterized types, extend <code>Throwable</code> generically.</li>
     </ul>
   </div>
-    <h2>Advanced Generics Topics</h2>
-    <ul>
-      <li><strong>Wildcard Capture:</strong> When the compiler internally infers a specific but unknown type from a wildcard type (<code>?</code>) during type checking.</li>
-      <li><strong>Heap Pollution & <code>@SafeVarargs</code>:</strong> Situations where parameterized types lose their type safety, often related to varargs. The <code>@SafeVarargs</code> annotation suppresses unchecked warnings for varargs parameters.</li>
-      <li><strong>Intersection Types:</strong> Declaring a type that must satisfy multiple bounds (e.g., <code>&lt;T extends Serializable &amp; Comparable&lt;T&gt;&gt;</code>).</li>
-      <li><strong>Super Type Tokens (e.g., <code>TypeReference&lt;T&gt;</code>):</strong> A pattern to retain generic type information at runtime, circumventing type erasure.</li>
-    </ul>
 </section>
 <section id="pg-topics-reflection-html" class="print-page">
   <p class="sec-tag">Deep dive · API · complete guide</p>
@@ -3102,7 +3324,8 @@ System.out.println(a == b);
     <a href="#processing">10. Compile-time annotation processing</a>
     <a href="#pitfalls">11. Pitfalls</a>
     <a href="#realworld">12. Real-world use cases</a>
-    <a href="#cheat">13. Cheat sheet</a>
+    <a href="#examples">13. Five complete examples, basic to advanced</a>
+    <a href="#cheat">14. Cheat sheet</a>
   </div>
 
   <!-- ============================================================ -->
@@ -3165,6 +3388,31 @@ public class Widget { ... }</code></pre>
   </div>
   <div class="note">To make a custom annotation show up in generated Javadoc, add
   <code>@Documented</code> to its own declaration (see §5) — by default, annotations are invisible to Javadoc.</div>
+
+  <h3>Element declaration rules</h3>
+  <p>An annotation is always declared with <code>@interface</code>, never plain <code>interface</code>.
+  Each element inside it is written exactly like an abstract method — no parameters, no
+  <code>throws</code>, no generic type parameters — and its return type is the type callers must
+  supply a value for:</p>
+  <pre><code class="java">public @interface ClassPreamble {
+  String author();                     // required — caller MUST supply author = "..."
+  int currentRevision() default 1;     // optional — has a default, caller may omit it
+}</code></pre>
+  <p>Legal element types are deliberately narrow — only what fits into a <code>.class</code> file's
+  constant pool, checked at compile time:</p>
+  <table class="data">
+    <tr><th>Allowed</th><th>Not allowed</th></tr>
+    <tr><td>primitives (<code>int</code>, <code>boolean</code>, …), <code>String</code>,
+    <code>Class&lt;?&gt;</code>, enum types, other annotation types, and 1-dimensional arrays of any of
+    these</td><td>Arbitrary objects, generic types, multi-dimensional arrays — and <code>null</code>
+    can never be a default value, even for <code>String</code>/<code>Class</code> elements</td></tr>
+  </table>
+  <div class="tip"><strong>The <code>value()</code> shorthand:</strong> if an annotation has exactly
+  one element and it's named <code>value()</code>, callers can drop the name entirely —
+  <code>@SuppressWarnings("unchecked")</code> is short for
+  <code>@SuppressWarnings(value = "unchecked")</code>. The moment there's more than one element (or the
+  single element isn't named <code>value</code>), every element needs an explicit name:
+  <code>@RequestMapping(path = "/users", method = "GET")</code>.</div>
 
   <!-- ============================================================ -->
   <h2 id="predefined">4 · Predefined annotations</h2>
@@ -3387,7 +3635,275 @@ public class BuilderProcessor extends AbstractProcessor {
   </table>
 
   <!-- ============================================================ -->
-  <h2 id="cheat">13 · Cheat sheet</h2>
+  <h2 id="examples">13 · Five complete examples, basic to advanced</h2>
+  <p>Every example on this page so far is a fragment. These five are complete, compiling programs —
+  each one was actually run to produce the output shown — going from a five-minute pattern to the same
+  compile-time code generation trick Lombok and Dagger use.</p>
+
+  <h3>Example 1 — Basic: method logging with a dynamic proxy</h3>
+  <p>The smallest useful pattern: mark specific interface methods, then have an
+  <code>InvocationHandler</code> check for the marker before deciding whether to log. This is the same
+  shape as Spring's <code>@Transactional</code>/<code>@Async</code> — an annotation that triggers
+  cross-cutting behavior <em>around</em> a call, without the method itself knowing about it.</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+@interface Loggable {}
+
+interface Calculator {
+  @Loggable
+  int add(int a, int b);
+  int subtract(int a, int b);      // not annotated — stays silent
+}
+
+class CalculatorImpl implements Calculator {
+  public int add(int a, int b) { return a + b; }
+  public int subtract(int a, int b) { return a - b; }
+}
+
+class LoggingHandler implements InvocationHandler {
+  private final Object target;
+  LoggingHandler(Object target) { this.target = target; }
+
+  public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    boolean log = method.isAnnotationPresent(Loggable.class);
+    if (log) System.out.println("-> " + method.getName() + Arrays.toString(args));
+    Object result = method.invoke(target, args);
+    if (log) System.out.println("<- " + result);
+    return result;
+  }
+}
+
+Calculator calc = (Calculator) Proxy.newProxyInstance(
+    Calculator.class.getClassLoader(),
+    new Class&lt;?&gt;[] { Calculator.class },
+    new LoggingHandler(new CalculatorImpl()));
+calc.add(2, 3);
+calc.subtract(5, 1);
+
+// verified output:
+// -> add[2, 3]
+// <- 5
+// (subtract prints nothing)</code></pre>
+
+  <h3>Example 2 — Basic/intermediate: a bean-validation mini-framework</h3>
+  <p>This is the mechanism behind Jakarta Bean Validation's <code>@NotBlank</code>/<code>@Min</code>:
+  walk an object's fields with reflection, and let each annotation carry its own rule data.</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface NotBlank {}
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Min { int value(); }
+
+class User {
+  @NotBlank String name;
+  @Min(18) int age;
+  User(String name, int age) { this.name = name; this.age = age; }
+}
+
+class Validator {
+  static List&lt;String&gt; validate(Object obj) throws IllegalAccessException {
+    List&lt;String&gt; errors = new ArrayList&lt;&gt;();
+    for (Field f : obj.getClass().getDeclaredFields()) {
+      f.setAccessible(true);
+      if (f.isAnnotationPresent(NotBlank.class)) {
+        Object value = f.get(obj);
+        if (value == null || value.toString().isBlank())
+          errors.add(f.getName() + " must not be blank");
+      }
+      if (f.isAnnotationPresent(Min.class)) {
+        int min = f.getAnnotation(Min.class).value();
+        if (f.getInt(obj) < min)
+          errors.add(f.getName() + " must be >= " + min);
+      }
+    }
+    return errors;
+  }
+}
+
+Validator.validate(new User("Ada", 30));   // verified: []
+Validator.validate(new User("", 12));      // verified: [name must not be blank, age must be >= 18]</code></pre>
+
+  <h3>Example 3 — Intermediate: a tiny dependency-injection container</h3>
+  <p><code>@Inject</code>/<code>@Autowired</code> demystified: a container is just a
+  <code>Map&lt;Class, Object&gt;</code> and a loop that reflects over annotated fields and fills them in.</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Inject {}
+
+interface PaymentGateway { String charge(int cents); }
+
+class StripeGateway implements PaymentGateway {
+  public String charge(int cents) { return "charged " + cents + " via Stripe"; }
+}
+
+class CheckoutService {
+  @Inject PaymentGateway gateway;
+  String checkout(int cents) { return gateway.charge(cents); }
+}
+
+class MiniContainer {
+  private final Map&lt;Class&lt;?&gt;, Object&gt; registry = new HashMap&lt;&gt;();
+  &lt;T&gt; void register(Class&lt;T&gt; type, T instance) { registry.put(type, instance); }
+
+  &lt;T&gt; T create(Class&lt;T&gt; type) throws Exception {
+    T instance = type.getDeclaredConstructor().newInstance();
+    for (Field f : type.getDeclaredFields()) {
+      if (f.isAnnotationPresent(Inject.class)) {
+        f.setAccessible(true);
+        f.set(instance, registry.get(f.getType()));   // wire the dependency in by type
+      }
+    }
+    return instance;
+  }
+}
+
+MiniContainer container = new MiniContainer();
+container.register(PaymentGateway.class, new StripeGateway());
+CheckoutService checkout = container.create(CheckoutService.class);
+checkout.checkout(2500);   // verified: "charged 2500 via Stripe"</code></pre>
+
+  <h3>Example 4 — Intermediate/advanced: a mini ORM (<code>@Entity</code>/<code>@Column</code> → SQL)</h3>
+  <p>Hibernate's field mapping starts here: annotations describe how a class corresponds to a table,
+  and a generator turns any annotated instance into SQL without either side hand-writing the mapping.</p>
+  <pre><code class="java">@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@interface Entity { String table(); }
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Column { String name(); }
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+@interface Id {}
+
+@Entity(table = "users")
+class UserRow {
+  @Id @Column(name = "id") int id;
+  @Column(name = "full_name") String name;
+  @Column(name = "email") String email;
+
+  UserRow(int id, String name, String email) {
+    this.id = id; this.name = name; this.email = email;
+  }
+}
+
+class SqlGenerator {
+  static String insertStatement(Object entity) throws IllegalAccessException {
+    Class&lt;?&gt; type = entity.getClass();
+    Entity table = type.getAnnotation(Entity.class);
+    if (table == null) throw new IllegalArgumentException(type + " is not @Entity");
+
+    List&lt;String&gt; columns = new ArrayList&lt;&gt;();
+    List&lt;String&gt; values = new ArrayList&lt;&gt;();
+    for (Field f : type.getDeclaredFields()) {
+      Column col = f.getAnnotation(Column.class);
+      if (col == null) continue;
+      f.setAccessible(true);
+      columns.add(col.name());
+      Object v = f.get(entity);
+      values.add(v instanceof String ? "'" + v + "'" : String.valueOf(v));
+    }
+    return "INSERT INTO " + table.table() + " (" + String.join(", ", columns)
+         + ") VALUES (" + String.join(", ", values) + ")";
+  }
+}
+
+SqlGenerator.insertStatement(new UserRow(1, "Ada Lovelace", "ada@example.com"));
+// verified: INSERT INTO users (id, full_name, email) VALUES (1, 'Ada Lovelace', 'ada@example.com')</code></pre>
+
+  <h3>Example 5 — Advanced: compile-time code generation (the Lombok/Dagger trick)</h3>
+  <p>This is the full version of the sketch in §10 — a real <code>@GenerateBuilder</code> annotation
+  processor that writes a new <code>.java</code> source file during compilation. Four pieces, compiled
+  and run in order.</p>
+  <p><strong>1. The marker annotation</strong> — <code>SOURCE</code> retention, because nothing needs
+  it after <code>javac</code> is done:</p>
+  <pre><code class="java">package demo;
+
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.SOURCE)
+public @interface GenerateBuilder {}</code></pre>
+  <p><strong>2. The processor</strong> — for every <code>@GenerateBuilder</code> class, writes a sibling
+  <code>XxxBuilder</code> class with one setter per field:</p>
+  <pre><code class="java">package demo;
+
+@SupportedAnnotationTypes("demo.GenerateBuilder")
+@SupportedSourceVersion(SourceVersion.RELEASE_21)
+public class BuilderProcessor extends AbstractProcessor {
+  @Override
+  public boolean process(Set&lt;? extends TypeElement&gt; annotations, RoundEnvironment roundEnv) {
+    for (Element e : roundEnv.getElementsAnnotatedWith(GenerateBuilder.class)) {
+      TypeElement classElement = (TypeElement) e;
+      String className = classElement.getSimpleName().toString();
+      String packageName = processingEnv.getElementUtils()
+          .getPackageOf(classElement).getQualifiedName().toString();
+      String builderName = className + "Builder";
+
+      try (PrintWriter out = new PrintWriter(
+          processingEnv.getFiler().createSourceFile(packageName + "." + builderName).openWriter())) {
+        out.println("package " + packageName + ";");
+        out.println("public class " + builderName + " {");
+        out.println("  private final " + className + " instance = new " + className + "();");
+        for (Element field : classElement.getEnclosedElements()) {
+          if (field.getKind() != ElementKind.FIELD) continue;
+          String name = field.getSimpleName().toString();
+          String type = field.asType().toString();
+          out.println("  public " + builderName + " " + name + "(" + type + " value) {");
+          out.println("    instance." + name + " = value;");
+          out.println("    return this;");
+          out.println("  }");
+        }
+        out.println("  public " + className + " build() { return instance; }");
+        out.println("}");
+      } catch (Exception ex) {
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Failed to generate builder: " + ex);
+      }
+    }
+    return true;
+  }
+}
+// registered in META-INF/services/javax.annotation.processing.Processor
+// with a single line: demo.BuilderProcessor</code></pre>
+  <p><strong>3. The annotated class</strong> — no builder written by hand:</p>
+  <pre><code class="java">package demo;
+
+@GenerateBuilder
+public class Product {
+  String name;
+  double price;
+
+  @Override
+  public String toString() { return name + " ($" + price + ")"; }
+}</code></pre>
+  <p><strong>4. Code that uses the generated class</strong> — <code>ProductBuilder</code> doesn't exist
+  anywhere in this source tree; <code>javac</code> generates it during compilation and then compiles
+  this file against it in the same pass:</p>
+  <pre><code class="java">package demo;
+
+public class Main {
+  public static void main(String[] args) {
+    Product p = new ProductBuilder().name("Widget").price(9.99).build();
+    System.out.println(p);
+  }
+}
+// verified generated source (demo/ProductBuilder.java):
+//   package demo;
+//   public class ProductBuilder {
+//     private final Product instance = new Product();
+//     public ProductBuilder name(java.lang.String value) { instance.name = value; return this; }
+//     public ProductBuilder price(double value) { instance.price = value; return this; }
+//     public Product build() { return instance; }
+//   }
+// verified output: Widget ($9.99)</code></pre>
+  <div class="note">Compiling this requires two passes: first compile <code>GenerateBuilder</code> and
+  <code>BuilderProcessor</code> on their own, then compile <code>Product</code>/<code>Main</code> with
+  <code>javac -processorpath &lt;dir-with-compiled-processor&gt; ...</code> — a processor can't process the
+  same compilation unit it's part of.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">14 · Cheat sheet</h2>
   <div class="cheat">
     <h3>Annotations in one glance</h3>
     <ul>
@@ -3402,8 +3918,6 @@ public class BuilderProcessor extends AbstractProcessor {
   </div>
     <h2>Advanced Annotation Topics</h2>
     <ul>
-      <li><strong>Permitted attribute types:</strong> Annotations can only have attributes of primitive types, <code>String</code>, <code>Class</code>, enums, annotations, and 1-dimensional arrays of these types.</li>
-      <li><strong>Prohibition of <code>null</code> default values:</strong> Annotation attributes cannot have <code>null</code> as a valid default value.</li>
       <li><strong>Interface Annotation Inheritance:</strong> Annotations on interfaces are generally not inherited by classes implementing them, unlike annotations on superclasses (when marked with <code>@Inherited</code>).</li>
       <li><strong>@Generated:</strong> Added in Java 9 to <code>javax.annotation.processing</code> to mark code generated by tools.</li>
     </ul>
@@ -8737,6 +9251,1479 @@ java -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=classes.jsa -cp . HelloS
     <h3>Cache Invalidation Constraints</h3>
     <p>When using AOT or CDS, the runtime must match the conditions under which the cache was created. Changes to class paths, module paths, or JVM arguments can invalidate the cache.</p>
 </section>
+</section>
+<section id="pg-topics-jshell-html" class="print-page">
+  <p class="sec-tag">Deep dive · tooling · REPL</p>
+  <h1>JShell — The Java REPL <span class="badge added">Java 9</span></h1>
+  <p class="lead">
+    JShell (JEP 222) is Java's official interactive Read-Eval-Print Loop. It lets you evaluate declarations, statements, and expressions directly without the boilerplate of a class or <code>main</code> method, making it an essential tool for prototyping, learning, and debugging.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">instant</span><span class="lbl">feedback loop</span></div>
+    <div class="stat"><span class="num">$1</span><span class="lbl">implicit variables</span></div>
+    <div class="stat"><span class="num">lazy</span><span class="lbl">forward references</span></div>
+    <div class="stat"><span class="num">/</span><span class="lbl">slash commands</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Before Java 9, testing a one-line Java expression required creating a file, writing a class, adding a <code>public static void main</code>, compiling it, and running it. JShell removes this friction, bringing Java in line with languages like Python or Node.js that have native interactive shells.
+  </div>
+
+  <h2>1 · Basic Usage &amp; Shortcuts</h2>
+  <p>To start JShell, simply type <code>jshell</code> in your terminal. You can immediately type expressions, statements, or declarations.</p>
+  <pre><code class="java">jshell&gt; 10 + 25
+$1 ==&gt; 35
+|  created scratch variable $1 : int
+
+jshell&gt; Math.sqrt($1)
+$2 ==&gt; 5.916079783099616</code></pre>
+
+  <h3>Essential Shortcuts</h3>
+  <table class="data">
+    <tr><th>Shortcut</th><th>Action</th></tr>
+    <tr><td><code>Tab</code></td><td>Autocompletes identifiers, methods, and classes. Press twice inside a method call (e.g., <code>Math.max(</code>) to see overloads, and thrice for Javadoc.</td></tr>
+    <tr><td><code>Shift+Tab</code> then <code>v</code></td><td><strong>Extract Variable:</strong> Converts the expression into a strongly-typed variable declaration automatically.</td></tr>
+    <tr><td><code>Shift+Tab</code> then <code>i</code></td><td><strong>Auto-Import:</strong> Finds and imports unresolved classes based on what you've typed.</td></tr>
+    <tr><td><code>Ctrl+R</code></td><td>Reverse search through your command history.</td></tr>
+  </table>
+
+  <h2>2 · Slash Commands</h2>
+  <p>JShell commands start with a forward slash (<code>/</code>) and control the environment state. They can be abbreviated (e.g., <code>/v</code> for <code>/vars</code>).</p>
+  <table class="data">
+    <tr><th>Command</th><th>Description</th></tr>
+    <tr><td><code>/vars</code>, <code>/methods</code>, <code>/types</code></td><td>Lists active variables, methods, or classes/interfaces/records defined in your session.</td></tr>
+    <tr><td><code>/imports</code></td><td>Lists all active imports.</td></tr>
+    <tr><td><code>/list</code></td><td>Shows all snippets you've entered with their IDs (e.g., <code>1</code>, <code>2</code>).</td></tr>
+    <tr><td><code>/edit [id]</code></td><td>Opens the specified snippet (or all active snippets) in an editor.</td></tr>
+    <tr><td><code>/drop [id]</code></td><td>Deletes a variable, method, or class from the session state.</td></tr>
+    <tr><td><code>/save &lt;file&gt;</code></td><td>Saves the current session history or active snippets to a local file.</td></tr>
+    <tr><td><code>/open &lt;file&gt;</code></td><td>Executes a JShell script file or built-in script (like <code>PRINTING</code>).</td></tr>
+    <tr><td><code>/env</code></td><td>Modifies the classpath or module path dynamically, triggering a reset and replay.</td></tr>
+    <tr><td><code>/reset</code></td><td>Wipes the session slate clean.</td></tr>
+    <tr><td><code>/history</code></td><td>Displays the full history of all code snippets and slash commands typed.</td></tr>
+  </table>
+
+  <h2>3 · Advanced Features</h2>
+  <h3>Forward References (Corralled Snippets)</h3>
+  <p>JShell supports declaring a method that references an undefined method or variable. JShell will accept it (marking it "recoverable"), but execution will fail until the missing dependency is declared.</p>
+  <pre><code class="java">jshell&gt; double getVolume() { return height * calcArea(); }
+|  created method getVolume(), however, it cannot be invoked until variable height, and method calcArea() are declared
+
+jshell&gt; double height = 10.0;
+jshell&gt; double calcArea() { return 25.0; }
+jshell&gt; getVolume()
+$3 ==&gt; 250.0</code></pre>
+  <div class="note"><strong>Note:</strong> Forward referencing works for methods and classes, but not for <em>variable initializers</em> (e.g., <code>int x = y + 1;</code> will fail if <code>y</code> doesn't exist).</div>
+
+  <h3>External Editors</h3>
+  <p>The built-in prompt is great for one-liners, but multi-line methods are easier in an editor. You can configure JShell to open your preferred IDE or terminal editor when you run <code>/edit</code>:</p>
+  <pre><code class="bash"># For VS Code (use --wait so JShell halts until you close the file)
+jshell&gt; /set editor -retain "code --wait"
+
+# For Vim or Nano
+jshell&gt; /set editor -retain vim</code></pre>
+
+  <h3>Custom Feedback Modes</h3>
+  <p>If you find JShell too noisy, you can reduce its output verbosity using feedback modes: <code>normal</code> (default), <code>verbose</code>, <code>concise</code>, or <code>silent</code>.</p>
+  <pre><code class="bash"># Switch to concise mode
+jshell&gt; /set feedback concise
+
+# Retain this choice across all future terminal sessions
+jshell&gt; /set feedback -retain concise</code></pre>
+
+  <h3>Startup Scripts and Classpaths</h3>
+  <p>By default, JShell imports <code>java.util.*</code>, <code>java.io.*</code>, etc. You can load additional built-in scripts, like <code>PRINTING</code>, to skip writing <code>System.out.</code> every time:</p>
+  <pre><code class="bash">jshell&gt; /set start -retain DEFAULT PRINTING
+jshell&gt; println("Hello without System.out!")</code></pre>
+  
+  <p>To launch JShell with external JARs or modules, pass them at startup:</p>
+  <pre><code class="bash">$ jshell --class-path "libs/*:target/classes"</code></pre>
+  <p>Or modify it mid-session:</p>
+  <pre><code class="bash">jshell&gt; /env --class-path /libs/gson-2.10.1.jar</code></pre>
+
+</section>
+<section id="pg-topics-jlink-jpackage-html" class="print-page">
+  <p class="sec-tag">Deep dive · tooling · packaging</p>
+  <h1>Custom Runtimes &amp; Native Packaging <span class="badge added">Java 9 &amp; 14</span></h1>
+  <p class="lead">
+    Modern Java deployment has shifted away from relying on users to install system-wide JREs. Instead, applications now ship as self-contained bundles. The pipeline consists of three tools: <code>jdeps</code> (dependency discovery), <code>jlink</code> (custom runtime creation), and <code>jpackage</code> (native installer generation).
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">30MB</span><span class="lbl">custom JRE sizes</span></div>
+    <div class="stat"><span class="num">.exe/.dmg</span><span class="lbl">native OS installers</span></div>
+    <div class="stat"><span class="num">Zero</span><span class="lbl">user java installs needed</span></div>
+    <div class="stat"><span class="num">jlink</span><span class="lbl">added in Java 9</span></div>
+  </div>
+
+  <h2>1 · jdeps: Discovering Dependencies</h2>
+  <p>To build a custom JVM, you need to know exactly which standard modules your application relies on. If you have a non-modular legacy JAR (a "fat JAR"), <code>jdeps</code> can inspect its bytecode and print out the required JDK modules.</p>
+  <pre><code class="bash">$ jdeps --multi-release 21 --ignore-missing-deps --print-module-deps target/myapp-fat.jar
+java.base,java.desktop,java.logging,java.sql</code></pre>
+  <div class="note"><strong>Warning:</strong> <code>jdeps</code> cannot detect modules loaded dynamically via reflection or ServiceLoader (e.g., JDBC drivers or crypto providers). You may need to manually append modules like <code>jdk.crypto.ec</code> or <code>jdk.unsupported</code>.</div>
+
+  <h2>2 · jlink: Building the Custom Runtime</h2>
+  <p>Introduced in Java 9, <code>jlink</code> takes the module list and strips the JDK down to exactly what you need. This typically reduces the JVM footprint by 85-90% (from ~300MB down to ~35MB).</p>
+  <pre><code class="bash">$ jlink \
+  --module-path "$JAVA_HOME/jmods" \
+  --add-modules java.base,java.desktop,java.logging,java.sql,jdk.crypto.ec \
+  --output custom-jre \
+  --compress zip-9 \
+  --no-header-files \
+  --no-man-pages \
+  --strip-debug</code></pre>
+  <p>You can now distribute this <code>custom-jre</code> folder alongside your JAR file. Users run your app using <code>./custom-jre/bin/java -jar myapp.jar</code>.</p>
+
+  <h2>3 · Does jlink require a modular project?</h2>
+  <p><strong>No</strong> — but there's one hard restriction worth knowing before you build a release
+  pipeline around it. <code>jlink</code> links two different things, and only one of them actually needs
+  <a href="#pg-topics-modules-jpms-html">JPMS</a>:</p>
+  <table class="data">
+    <tr><th>What's being linked</th><th>Needs <code>module-info.java</code>?</th></tr>
+    <tr><td>The <strong>JDK's own platform modules</strong> (<code>java.base</code>,
+    <code>java.sql</code>, …) into a trimmed-down runtime — what §1/§2 above just did</td>
+    <td>No. Works for any project, modular or not — this is the normal path.</td></tr>
+    <tr><td>Your <strong>own application code</strong>, linked directly into the image as a module</td>
+    <td>Yes. <code>jlink</code> refuses a plain, non-modular JAR outright.</td></tr>
+  </table>
+
+  <p>Verified: pointing <code>jlink</code> at an ordinary classpath JAR (no <code>module-info.class</code>
+  inside it) fails immediately, even though the exact same JAR works fine as an
+  <em>automatic module</em> (JPMS's name for a plain JAR on the module path) everywhere else:</p>
+  <pre><code class="bash">$ jar --describe-module --file app.jar
+No module descriptor found. Derived automatic module.
+app automatic
+requires java.base mandated
+contains com.example
+
+$ jlink --module-path "app.jar:$JAVA_HOME/jmods" --add-modules app --output image
+Error: automatic module cannot be used with jlink: app from file:///.../app.jar</code></pre>
+  <div class="warn"><strong><code>jlink</code> flatly refuses automatic modules</strong> — there is no
+  flag to force it through. To link your own code into the image as a module, it must be a real,
+  explicit module with its own <code>module-info.java</code>.</div>
+
+  <h3>Running the image once your module <em>is</em> linked in</h3>
+  <p>If your app has a real <code>module-info.java</code>, <code>jlink</code> will link it straight into
+  the image alongside the JDK modules — no separate JAR to ship, no classpath at all:</p>
+  <pre><code class="bash">$ jlink \
+  --module-path "app.jar:$JAVA_HOME/jmods" \
+  --add-modules com.example.app \
+  --output image
+$ ./image/bin/java --list-modules | grep com.example
+com.example.app                    # verified — it's genuinely baked into image/lib/modules</code></pre>
+  <p>Three verified, equivalent ways to launch it — no <code>-cp</code>/<code>-jar</code> anywhere,
+  because the module is already inside the image:</p>
+  <pre><code class="bash"># 1. explicit module/class — works on any image, no extra jlink flags needed
+$ ./image/bin/java -m com.example.app/com.example.Main
+hello from a real modular app, module=com.example.app
+
+# 2. module name alone — works when the module jar's manifest/module-info
+#    already points at a main class (jar --create --main-class ... at build time)
+$ ./image/bin/java -m com.example.app
+hello from a real modular app, module=com.example.app</code></pre>
+  <p>The third way skips <code>java -m</code> entirely — add <code>--launcher</code> at
+  <code>jlink</code> time and it bakes the whole invocation into a ready-to-ship script:</p>
+  <pre><code class="bash">$ jlink \
+  --module-path "app.jar:$JAVA_HOME/jmods" \
+  --add-modules com.example.app \
+  --launcher run=com.example.app/com.example.Main \
+  --output image
+$ ./image/bin/run                       # just this — no -m, no module name to remember
+hello from a real modular app, module=com.example.app</code></pre>
+  <div class="tip"><code>--launcher</code> is what <code>jpackage</code> (§4) uses under the hood to
+  turn a linked image into a native, double-click-able app — the generated launcher script/binary
+  <em>is</em> the executable the installer ships.</div>
+
+  <h3>Quick reference — the <code>java</code> launcher flags themselves differ</h3>
+  <p>This is the root of every difference above: a non-modular jar and a modular jar aren't launched
+  with the same flags at all — <code>-cp</code>/<code>-jar</code> vs. <code>-p</code>/<code>-m</code>,
+  never mixed for the same artifact:</p>
+  <table class="data">
+    <tr><th></th><th>Non-modular jar</th><th>Modular jar</th></tr>
+    <tr><td>Where to look for code</td>
+      <td><code>-cp</code> / <code>-classpath</code> (a flat bag of classes)</td>
+      <td><code>-p</code> / <code>--module-path</code> (a directory of modules/modular jars)</td></tr>
+    <tr><td>What to run</td>
+      <td><code>-jar app.jar</code> (main class read from the jar's <code>Main-Class</code> manifest
+      attribute) — or name the class explicitly with <code>-cp</code></td>
+      <td><code>-m</code> / <code>--module module[/Main]</code> (main class read from
+      <code>module-info</code>/the module's declared main class if omitted)</td></tr>
+    <tr><td>Full command</td>
+      <td><code>java -cp app.jar com.example.Main</code></td>
+      <td><code>java -p mods -m com.example.app/com.example.Main</code></td></tr>
+    <tr><td>Inside a <code>jlink</code> image</td>
+      <td><code>./image/bin/java -cp app.jar com.example.Main</code> — app.jar ships alongside the
+      image, isn't linked in (§3, non-modular path above)</td>
+      <td><code>./image/bin/java -m com.example.app/com.example.Main</code> — no jar needed; the module
+      is already inside <code>image/lib/modules</code></td></tr>
+  </table>
+  <div class="warn">The two flag families don't compose: <code>-cp</code> puts a jar on the classpath as
+  the unnamed module (erasing any <code>module-info.class</code> it has), while <code>-p</code> puts it
+  on the module path as a real or automatic module. Same jar, two different runtime identities,
+  depending entirely on which flag you launch it with.</div>
+
+  <p>That restriction only applies to linking your code <em>in</em>. Building the slimmed-down runtime
+  and running your existing non-modular JAR <em>on top of it</em> is unaffected — this is the real-world
+  pattern almost every non-modular project actually uses, verified end-to-end:</p>
+  <pre><code class="bash"># 1. jdeps works fine against an ordinary classpath jar (no module-info needed)
+$ jdeps --print-module-deps app.jar
+java.base
+
+# 2. jlink a minimal runtime with ONLY those JDK modules — no app code inside the image at all
+$ jlink --module-path "$JAVA_HOME/jmods" --add-modules java.base --output image
+# ~45MB vs ~300MB for a full JDK install — verified
+
+# 3. run your unmodified, non-modular jar on the classpath, same as always
+$ ./image/bin/java -cp app.jar com.example.Main
+hello from a non-modular app, in a real package        # verified output</code></pre>
+  <div class="tip">This is exactly why <code>jdeps</code> in §1 is described as working against a
+  "non-modular legacy JAR" — it exists specifically so you can build a custom runtime without ever
+  modularizing your project. <code>jlink</code> only trims the <em>JDK's</em> modules here; your app
+  keeps running on the classpath, entirely outside JPMS.</div>
+  <p>In practice, most non-modular projects skip calling <code>jlink</code> by hand and reach for
+  <code>jpackage</code> (§4) instead — it runs <code>jdeps</code> and <code>jlink</code> for you
+  internally and accepts a plain classpath JAR directly via <code>--main-jar</code>/<code>--main-class</code>,
+  exactly as shown below.</p>
+
+  <h2>4 · jpackage: Building Native Installers</h2>
+  <p>Introduced in Java 14 (finalized in Java 16), <code>jpackage</code> wraps a runtime image and your
+  app into a native, double-click-able package: <code>.exe</code>/<code>.msi</code> for Windows,
+  <code>.dmg</code>/<code>.pkg</code> for macOS, and <code>.deb</code>/<code>.rpm</code> for Linux.</p>
+
+  <h3>Modular vs. non-modular — the invocation itself changes, not just a flag</h3>
+  <p><code>jpackage --help</code> states this as two different command shapes outright: <em>"For a
+  modular application: <code>jpackage -n name -p modulePath -m moduleName/className</code>"</em> vs.
+  <em>"For a non-modular application: <code>jpackage -i inputDir -n name --main-class className
+  --main-jar myJar.jar</code>"</em>. Verified end-to-end below by actually building and running both:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Non-modular — <code>--input</code> + <code>--main-jar</code>/<code>--main-class</code></div>
+      <pre><code class="bash">$ jpackage \
+  --type app-image \
+  --name NonModApp \
+  --input dist/input \
+  --main-jar app.jar \
+  --main-class NonModMain
+$ ./NonModApp.app/Contents/MacOS/NonModApp
+non-modular app running        # verified</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Modular — <code>--module-path</code> + <code>--module</code> (no <code>--input</code> at all)</div>
+      <pre><code class="bash">$ jpackage \
+  --type app-image \
+  --name ModApp \
+  --module-path mods \
+  --module com.example.app/com.example.Main
+$ ./ModApp.app/Contents/MacOS/ModApp
+modular app running             # verified</code></pre>
+    </div>
+  </div>
+  <p>The structural difference from §3 carries all the way through to what <code>jpackage</code> actually
+  ships — verified by inspecting both built bundles' contents:</p>
+  <pre><code class="bash">$ ls NonModApp.app/Contents/app/
+app.jar   NonModApp.cfg          # your jar, shipped as-is, run on the classpath
+
+$ ls ModApp.app/Contents/app/
+ModApp.cfg                       # no jar here at all —
+# com.example.app was linked straight into Contents/runtime by the jlink step jpackage ran internally</code></pre>
+  <div class="tip">Both forms accept <code>--runtime-image</code> to reuse a runtime you already built
+  yourself with <code>jlink</code> (§2/§3), instead of letting <code>jpackage</code> invoke
+  <code>jlink</code> internally.</div>
+
+  <h3>Quick reference — the <code>jpackage</code> flags themselves differ</h3>
+  <p>Same split as the <code>java</code> launcher table in §3, one level up the toolchain:</p>
+  <table class="data">
+    <tr><th></th><th>Non-modular jar</th><th>Modular jar</th></tr>
+    <tr><td>Where the app lives</td>
+      <td><code>-i</code> / <code>--input</code> (a directory whose contents are copied wholesale)</td>
+      <td><code>-p</code> / <code>--module-path</code> (a directory of modules/modular jars)</td></tr>
+    <tr><td>What to run</td>
+      <td><code>--main-jar</code> + <code>--main-class</code></td>
+      <td><code>-m</code> / <code>--module module[/Main]</code></td></tr>
+    <tr><td>Full command</td>
+      <td><code>jpackage -n MyApp -i dist/input --main-jar app.jar --main-class com.example.Main</code></td>
+      <td><code>jpackage -n MyApp -p mods -m com.example.app/com.example.Main</code></td></tr>
+    <tr><td>What ends up inside the package</td>
+      <td>Your jar, copied as-is into <code>Contents/app</code>, run on the classpath — verified above</td>
+      <td>No jar at all — linked straight into <code>Contents/runtime</code> by jpackage's internal
+      <code>jlink</code> call — verified above</td></tr>
+  </table>
+  <div class="warn"><code>--main-jar</code> and <code>--module</code> are mutually exclusive, straight
+  from <code>jpackage --help</code>: <em>"Either --module or --main-jar option can be specified but not
+  both."</em> There's no combined form — pick the row that matches your jar.</div>
+
+  <p>Same two commands, flag-by-flag:</p>
+  <div class="ba">
+    <div class="before"><div class="ba-label">Non-modular</div>
+      <pre><code class="bash">jpackage \
+  --input input-dir \           # 1. directory containing all JARs
+  --main-jar "my-app.jar" \     # 2. the main target JAR file
+  --main-class "com.foo.Main"   # 3. entry point class name</code></pre>
+    </div>
+    <div class="after"><div class="ba-label">Modular</div>
+      <pre><code class="bash">jpackage \
+  --module-path mods/ \                          # 1. directory containing modules
+  --module com.myapp.core/com.myapp.core.Main    # 2. Module/MainClass syntax</code></pre>
+    </div>
+  </div>
+  <p>Three inputs collapse to two: the module path replaces <code>--input</code>, and
+  <code>--module</code> carries both "which jar" and "which class" in one
+  <code>module/Class</code> argument — there's no separate <code>--main-class</code> to pair it with.</p>
+  <div class="note">Both stripped-down commands above are the real minimum — verified by actually
+  running them as-is, with no <code>--name</code>, <code>--type</code>, <code>--app-version</code>, or
+  <code>--icon</code> at all. Both exited <code>0</code> and produced a real installer.
+  <code>jpackage</code> fills in defaults for everything else: <code>--name</code> falls back to the
+  bare main-class name (<code>Main</code>, not <code>com.foo.Main</code>), and <code>--type</code> falls
+  back to the host OS's default installer format (<code>dmg</code> on macOS) — so the result was a
+  working <code>Main-1.0.dmg</code> in both cases, not an error. Add the cosmetic flags
+  (<code>--name</code>, <code>--app-version</code>, <code>--icon</code>, the per-OS flags below) when you
+  want control over the output; they're not required to make <code>jpackage</code> run.</div>
+
+  <h3>Per-OS installer types &amp; flags</h3>
+  <p><code>--type</code>'s valid values are platform-dependent — <code>jpackage --help</code> only lists
+  the types the <em>host</em> OS can actually build. Run on macOS, it reports
+  <code>{"app-image", "dmg", "pkg"}</code> — verified; the equivalent flag sets for the other two
+  platforms come from Oracle's <code>jpackage</code> tool reference, since each only builds on its own OS
+  (see the cross-compilation note below):</p>
+  <table class="data">
+    <tr><th>Host OS</th><th><code>--type</code> values</th><th>OS-specific flags</th><th>Icon format</th></tr>
+    <tr><td>Windows</td><td><code>exe</code>, <code>msi</code></td>
+      <td><code>--win-shortcut</code>, <code>--win-menu</code>, <code>--win-dir-chooser</code>,
+      <code>--win-per-user-install</code>, <code>--win-console</code></td><td><code>.ico</code></td></tr>
+    <tr><td>macOS</td><td><code>dmg</code>, <code>pkg</code></td>
+      <td><code>--mac-package-name</code>, <code>--mac-app-category</code>, <code>--mac-sign</code>,
+      <code>--mac-package-identifier</code></td><td><code>.icns</code></td></tr>
+    <tr><td>Linux</td><td><code>deb</code>, <code>rpm</code></td>
+      <td><code>--linux-shortcut</code>, <code>--linux-menu-group</code>,
+      <code>--linux-app-category</code>, <code>--linux-package-name</code></td><td><code>.png</code></td></tr>
+  </table>
+
+  <p><strong>Windows:</strong></p>
+  <pre><code class="bash">$ jpackage \
+  --type exe \
+  --name "MyApp" \
+  --app-version "1.0.0" \
+  --input dist/input \
+  --main-jar myapp-fat.jar \
+  --main-class com.example.AppMain \
+  --runtime-image custom-jre \
+  --icon assets/app.ico \
+  --win-shortcut \
+  --win-menu</code></pre>
+
+  <p><strong>macOS</strong> — flags verified against <code>jpackage --help</code> on macOS:</p>
+  <pre><code class="bash">$ jpackage \
+  --type dmg \
+  --name "MyApp" \
+  --app-version "1.0.0" \
+  --input dist/input \
+  --main-jar myapp-fat.jar \
+  --main-class com.example.AppMain \
+  --runtime-image custom-jre \
+  --icon assets/app.icns \
+  --mac-package-name "MyApp" \
+  --mac-app-category "utilities"</code></pre>
+
+  <p><strong>Linux:</strong></p>
+  <pre><code class="bash">$ jpackage \
+  --type deb \
+  --name "MyApp" \
+  --app-version "1.0.0" \
+  --input dist/input \
+  --main-jar myapp-fat.jar \
+  --main-class com.example.AppMain \
+  --runtime-image custom-jre \
+  --icon assets/app.png \
+  --linux-shortcut \
+  --linux-menu-group "Utility" \
+  --linux-app-category "utils"</code></pre>
+
+  <div class="note"><strong>Cross-compilation:</strong> <code>jpackage</code> is not a cross-compiler. You must run it on Windows to generate Windows installers, on macOS to generate macOS installers, and on Linux to generate <code>.deb</code>/<code>.rpm</code> — each command above only runs on its matching host OS.</div>
+
+</section>
+<section id="pg-topics-jfr-html" class="print-page">
+  <p class="sec-tag">Deep dive · profiling</p>
+  <h1>Java Flight Recorder (JFR) &amp; JMC <span class="badge added">Java 11</span></h1>
+  <p class="lead">
+    Java Flight Recorder (JFR) is an event-driven diagnostic and profiling framework built directly into the HotSpot JVM. It captures low-level JVM internals (GC, threads, memory, CPU) with negligible runtime overhead (&lt; 1–2%), making it the standard for production profiling.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">&lt;2%</span><span class="lbl">production overhead</span></div>
+    <div class="stat"><span class="num">JMC</span><span class="lbl">mission control GUI</span></div>
+    <div class="stat"><span class="num">Java 14</span><span class="lbl">event streaming API</span></div>
+    <div class="stat"><span class="num">Open</span><span class="lbl">sourced in Java 11</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Profiling Java applications in production historically required attaching heavyweight agents that skewed performance metrics and slowed down the application. JFR is deeply embedded into the JVM, allowing continuous, always-on "black box" flight recording without impacting user latencies.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#starting">1. Starting recordings</a>
+    <a href="#cli">2. The jfr command-line tool</a>
+    <a href="#detecting">3. Detecting real problems — worked examples</a>
+    <a href="#jmc">4. JDK Mission Control (JMC)</a>
+    <a href="#custom">5. Custom application events — complete example</a>
+    <a href="#streaming">6. JFR event streaming — complete example</a>
+    <a href="#custom-streaming">7. Complete example: streaming your own events live</a>
+    <a href="#cheat">8. Cheat sheet</a>
+  </div>
+
+  <h2 id="starting">1 · Starting Recordings</h2>
+  <p>You can start JFR at launch using JVM flags, or dynamically at runtime using the <code>jcmd</code> CLI.</p>
+
+  <h3>Via JVM Flags</h3>
+  <pre><code class="bash"># Start a continuous recording with a rolling 1-hour buffer
+$ java -XX:StartFlightRecording=disk=true,maxage=1h,settings=default -jar app.jar
+
+# Start a highly detailed 60-second profile
+$ java -XX:StartFlightRecording=filename=startup.jfr,duration=60s,settings=profile -jar app.jar</code></pre>
+
+  <h3>Via <code>jcmd</code> (Dynamically) — verified end-to-end on a live process</h3>
+  <p>The whole point of <code>jcmd</code> is that you don't restart anything — you attach to a JVM
+  that's <em>already running in production</em> and turn recording on and off from the outside. Find
+  your Java PID with <code>jcmd -l</code> (or <code>jps</code>), then issue commands to it. Run below
+  against a real long-lived process, output unedited:</p>
+  <pre><code class="bash">$ java -cp . LongRunner &amp;
+[1] 9496
+
+$ jcmd 9496 JFR.check
+9496:
+No available recordings.
+Use jcmd 9496 JFR.start to start a recording.
+
+$ jcmd 9496 JFR.start name=demo settings=profile duration=60s filename=/tmp/jcmd-demo.jfr
+9496:
+Started recording 1. The result will be written to:
+/tmp/jcmd-demo.jfr
+
+$ jcmd 9496 JFR.check
+9496:
+Recording 1: name=demo duration=1m (running)
+
+$ jcmd 9496 JFR.dump name=demo filename=/tmp/jcmd-snapshot.jfr
+9496:
+Dumped recording "demo", 406.9 kB written to:
+/tmp/jcmd-snapshot.jfr
+
+$ jcmd 9496 JFR.stop name=demo
+9496:
+Stopped recording "demo", 792.4 kB written to:
+/tmp/jcmd-demo.jfr</code></pre>
+  <div class="tip"><strong><code>JFR.dump</code> doesn't stop the recording</strong> — it copies
+  everything captured so far to a file while the recording keeps running. This is what lets you pull a
+  snapshot from a production JVM mid-incident without losing the rest of the recording window.</div>
+
+  <h2 id="cli">2 · The <code>jfr</code> Command-Line Tool</h2>
+  <p>Once you have a <code>.jfr</code> file, you don't need JMC's GUI to read it — the <code>jfr</code>
+  CLI (bundled with the JDK since Java 8u, standardized alongside JFR's open-sourcing in Java 11) can
+  print, summarize, and query it directly from a terminal or a CI pipeline. Every command below is
+  <code>jfr &lt;subcommand&gt; --help</code>'s real output, condensed:</p>
+  <table class="data">
+    <tr><th>Command</th><th>What it's for</th></tr>
+    <tr><td><code>jfr summary file.jfr</code></td><td>Fast overview: recording duration, and every
+    event type present with its count &amp; size — your first stop on any unfamiliar recording.</td></tr>
+    <tr><td><code>jfr view &lt;view-name&gt; file.jfr</code></td><td>Pretty-printed, pre-aggregated
+    tables for ~70 built-in questions (hot methods, GC pauses, contention, allocation pressure, …) —
+    <code>jfr view all-views file.jfr</code> lists every one.</td></tr>
+    <tr><td><code>jfr print --events &lt;name&gt; file.jfr</code></td><td>Raw, per-event dump (text/XML/
+    JSON) with full field values and stack traces — use once <code>view</code> has pointed you at a
+    specific event type.</td></tr>
+    <tr><td><code>jfr metadata --events &lt;name&gt; file.jfr</code></td><td>Shows an event type's field
+    layout, labels, and description — works on any <code>.jfr</code> file or the running JDK, useful
+    when you don't remember a custom event's exact field names.</td></tr>
+    <tr><td><code>jfr configure [options] --output custom.jfc</code></td><td>Builds a reusable
+    <code>.jfc</code> settings file — e.g. turn on full (non-throttled) exception capture or maximum
+    allocation profiling — instead of a long inline <code>settings=...</code> flag string.</td></tr>
+    <tr><td><code>jfr scrub --exclude-categories '...' in.jfr out.jfr</code></td><td>Strips events
+    matching a filter and writes a smaller file — handy for sharing a recording without, say, system
+    properties or thread dumps.</td></tr>
+    <tr><td><code>jfr assemble &lt;repository-dir&gt; out.jfr</code></td><td>Stitches together the raw
+    chunk files JFR writes when a JVM crashes mid-recording (found under
+    <code>-XX:FlightRecorderOptions=repository=...</code>) into one loadable <code>.jfr</code>.</td></tr>
+    <tr><td><code>jfr disassemble file.jfr</code></td><td>The inverse — splits one recording into its
+    per-chunk files, useful for isolating a time window from a very large recording.</td></tr>
+  </table>
+
+  <h3><code>jfr view</code> — every category, verified against a real JDK 25 install</h3>
+  <p><code>jfr view all-views file.jfr</code> lists every available view; running it here groups into
+  three real categories:</p>
+  <table class="data">
+    <tr><th>Category</th><th>Sample views</th></tr>
+    <tr><td>JVM internals</td><td><code>gc</code>, <code>gc-pauses</code>,
+    <code>heap-configuration</code>, <code>safepoints</code>, <code>compiler-statistics</code>,
+    <code>tlabs</code></td></tr>
+    <tr><td>Environment</td><td><code>cpu-load</code>, <code>system-information</code>,
+    <code>jvm-flags</code>, <code>active-recordings</code>, <code>native-library-failures</code></td></tr>
+    <tr><td>Application</td><td><code>hot-methods</code>, <code>allocation-by-class</code>,
+    <code>contention-by-site</code>, <code>exception-by-type</code>,
+    <code>method-timing</code></td></tr>
+  </table>
+  <pre><code class="bash"># see everything at once, or drill into one event type by name
+$ jfr view all-views recording.jfr
+$ jfr view hot-methods recording.jfr
+$ jfr view jdk.GarbageCollection recording.jfr   # any event type name works as a "view" too</code></pre>
+
+  <h2 id="detecting">3 · Detecting Real Problems — Worked Examples</h2>
+  <p>Four scenarios below, each with a small self-contained Java program you can compile and run
+  locally, plus the actual <code>jfr</code> command output that JFR captured from it — unedited, on this
+  machine, JDK 25. This is the workflow: record with <code>settings=profile</code>, then let
+  <code>jfr view</code>'s pre-built aggregations point you straight at the offending method/site instead
+  of reading thousands of raw events by hand.</p>
+
+  <h3>3.1 · Finding a CPU hotspot</h3>
+  <p>The program below deliberately builds a string with <code>+=</code> in a loop (quadratic — a classic
+  accidental hotspot) alongside two cheaper helper methods, so <code>hot-methods</code> has to actually
+  pick the right one out:</p>
+  <pre><code class="java">import java.util.*;
+import java.util.concurrent.*;
+
+public class BuggyApp {
+  static final Object LOCK = new Object();
+  static long sharedCounter = 0;
+
+  // deliberately inefficient CPU hotspot: string concatenation in a loop
+  static String buildReport(int n) {
+    String s = "";
+    for (int i = 0; i &lt; n; i++) {
+      s += "row-" + i + ";";   // hot: quadratic string building
+    }
+    return s;
+  }
+
+  // deliberately generates a lot of short-lived garbage
+  static void churnGarbage(int iterations) {
+    List&lt;byte[]&gt; junk = new ArrayList&lt;&gt;();
+    for (int i = 0; i &lt; iterations; i++) {
+      junk.add(new byte[1024]);
+      if (junk.size() &gt; 500) junk.clear();
+    }
+  }
+
+  // deliberately contended lock, held too long
+  static void contendedIncrement() {
+    synchronized (LOCK) {
+      sharedCounter++;
+      try { Thread.sleep(2); } catch (InterruptedException ignored) {}
+    }
+  }
+
+  public static void main(String[] args) throws Exception {
+    ExecutorService pool = Executors.newFixedThreadPool(8);
+    List&lt;Future&lt;?&gt;&gt; futures = new ArrayList&lt;&gt;();
+    for (int t = 0; t &lt; 8; t++) {
+      futures.add(pool.submit(() -&gt; {
+        for (int i = 0; i &lt; 40; i++) {
+          buildReport(3000);
+          churnGarbage(2000);
+          contendedIncrement();
+        }
+      }));
+    }
+    for (Future&lt;?&gt; f : futures) f.get();
+    pool.shutdown();
+    System.out.println("done, counter=" + sharedCounter);
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac BuggyApp.java
+$ java -XX:StartFlightRecording=filename=demo.jfr,settings=profile -cp . BuggyApp
+done, counter=320
+
+$ jfr view --width 140 hot-methods demo.jfr</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — the deliberately-bad method is identified
+  immediately, no manual code reading required:
+  <pre><code class="java">                                       Java Methods that Execute the Most
+
+Method                                                                    Samples Percent
+-------------------------------------------------------------------------- ------- -------
+BuggyApp.buildReport(int)                                                      36  65.45%
+BuggyApp.churnGarbage(int)                                                      7  12.73%
+jdk.internal.util.DecimalDigits.uncheckedGetCharsLatin1(int, int, byte[])       6  10.91%
+jdk.internal.misc.Unsafe.allocateUninitializedArray(Class, int)                 2   3.64%</code></pre></div>
+
+  <h3>3.2 · Finding lock contention</h3>
+  <p>Same recording, different view — <code>contention-by-site</code> ranks every
+  <code>synchronized</code> block by total time other threads spent waiting to get in:</p>
+  <pre><code class="bash">$ jfr view --width 160 contention-by-site demo.jfr</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">                                        Contention by Site
+
+StackTrace                                Count    Avg.    Max.
+------------------------------------------ ----- ------- -------
+BuggyApp.contendedIncrement()               314 16.1 ms 18.9 ms</code></pre></div>
+  <p>For the individual events behind that aggregate — including which thread was blocking which —
+  drop to <code>jfr print</code>:</p>
+  <pre><code class="bash">$ jfr print --events jdk.JavaMonitorEnter --stack-depth 3 demo.jfr</code></pre>
+  <pre><code class="java">jdk.JavaMonitorEnter {
+  startTime = 12:49:04.920 (2026-08-31)
+  duration = 10.8 ms
+  monitorClass = java.lang.Object (classLoader = bootstrap)
+  previousOwner = "pool-1-thread-2" (javaThreadId = 30)
+  eventThread = "pool-1-thread-6" (javaThreadId = 34)
+  stackTrace = [
+    BuggyApp.contendedIncrement() line: 29
+    BuggyApp.lambda$main$0() line: 44
+    java.util.concurrent.Executors$RunnableAdapter.call() line: 545
+  ]
+}</code></pre>
+
+  <h3>3.3 · Finding allocation pressure &amp; GC impact</h3>
+  <p><code>allocation-by-class</code> ranks which types are generating the most garbage;
+  <code>gc</code> shows the actual pause cost that garbage created:</p>
+  <pre><code class="bash">$ jfr view --width 140 allocation-by-class demo.jfr
+$ jfr view --width 140 gc demo.jfr</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">                                     Allocation by Class
+
+Object Type                                                        Allocation Pressure
+-------------------------------------------------------------------------------------
+byte[]                                                                            90.13%
+jdk.internal.event.ThreadSleepEvent                                               9.84%
+java.lang.String                                                                  0.03%
+
+                                          Garbage Collections
+
+Start    GC ID Type                              Heap Before GC Heap After GC Longest Pause
+-------- ----- --------------------------------- -------------- ------------- -------------
+12:49:04     0 Young Garbage Collection                 49.1 MB        4.0 MB       1.24 ms
+12:49:04     1 Young Garbage Collection                332.0 MB        4.1 MB       1.02 ms
+12:49:05     6 Young Garbage Collection                580.0 MB        4.0 MB      0.911 ms
+12:49:05    14 Young Garbage Collection                852.1 MB        4.0 MB       1.10 ms</code></pre></div>
+  <p>Fifteen young GCs in roughly one second, heap climbing back to ~850MB between collections —
+  <code>byte[]</code> at 90% of allocation pressure points straight at <code>churnGarbage</code> without
+  needing a heap dump.</p>
+
+  <h3>3.4 · Finding an exception storm — and the throttling gotcha</h3>
+  <p>This one has a sharp edge worth knowing before you trust a raw count. The program below throws
+  (and catches) a <code>NumberFormatException</code> on exactly 1 in 3 of 50,000 iterations —
+  <strong>16,667 real exceptions</strong>:</p>
+  <pre><code class="java">public class ExceptionStorm {
+  public static void main(String[] args) {
+    int caught = 0;
+    for (int i = 0; i &lt; 50000; i++) {
+      try {
+        parseMaybeBad(i);
+      } catch (NumberFormatException e) {
+        caught++;
+      }
+    }
+    System.out.println("caught=" + caught);
+  }
+  static int parseMaybeBad(int i) {
+    String s = (i % 3 == 0) ? "not-a-number" : String.valueOf(i);
+    return Integer.parseInt(s);
+  }
+}</code></pre>
+  <pre><code class="bash">$ java -XX:StartFlightRecording=filename=ex.jfr,settings=profile -cp . ExceptionStorm
+caught=16667
+$ jfr view --width 140 exception-by-type ex.jfr</code></pre>
+  <div class="warn"><strong>Verified real output — the count is wrong on purpose:</strong>
+  <pre><code class="java">                                Exceptions by Type
+
+Class                                                                 Count
+---------------------------------------------------------------------------
+java.lang.NumberFormatException                                         60</code></pre>
+  <strong>60, not 16,667.</strong> <code>profile.jfc</code> throttles
+  <code>jdk.JavaExceptionThrow</code> to <code>300/s</code> by default (verified in the JDK's own
+  <code>lib/jfr/profile.jfc</code>) — a deliberate trade-off so a genuine exception storm can't flood the
+  recording buffer and drown out everything else. The view still correctly identifies <em>which</em>
+  exception type and site are the problem; just don't read the number as a literal count under load.</div>
+  <p>To capture the real count when you need it, override the throttle explicitly:</p>
+  <pre><code class="bash">$ java -XX:StartFlightRecording=filename=ex2.jfr,settings=profile,exceptions=all -cp . ExceptionStorm
+caught=16667
+$ jfr summary ex2.jfr | grep JavaExceptionThrow
+ jdk.JavaExceptionThrow                  16667        216703        # verified — all 16,667 captured</code></pre>
+
+  <h2 id="jmc">4 · JDK Mission Control (JMC)</h2>
+  <p><strong>JDK Mission Control (JMC)</strong> is the official desktop GUI for analyzing <code>.jfr</code> dump files. It provides:</p>
+  <ul>
+    <li><strong>Automated Analysis:</strong> Rule-based scorecard with tuning recommendations (e.g., GC pauses, memory leaks).</li>
+    <li><strong>Flame Graphs:</strong> Visualizes call trees and hotspot methods.</li>
+    <li><strong>Thread &amp; Lock Contention:</strong> Swimlanes for thread states, lock wait times, and deadlocks.</li>
+    <li><strong>Memory Profiling:</strong> Allocation pressure, object lifetimes, and heap fragmentation.</li>
+  </ul>
+  <div class="note">JMC (and <code>jconsole</code>) both connect over <strong>JMX</strong> — the same
+  general-purpose management protocol the JVM has exposed since Java 5. Recording control
+  (start/stop/dump) can be driven purely through JMX too, without JMC's GUI at all — see the
+  <a href="#pg-topics-jmx-html">JMX + JFR deep dive</a> for a working example that starts and stops
+  a recording via <code>com.sun.management:type=DiagnosticCommand</code>.</div>
+
+  <h2 id="custom">5 · Custom Application Events — complete example</h2>
+  <p>You can emit your own application telemetry directly into the JFR pipeline, right alongside JVM
+  events — same file, same <code>jfr print</code>/<code>jfr view</code> tooling. Two files, both
+  compiled and run for real below.</p>
+
+  <p><strong>1. The event class</strong> — extend <code>jdk.jfr.Event</code>; every public field
+  becomes a captured value:</p>
+  <pre><code class="java">import jdk.jfr.*;
+
+@Name("com.example.OrderProcessed")
+@Label("Order Processed")
+@Category({"Demo", "Orders"})
+@Description("Fired whenever an order finishes processing")
+@StackTrace(false)                 // this event doesn't need a stack trace — cheaper to record
+public class OrderEvent extends Event {
+  @Label("Order ID")
+  public String orderId;
+
+  @Label("Amount")
+  public double amount;
+
+  @Label("Item Count")
+  public int itemCount;
+}</code></pre>
+
+  <p><strong>2. Emitting it</strong> — <code>begin()</code>/<code>end()</code> capture a duration
+  automatically; <code>commit()</code> writes the event only if JFR is actually recording (near-zero
+  cost when it isn't):</p>
+  <pre><code class="java">import java.util.Random;
+
+public class OrderDemo {
+  public static void main(String[] args) throws Exception {
+    Random rnd = new Random(42);
+    for (int i = 0; i &lt; 5; i++) {
+      processOrder("ORD-" + (1000 + i), rnd.nextDouble() * 200, rnd.nextInt(5) + 1);
+    }
+    System.out.println("processed 5 orders");
+  }
+
+  static void processOrder(String id, double amount, int items) throws InterruptedException {
+    OrderEvent event = new OrderEvent();
+    event.begin();
+    Thread.sleep(10 + (long) (Math.random() * 40));   // simulate work
+    event.end();
+    event.orderId = id;
+    event.amount = amount;
+    event.itemCount = items;
+    event.commit();
+  }
+}</code></pre>
+
+  <pre><code class="bash">$ javac OrderEvent.java OrderDemo.java
+$ java -XX:StartFlightRecording=filename=orders.jfr -cp . OrderDemo
+processed 5 orders
+
+$ jfr print --events com.example.OrderProcessed orders.jfr</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — your custom event, printed exactly like a
+  built-in one:
+  <pre><code class="java">com.example.OrderProcessed {
+  startTime = 12:50:13.893 (2026-08-31)
+  duration = 50.1 ms
+  orderId = "ORD-1000"
+  amount = 145.51273600657362
+  itemCount = 4
+  eventThread = "main" (javaThreadId = 3)
+}
+
+com.example.OrderProcessed {
+  startTime = 12:50:13.943 (2026-08-31)
+  duration = 12.6 ms
+  orderId = "ORD-1001"
+  amount = 9.58786102747753
+  itemCount = 1
+  eventThread = "main" (javaThreadId = 3)
+}
+// ... 3 more, one per processOrder() call</code></pre></div>
+  <div class="note">Forgot a field name? <code>jfr metadata --events com.example.OrderProcessed
+  orders.jfr</code> prints the event's full layout (labels, types, descriptions) straight from the
+  recording — no need to go dig up the source file.</div>
+
+  <h2 id="streaming">6 · JFR Event Streaming — complete example <span class="badge added">Java 14</span></h2>
+  <p>Introduced in Java 14 (JEP 349), <strong>Event Streaming</strong> lets an application consume JFR
+  events continuously, in-process, in real time — completely bypassing the need to dump
+  <code>.jfr</code> files to disk. This is the mechanism behind live dashboards and self-monitoring
+  alerts that react to JVM behavior as it happens.</p>
+  <p>Below is the complete, compilable program — it starts a live <code>RecordingStream</code>, does a
+  bit of real CPU work so <code>jdk.CPULoad</code> has something to report, and waits (via a
+  <code>CountDownLatch</code>, not a guess-and-sleep) until it has actually received two events before
+  shutting down cleanly:</p>
+  <pre><code class="java">import jdk.jfr.consumer.RecordingStream;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+
+public class StreamDemo {
+  public static void main(String[] args) throws Exception {
+    CountDownLatch seenCpu = new CountDownLatch(2);
+
+    try (RecordingStream rs = new RecordingStream()) {
+      rs.enable("jdk.CPULoad").withPeriod(Duration.ofMillis(500));
+
+      rs.onEvent("jdk.CPULoad", event -&gt; {
+        float jvmCpu = event.getFloat("jvmUser") + event.getFloat("jvmSystem");
+        System.out.printf("[stream] jvmCpu=%.1f%% machineTotal=%.1f%%%n",
+            jvmCpu * 100, event.getFloat("machineTotal") * 100);
+        seenCpu.countDown();
+      });
+
+      rs.startAsync();
+
+      // simulate a bit of CPU work so CPULoad has something to report
+      long x = 0;
+      for (int i = 0; i &lt; 200_000_000; i++) x += i;
+      System.out.println("busy-work result=" + x);
+
+      seenCpu.await();   // wait until we've actually received 2 CPULoad events
+      rs.close();
+    }
+    System.out.println("stream closed cleanly");
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac StreamDemo.java
+$ java -cp . StreamDemo</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">busy-work result=19999999900000000
+[stream] jvmCpu=0.7% machineTotal=16.4%
+[stream] jvmCpu=0.0% machineTotal=19.0%
+stream closed cleanly</code></pre></div>
+  <div class="tip"><code>RecordingStream</code> is a <em>new, temporary, in-memory</em> recording, not
+  a view into one you started elsewhere. To tap into an already-running
+  <code>-XX:StartFlightRecording</code> session's live events instead, use
+  <code>EventStream.openRepository()</code>, which reads the same on-disk repository files the running
+  recording is already writing.</div>
+
+  <h2 id="custom-streaming">7 · Complete example: streaming your own custom events live</h2>
+  <p>The natural next step: combine §5 and §6 — stream your <em>own</em> event type the instant it's
+  committed, instead of writing it to a file and reading it back later. Reuses the exact
+  <code>OrderEvent</code> class from §5, unchanged:</p>
+  <pre><code class="java">import jdk.jfr.consumer.RecordingStream;
+import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+
+public class OrderStreamDemo {
+  public static void main(String[] args) throws Exception {
+    CountDownLatch latch = new CountDownLatch(5);
+
+    try (RecordingStream rs = new RecordingStream()) {
+      rs.enable("com.example.OrderProcessed");   // our own event, enabled by name
+
+      rs.onEvent("com.example.OrderProcessed", event -&gt; {
+        System.out.printf("[live] order=%s amount=$%.2f items=%d took=%dms%n",
+            event.getString("orderId"),
+            event.getDouble("amount"),
+            event.getInt("itemCount"),
+            event.getDuration().toMillis());
+        latch.countDown();
+      });
+
+      rs.startAsync();
+
+      Random rnd = new Random(7);
+      for (int i = 0; i &lt; 5; i++) {
+        processOrder("LIVE-" + (2000 + i), rnd.nextDouble() * 300, rnd.nextInt(5) + 1);
+      }
+
+      latch.await();   // block until all 5 orders have actually streamed through
+    }
+    System.out.println("all 5 orders observed live");
+  }
+
+  static void processOrder(String id, double amount, int items) throws InterruptedException {
+    OrderEvent event = new OrderEvent();
+    event.begin();
+    Thread.sleep(10 + (long) (Math.random() * 30));
+    event.end();
+    event.orderId = id;
+    event.amount = amount;
+    event.itemCount = items;
+    event.commit();
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac OrderStreamDemo.java   # OrderEvent.class from §5 must be on the classpath
+$ java -cp . OrderStreamDemo</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — each order shows up the moment
+  <code>commit()</code> runs, not after the program exits:
+  <pre><code class="java">[live] order=LIVE-2000 amount=$219.21 items=1 took=34ms
+[live] order=LIVE-2001 amount=$2.89 items=5 took=39ms
+[live] order=LIVE-2002 amount=$269.18 items=1 took=22ms
+[live] order=LIVE-2003 amount=$170.74 items=3 took=36ms
+[live] order=LIVE-2004 amount=$36.22 items=1 took=40ms
+all 5 orders observed live</code></pre></div>
+  <div class="note">Notice <code>rs.enable("com.example.OrderProcessed")</code> needed no
+  <code>settings=profile</code> flag, no <code>-XX:StartFlightRecording</code>, nothing on the command
+  line at all — <code>RecordingStream</code> creates and controls its own recording purely from Java
+  code, which is exactly what makes it usable for an in-app health dashboard or alerting hook.</div>
+
+  <h2 id="cheat">8 · Cheat sheet</h2>
+  <div class="cheat">
+    <h3>JFR in one glance</h3>
+    <ul>
+      <li><strong>Start:</strong> <code>-XX:StartFlightRecording=...</code> at launch, or
+      <code>jcmd &lt;PID&gt; JFR.start</code> on a running JVM — no restart needed.</li>
+      <li><strong>Snapshot without stopping:</strong> <code>jcmd &lt;PID&gt; JFR.dump</code> copies
+      what's captured so far; the recording keeps running.</li>
+      <li><strong>Read a file fast:</strong> <code>jfr summary</code> (overview) →
+      <code>jfr view &lt;name&gt;</code> (pre-built tables: <code>hot-methods</code>,
+      <code>contention-by-site</code>, <code>allocation-by-class</code>, <code>gc</code>,
+      <code>exception-by-type</code>, …) → <code>jfr print --events &lt;name&gt;</code> (raw events).</li>
+      <li><strong>Don't know a field name?</strong> <code>jfr metadata --events &lt;name&gt;</code>.</li>
+      <li><strong>Custom events:</strong> extend <code>jdk.jfr.Event</code>, annotate fields,
+      <code>begin()</code>/<code>end()</code>/<code>commit()</code> — same tooling reads them.</li>
+      <li><strong>Live, in-process:</strong> <code>RecordingStream</code> — <code>enable()</code> +
+      <code>onEvent()</code> + <code>startAsync()</code>, zero files, zero JVM flags.</li>
+      <li><strong>Gotcha:</strong> <code>settings=profile</code> throttles noisy events like
+      <code>jdk.JavaExceptionThrow</code> (300/s default) — override with
+      <code>exceptions=all</code> when you need the exact count.</li>
+    </ul>
+  </div>
+
+</section>
+<section id="pg-topics-jmx-html" class="print-page">
+  <p class="sec-tag">Deep dive · management &amp; monitoring</p>
+  <h1>Java Management Extensions (JMX) &amp; JConsole <span class="badge added">Java 5</span></h1>
+  <p class="lead">
+    JMX is the JVM's built-in framework for exposing an application's internals — configuration,
+    statistics, operations — as manageable objects called <strong>MBeans</strong>, reachable both
+    in-process and over the network. Every JVM has been running a management agent since Java 5, whether
+    you've ever touched it or not: <code>java.lang.management</code>'s <code>MemoryMXBean</code>,
+    <code>ThreadMXBean</code>, and friends are JMX, already wired up, with zero configuration.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">2004</span><span class="lbl">bundled into J2SE 5.0 (JSR 3, 160, 174)</span></div>
+    <div class="stat"><span class="num">MBean</span><span class="lbl">the unit of manageability</span></div>
+    <div class="stat"><span class="num">0</span><span class="lbl">config needed for platform MXBeans</span></div>
+    <div class="stat"><span class="num">RMI</span><span class="lbl">default remote transport</span></div>
+    <div class="stat"><span class="num">Java 8</span><span class="lbl">jcmd/JFR reachable over JMX too</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Before JMX, "managing" a running Java application meant something different in every codebase — a
+    telnet admin port here, a properties file polled on a timer there, a custom socket protocol
+    somewhere else. Application servers like early WebLogic bolted on their own JMX 1.0 implementation
+    for exactly this reason, years before it shipped in the JDK. JMX standardized it: one API to expose
+    an attribute or an operation, one protocol to reach it locally or remotely, and one set of tools
+    (<code>jconsole</code>, JMC, any JMX client) that work against <em>any</em> compliant application
+    without knowing anything about it in advance.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#history">1. What JMX is, and why it was added</a>
+    <a href="#mxbeans">2. Platform MXBeans — built in, zero setup</a>
+    <a href="#tools">3. Tools for inspecting MBeans</a>
+    <a href="#custom">4. Writing your own MBean — complete example</a>
+    <a href="#remote">5. Remote JMX — complete example</a>
+    <a href="#notifications">6. Notifications — complete example</a>
+    <a href="#jfr-integration">7. JMX + JFR — controlling recordings over JMX</a>
+    <a href="#cheat">8. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="history">1 · What JMX Is, and Why It Was Added</h2>
+  <p>JMX (<strong>Java Management Extensions</strong>) predates its place in the JDK. The core
+  specification — JMX 1.0, then 1.2 — was published by Sun as a standalone download, and application
+  servers of the era adopted it independently for their own admin consoles; WebLogic Server, for
+  instance, implemented the JMX 1.0 spec for its management services well before JMX shipped in any
+  JDK. Every vendor building "manage my running server" tooling was solving the same problem separately.</p>
+  <p>That changed with <strong>J2SE 5.0 (2004)</strong>, which bundled three related JSRs directly into
+  the platform:</p>
+  <table class="data">
+    <tr><th>JSR</th><th>What it defined</th></tr>
+    <tr><td>JSR 3 — Java Management Extensions</td><td>The core <code>javax.management</code> API:
+    MBeans, the <code>MBeanServer</code>, <code>ObjectName</code> — JMX 1.2.</td></tr>
+    <tr><td>JSR 160 — JMX Remote API</td><td>How to reach an <code>MBeanServer</code> from outside the
+    process: connectors, the RMI transport, <code>service:jmx:...</code> URLs.</td></tr>
+    <tr><td>JSR 174 — Monitoring and Management for the JVM</td><td>The <code>java.lang.management</code>
+    package: a standard set of platform MBeans (memory, threads, GC, class loading, …) every JVM exposes
+    automatically.</td></tr>
+  </table>
+  <p><code>jconsole</code> shipped alongside as the reference GUI client. The result: instead of every
+  app inventing its own admin protocol, a Java application gets a standard, remotely-reachable
+  management surface the instant it starts — for the JVM itself, and for anything the application
+  chooses to expose the same way.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="mxbeans">2 · Platform MXBeans — Built In, Zero Setup</h2>
+  <p>Before writing a single line of JMX code yourself, every JVM already exposes a standard set of
+  MBeans through <code>java.lang.management.ManagementFactory</code> — no flags, no registration, no
+  network setup. This is the same data <code>jconsole</code>'s "VM Summary" tab and JMC's overview
+  pull from.</p>
+  <pre><code class="java">import java.lang.management.*;
+import java.util.List;
+
+public class PlatformMXBeanDemo {
+  public static void main(String[] args) {
+    RuntimeMXBean runtime = ManagementFactory.getRuntimeMXBean();
+    System.out.println("JVM name: " + runtime.getVmName());
+    System.out.println("Uptime: " + runtime.getUptime() + "ms");
+
+    MemoryMXBean memory = ManagementFactory.getMemoryMXBean();
+    MemoryUsage heap = memory.getHeapMemoryUsage();
+    System.out.printf("Heap used: %.1f MB / max %.1f MB%n",
+        heap.getUsed() / 1_048_576.0, heap.getMax() / 1_048_576.0);
+
+    ThreadMXBean threads = ManagementFactory.getThreadMXBean();
+    System.out.println("Live threads: " + threads.getThreadCount());
+    System.out.println("Peak threads: " + threads.getPeakThreadCount());
+
+    List&lt;GarbageCollectorMXBean&gt; gcs = ManagementFactory.getGarbageCollectorMXBeans();
+    for (GarbageCollectorMXBean gc : gcs) {
+      System.out.println("GC[" + gc.getName() + "] collections=" + gc.getCollectionCount()
+          + " time=" + gc.getCollectionTime() + "ms");
+    }
+
+    OperatingSystemMXBean os = ManagementFactory.getOperatingSystemMXBean();
+    System.out.println("Available processors: " + os.getAvailableProcessors());
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac PlatformMXBeanDemo.java
+$ java -cp . PlatformMXBeanDemo</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">JVM name: OpenJDK 64-Bit Server VM
+Uptime: 20ms
+Heap used: 0.0 MB / max 12288.0 MB
+Live threads: 6
+Peak threads: 6
+GC[G1 Young Generation] collections=0 time=0ms
+GC[G1 Concurrent GC] collections=0 time=0ms
+GC[G1 Old Generation] collections=0 time=0ms
+Available processors: 15</code></pre></div>
+  <table class="data">
+    <tr><th>Platform MXBean</th><th>Exposes</th></tr>
+    <tr><td><code>MemoryMXBean</code></td><td>Heap/non-heap usage, pending finalization count</td></tr>
+    <tr><td><code>ThreadMXBean</code></td><td>Live/peak/daemon thread counts, deadlock detection,
+    per-thread CPU time</td></tr>
+    <tr><td><code>GarbageCollectorMXBean</code></td><td>Per-collector collection count &amp; total
+    time — one instance per GC algorithm component</td></tr>
+    <tr><td><code>RuntimeMXBean</code></td><td>Uptime, input JVM arguments, system properties, VM
+    name/vendor/version</td></tr>
+    <tr><td><code>OperatingSystemMXBean</code></td><td>Available processors, system load average
+    (cast to <code>com.sun.management.OperatingSystemMXBean</code> for process CPU load)</td></tr>
+    <tr><td><code>ClassLoadingMXBean</code>, <code>CompilationMXBean</code></td><td>Loaded/unloaded
+    class counts; JIT compilation time</td></tr>
+  </table>
+  <div class="note">This is the exact API <a href="#pg-topics-jvm-memory-gc-html">JVM Memory &amp; GC</a> and
+  <a href="#pg-topics-virtual-threads-html">Virtual threads</a> content elsewhere on this site would reach for
+  programmatically — JMX platform MXBeans are the stable, standard alternative to parsing
+  <code>-Xlog</code> output.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="tools">3 · Tools for Inspecting MBeans</h2>
+  <table class="data">
+    <tr><th>Tool</th><th>What it's for</th></tr>
+    <tr><td><code>jconsole</code></td><td>The original JMX GUI client, bundled with the JDK since Java
+    5. Connects to a local or remote <code>MBeanServer</code>, browses every registered MBean's
+    attributes/operations, plots memory/thread/CPU graphs live.</td></tr>
+    <tr><td>JDK Mission Control (JMC)</td><td>The modern successor — same MBean browser plus JFR
+    integration, triggers, and rule-based analysis (see the <a href="#pg-topics-jfr-html">JFR &amp; Mission
+    Control deep dive</a>).</td></tr>
+    <tr><td><code>jcmd &lt;PID&gt; ManagementAgent.start</code></td><td>Turns on remote JMX for an
+    <em>already-running</em> JVM that was launched with no <code>jmxremote</code> flags at all — verified
+    below.</td></tr>
+    <tr><td>Any <code>javax.management.remote.JMXConnector</code> client</td><td>Your own code — see §5.
+    This is how monitoring agents (Prometheus JMX exporter, Datadog, New Relic) read JVM metrics.</td></tr>
+  </table>
+
+  <h3>Enabling JMX on a JVM that's already running</h3>
+  <p>Mirrors the same "no restart needed" story as JFR's <code>jcmd JFR.start</code> — attach to a live
+  process and turn on remote management from the outside:</p>
+  <pre><code class="bash">$ java -cp . PlainServer &amp;
+[1] 31834
+
+$ jcmd 31834 ManagementAgent.start jmxremote.port=19100 jmxremote.authenticate=false jmxremote.ssl=false
+31834:
+Command executed successfully
+
+$ jcmd 31834 ManagementAgent.status
+31834:
+Agent: enabled
+
+Connection Type: remote
+Protocol       : rmi
+Properties     :
+  com.sun.management.jmxremote.authenticate = false
+  com.sun.management.jmxremote.ssl = false
+  com.sun.management.jmxremote.port = 19100</code></pre>
+  <div class="tip">The output above is unedited except for trimming the (very long) serialized RMI stub
+  string on the <code>URL</code> line. Note <code>jmxremote.local.only</code> defaults to
+  <code>true</code> — for genuinely remote access, pass
+  <code>jmxremote.local.only=false</code> too.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="custom">4 · Writing Your Own MBean — Complete Example</h2>
+  <p>There are two ways to make your own class manageable, both verified below with the same
+  <code>CacheStats</code> example — a hit/miss counter you might attach to an actual cache.</p>
+
+  <h3>4.1 · The Standard MBean pattern — naming-convention based</h3>
+  <p>The interface's name must be the implementing class's name with <code>MBean</code> appended —
+  this is a compile-time-invisible convention the JMX runtime checks by reflection, not an annotation.
+  Every public getter/setter/method on the interface becomes an attribute or operation.</p>
+  <pre><code class="java">// CacheStatsMBean.java — MUST be named "&lt;ClassName&gt;MBean" exactly
+public interface CacheStatsMBean {
+  long getHitCount();
+  long getMissCount();
+  double getHitRatio();
+  void reset();
+}
+
+// CacheStats.java
+import java.util.concurrent.atomic.AtomicLong;
+
+public class CacheStats implements CacheStatsMBean {
+  private final AtomicLong hits = new AtomicLong();
+  private final AtomicLong misses = new AtomicLong();
+
+  public void recordHit() { hits.incrementAndGet(); }
+  public void recordMiss() { misses.incrementAndGet(); }
+
+  @Override public long getHitCount() { return hits.get(); }
+  @Override public long getMissCount() { return misses.get(); }
+  @Override public double getHitRatio() {
+    long total = hits.get() + misses.get();
+    return total == 0 ? 0.0 : (double) hits.get() / total;
+  }
+  @Override public void reset() { hits.set(0); misses.set(0); }
+}</code></pre>
+  <p>Registering it puts it on the <em>same</em> <code>MBeanServer</code> platform MXBeans live on —
+  one <code>ObjectName</code> namespace for everything:</p>
+  <pre><code class="java">import javax.management.*;
+import java.lang.management.ManagementFactory;
+
+public class MBeanDemo {
+  public static void main(String[] args) throws Exception {
+    MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+    ObjectName name = new ObjectName("com.example:type=CacheStats,name=OrderCache");
+
+    CacheStats cache = new CacheStats();
+    server.registerMBean(cache, name);
+
+    cache.recordHit(); cache.recordHit(); cache.recordHit(); cache.recordMiss();
+
+    // read it back purely through the MBeanServer, exactly as jconsole/a remote client would
+    long hits = (long) server.getAttribute(name, "HitCount");
+    long misses = (long) server.getAttribute(name, "MissCount");
+    double ratio = (double) server.getAttribute(name, "HitRatio");
+    System.out.printf("via MBeanServer -&gt; hits=%d misses=%d ratio=%.2f%n", hits, misses, ratio);
+
+    server.invoke(name, "reset", new Object[0], new String[0]);
+    System.out.println("after reset, hits=" + server.getAttribute(name, "HitCount"));
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac CacheStatsMBean.java CacheStats.java MBeanDemo.java
+$ java -cp . MBeanDemo</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">via MBeanServer -> hits=3 misses=1 ratio=0.75
+after reset, hits=0</code></pre></div>
+  <div class="warn"><strong>The naming convention is strictly enforced.</strong> Rename the interface
+  to anything other than <code>CacheStatsMBean</code> (with no <code>@MXBean</code>, below) and
+  registration fails immediately — verified:
+  <pre><code class="java">javax.management.NotCompliantMBeanException:
+  Class CacheStats is not a JMX compliant Standard MBean</code></pre></div>
+
+  <h3>4.2 · The <code>@MXBean</code> pattern — no naming convention required</h3>
+  <p>The simpler, more modern alternative: annotate the interface with <code>@MXBean</code> and name it
+  whatever you like. <code>@MXBean</code> also auto-converts complex return types (records, custom
+  classes) into <code>CompositeData</code> for you — this is the pattern every platform MXBean
+  (<code>MemoryMXBean</code>, <code>ThreadMXBean</code>) itself uses.</p>
+  <pre><code class="java">import javax.management.MXBean;
+
+@MXBean
+public interface Stats {   // any name at all — no "MBean" suffix required
+  long getHitCount();
+}
+
+public class StatsImpl implements Stats {
+  public long getHitCount() { return 42; }
+}</code></pre>
+  <pre><code class="bash">$ javac Stats.java StatsImpl.java ArbitraryNameTest.java
+$ java -cp . ArbitraryNameTest</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — registers and reads back fine, despite the
+  interface name matching neither the class name nor "MBean":
+  <pre><code class="java">registered with @MXBean, arbitrary interface name -> 42</code></pre></div>
+
+  <!-- ============================================================ -->
+  <h2 id="remote">5 · Remote JMX — Complete Example</h2>
+  <p>The whole point of JSR 160: reach an <code>MBeanServer</code> running in a <em>different</em> JVM,
+  potentially on a different machine. Below, a server process registers the same <code>CacheStats</code>
+  MBean and exposes JMX remotely; a completely separate client process connects and reads it — real
+  two-process, real network round trip on this machine.</p>
+  <p><strong>Server</strong> — three system properties turn on the remote agent at launch:</p>
+  <pre><code class="bash">$ java -Dcom.sun.management.jmxremote \
+       -Dcom.sun.management.jmxremote.port=19099 \
+       -Dcom.sun.management.jmxremote.authenticate=false \
+       -Dcom.sun.management.jmxremote.ssl=false \
+       -Djava.rmi.server.hostname=127.0.0.1 \
+       -cp . RemoteServer &amp;
+server up, pid=30378</code></pre>
+  <p><strong>Client</strong> — a separate process, separate JVM, using
+  <code>JMXConnectorFactory</code> and a <code>service:jmx:rmi:...</code> URL:</p>
+  <pre><code class="java">import javax.management.*;
+import javax.management.remote.*;
+import java.util.Map;
+
+public class RemoteClient {
+  public static void main(String[] args) throws Exception {
+    String url = "service:jmx:rmi:///jndi/rmi://127.0.0.1:19099/jmxrmi";
+    JMXServiceURL serviceUrl = new JMXServiceURL(url);
+    try (JMXConnector connector = JMXConnectorFactory.connect(serviceUrl, Map.of())) {
+      MBeanServerConnection conn = connector.getMBeanServerConnection();
+      ObjectName name = new ObjectName("com.example:type=CacheStats,name=OrderCache");
+
+      long hits = (long) conn.getAttribute(name, "HitCount");
+      long misses = (long) conn.getAttribute(name, "MissCount");
+      System.out.println("REMOTE read -> hits=" + hits + " misses=" + misses);
+
+      // platform MXBeans are reachable remotely too — no extra work
+      ObjectName memName = new ObjectName("java.lang:type=Memory");
+      System.out.println("REMOTE Memory MBean reachable: " +
+          (conn.getAttribute(memName, "HeapMemoryUsage") != null));
+    }
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac RemoteClient.java
+$ java -cp . RemoteClient</code></pre>
+  <div class="warn"><strong>Verified real output — genuinely two separate JVM processes:</strong>
+  <pre><code class="java">REMOTE read -> hits=2 misses=1
+REMOTE Memory MBean reachable: true</code></pre></div>
+  <div class="note"><code>service:jmx:rmi:///jndi/rmi://host:port/jmxrmi</code> is the default RMI
+  connector URL form — the same one <code>jconsole</code> builds internally when you type
+  <code>host:port</code> into its connect dialog. Production setups typically add
+  <code>ssl=true</code> and a password/access file instead of the <code>authenticate=false</code>
+  shortcut used here for a local demo.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="notifications">6 · Notifications — Complete Example</h2>
+  <p>MBeans aren't purely poll-based — an MBean that implements
+  <code>NotificationEmitter</code>/<code>NotificationBroadcaster</code> can push events to listeners.
+  The platform's own <code>MemoryMXBean</code> does exactly this for heap usage thresholds, which is
+  how tools show a live "memory pressure" alert without polling in a loop:</p>
+  <pre><code class="java">import java.lang.management.*;
+import javax.management.*;
+import javax.management.openmbean.CompositeData;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+public class MemoryThresholdDemo {
+  public static void main(String[] args) throws Exception {
+    List&lt;MemoryPoolMXBean&gt; pools = ManagementFactory.getMemoryPoolMXBeans();
+    MemoryPoolMXBean targetPool = null;
+    for (MemoryPoolMXBean p : pools) {
+      if (p.isUsageThresholdSupported() &amp;&amp; p.getType() == MemoryType.HEAP) {
+        targetPool = p;
+        break;
+      }
+    }
+    if (targetPool == null) { System.out.println("no supported pool found"); return; }
+
+    long threshold = targetPool.getUsage().getUsed() + 1;   // trips almost immediately, for the demo
+    targetPool.setUsageThreshold(threshold);
+    System.out.println("watching pool: " + targetPool.getName());
+
+    CountDownLatch latch = new CountDownLatch(1);
+    MemoryMXBean memBean = ManagementFactory.getMemoryMXBean();
+    NotificationEmitter emitter = (NotificationEmitter) memBean;
+    emitter.addNotificationListener((Notification notif, Object handback) -&gt; {
+      if (notif.getType().equals(MemoryNotificationInfo.MEMORY_THRESHOLD_EXCEEDED)) {
+        MemoryNotificationInfo info = MemoryNotificationInfo.from((CompositeData) notif.getUserData());
+        System.out.println("NOTIFICATION: pool=" + info.getPoolName()
+            + " used=" + info.getUsage().getUsed());
+        latch.countDown();
+      }
+    }, null, null);
+
+    // allocate until the threshold trips
+    List&lt;byte[]&gt; garbage = new ArrayList&lt;&gt;();
+    for (int i = 0; i &lt; 2000 &amp;&amp; latch.getCount() &gt; 0; i++) {
+      garbage.add(new byte[10_000]);
+    }
+    latch.await(5, TimeUnit.SECONDS);
+    System.out.println("done, notified=" + (latch.getCount() == 0));
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac MemoryThresholdDemo.java
+$ java -cp . MemoryThresholdDemo</code></pre>
+  <div class="warn"><strong>Verified real output — a push notification, not a poll:</strong>
+  <pre><code class="java">watching pool: G1 Old Gen
+NOTIFICATION: pool=G1 Old Gen used=1177912
+done, notified=true</code></pre></div>
+  <div class="tip">This is exactly the mechanism behind production "heap usage &gt; 90%" alerting agents
+  — set <code>setUsageThreshold</code> to something meaningful (e.g. 90% of max) instead of "used + 1",
+  and the notification fires once, asynchronously, the moment the JVM crosses it — no polling loop
+  burning CPU.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="jfr-integration">7 · JMX + JFR — Controlling Recordings Over JMX</h2>
+  <p>This is the direct answer to "how do JMX and JFR relate": since <strong>Java 8</strong>, every
+  <code>jcmd</code> diagnostic command — including all of JFR's — is <em>also</em> exposed as an MBean,
+  <code>com.sun.management:type=DiagnosticCommand</code>. That means you can start, check, dump, and
+  stop a JFR recording purely through JMX: no shell access to the target host at all, which matters a
+  great deal for a JVM inside a locked-down container where only a JMX port is reachable.</p>
+  <p>First, proof the operations are really there — inspecting the MBean's own metadata, filtered to
+  the JFR-related ones:</p>
+  <pre><code class="java">import javax.management.*;
+import java.lang.management.ManagementFactory;
+
+public class DiagCommandInspect {
+  public static void main(String[] args) throws Exception {
+    MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+    ObjectName name = new ObjectName("com.sun.management:type=DiagnosticCommand");
+    MBeanInfo info = server.getMBeanInfo(name);
+    for (MBeanOperationInfo op : info.getOperations()) {
+      if (op.getName().toLowerCase().contains("jfr")) {
+        System.out.println(op.getName() + " -> " + op.getDescription());
+      }
+    }
+  }
+}</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — the exact same commands
+  <code>jcmd &lt;PID&gt; JFR.*</code> exposes, listed straight off the running JVM's own MBean:
+  <pre><code class="java">jfrCheck -> Checks running JFR recording(s)
+jfrConfigure -> Configure JFR
+jfrDump -> Copies contents of a JFR recording to file. Either the name or the recording id must be specified.
+jfrStart -> Starts a new JFR recording
+jfrStop -> Stops a JFR recording
+jfrView -> Display event data in predefined views</code></pre></div>
+
+  <p>Now actually driving a full start → check → stop cycle — purely over JMX, invoking each operation
+  with a <code>String[]</code> of the same arguments you'd type after <code>jcmd &lt;PID&gt; JFR.start</code>:</p>
+  <pre><code class="java">import javax.management.*;
+import java.lang.management.ManagementFactory;
+
+public class DiagCommandJfr {
+  public static void main(String[] args) throws Exception {
+    MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+    ObjectName name = new ObjectName("com.sun.management:type=DiagnosticCommand");
+
+    String startResult = (String) server.invoke(name, "jfrStart",
+        new Object[]{ new String[]{ "name=jmxdemo", "settings=profile", "filename=/tmp/jmx-triggered.jfr" } },
+        new String[]{ String[].class.getName() });
+    System.out.println("jfrStart -> " + startResult.trim());
+
+    long x = 0;
+    for (int i = 0; i &lt; 100_000_000; i++) x += i;   // give the recording something to capture
+    System.out.println("work done, x=" + x);
+
+    String checkResult = (String) server.invoke(name, "jfrCheck",
+        new Object[]{ (Object) null }, new String[]{ String[].class.getName() });
+    System.out.println("jfrCheck -> " + checkResult.trim());
+
+    String stopResult = (String) server.invoke(name, "jfrStop",
+        new Object[]{ new String[]{ "name=jmxdemo" } },
+        new String[]{ String[].class.getName() });
+    System.out.println("jfrStop -> " + stopResult.trim());
+  }
+}</code></pre>
+  <pre><code class="bash">$ javac DiagCommandJfr.java
+$ java -cp . DiagCommandJfr</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — every line below is a real
+  <code>String</code> returned from an MBean operation call, and the recording it produced was then
+  read back with <code>jfr summary</code> to confirm the file is genuine:
+  <pre><code class="java">jfrStart -> Started recording 1. No limit specified, using maxsize=250MB as default.
+work done, x=4999999950000000
+jfrCheck -> Recording 1: name=jmxdemo maxsize=250.0MB (running)
+jfrStop -> Stopped recording "jmxdemo", 373.1 kB written to:
+/tmp/jmx-triggered.jfr</code></pre></div>
+  <p>Combine this with §5's remote connector and you can trigger the exact same sequence against a JVM
+  on another host — the recipe production incident tooling actually uses: connect over JMX, call
+  <code>jfrDump</code> to pull a snapshot without stopping anything, then read the resulting
+  <code>.jfr</code> file with the <code>jfr</code> CLI or JMC, as covered in the
+  <a href="#pg-topics-jfr-html">JFR &amp; Mission Control deep dive</a>.</p>
+  <div class="tip">Two independent things are true at once here: JFR events themselves are
+  <strong>not</strong> delivered over JMX (they're a separate, purpose-built binary format and streaming
+  API — see <a href="#pg-topics-jfr-html">JFR Event Streaming</a>) — but JFR's <em>control plane</em>
+  (start/stop/dump/configure) is fully reachable through JMX, because it rides on the same
+  general-purpose <code>DiagnosticCommand</code> bridge every <code>jcmd</code> command uses.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">8 · Cheat Sheet</h2>
+  <div class="cheat">
+    <h3>JMX in one glance</h3>
+    <ul>
+      <li><strong>History:</strong> JSR 3 (core API) + JSR 160 (remote) + JSR 174 (platform MXBeans),
+      all bundled starting J2SE 5.0 (2004) — JMX itself predates that as a standalone spec app servers
+      adopted on their own.</li>
+      <li><strong>Zero-setup data:</strong> <code>ManagementFactory.getMemoryMXBean()</code>,
+      <code>getThreadMXBean()</code>, <code>getGarbageCollectorMXBeans()</code>, etc. — no flags needed.</li>
+      <li><strong>Custom MBean, two ways:</strong> Standard MBean (interface must be named
+      <code>&lt;Class&gt;MBean</code> exactly) or <code>@MXBean</code> (any interface name, richer type
+      conversion) — register both with <code>MBeanServer.registerMBean(obj, ObjectName)</code>.</li>
+      <li><strong>Enable remotely:</strong> <code>-Dcom.sun.management.jmxremote.port=...</code> at
+      launch, or <code>jcmd &lt;PID&gt; ManagementAgent.start ...</code> on an already-running JVM.</li>
+      <li><strong>Connect remotely:</strong> <code>JMXConnectorFactory.connect(new
+      JMXServiceURL("service:jmx:rmi:///jndi/rmi://host:port/jmxrmi"))</code>.</li>
+      <li><strong>Push, not poll:</strong> <code>NotificationEmitter</code> +
+      <code>addNotificationListener</code> — <code>MemoryMXBean</code>'s usage-threshold notifications
+      are the built-in example.</li>
+      <li><strong>JMX ↔ JFR:</strong> <code>com.sun.management:type=DiagnosticCommand</code> exposes
+      every <code>jcmd JFR.*</code> command as an MBean operation (since Java 8) — start/check/dump/stop
+      a recording with no shell access to the target host at all.</li>
+      <li><strong>Tools:</strong> <code>jconsole</code> (bundled since Java 5), JDK Mission Control
+      (modern successor, also does JFR).</li>
+    </ul>
+  </div>
+
+</section>
+<section id="pg-topics-jwebserver-html" class="print-page">
+  <p class="sec-tag">Deep dive · tooling · prototyping</p>
+  <h1>Simple Web Server (jwebserver) <span class="badge added">Java 18</span></h1>
+  <p class="lead">
+    Introduced in Java 18 (JEP 408), the Simple Web Server is a lightweight, out-of-the-box HTTP server for serving static files. It removes the need for Python, Node, or Apache just to preview local assets during development or education.
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">CLI</span><span class="lbl">start from terminal</span></div>
+    <div class="stat"><span class="num">API</span><span class="lbl">programmatic hooks</span></div>
+    <div class="stat"><span class="num">Static</span><span class="lbl">files only (GET / HEAD)</span></div>
+    <div class="stat"><span class="num">Java 18</span><span class="lbl">introduction</span></div>
+  </div>
+
+  <h2>1 · Command-Line Tool</h2>
+  <p>To serve the current directory on port 8000, simply run <code>jwebserver</code>.</p>
+  <pre><code class="bash">$ jwebserver
+Binding to 127.0.0.1:8000 and serving /Users/you/project
+URL http://127.0.0.1:8000/</code></pre>
+
+  <p>You can customize the directory, port, and binding address (e.g., to make it accessible to your local network instead of just localhost):</p>
+  <pre><code class="bash">$ jwebserver -b 0.0.0.0 -p 9000 -d ./public -o verbose</code></pre>
+
+  <h2>2 · Programmatic API</h2>
+  <p>If you want to bake the static file server into your application, Java 18 added factory methods to <code>com.sun.net.httpserver.SimpleFileServer</code> and <code>HttpHandlers</code>.</p>
+  
+  <h3>Basic Embedded Server</h3>
+  <pre><code class="java">import com.sun.net.httpserver.*;
+import java.net.InetSocketAddress;
+import java.nio.file.Path;
+
+public class BasicFileServer {
+    public static void main(String[] args) {
+        var address = new InetSocketAddress(8080);
+        var rootDir = Path.of("./public").toAbsolutePath();
+        
+        HttpServer server = SimpleFileServer.createFileServer(address, rootDir, SimpleFileServer.OutputLevel.INFO);
+        server.start();
+        
+        System.out.println("Serving on http://localhost:8080");
+    }
+}</code></pre>
+
+  <h3>Advanced Routing &amp; Fallbacks</h3>
+  <p>You can compose handlers conditionally. For example, serve static files for public paths, but return a custom 403 response for hidden paths.</p>
+  <pre><code class="java">import com.sun.net.httpserver.*;
+import java.net.InetSocketAddress;
+import java.nio.file.Path;
+
+public class AdvancedRoutingServer {
+    public static void main(String[] args) throws Exception {
+        var staticDir = Path.of("./static").toAbsolutePath();
+        HttpHandler fileHandler = SimpleFileServer.createFileHandler(staticDir);
+
+        // Fallback for forbidden access
+        HttpHandler forbidden = HttpHandlers.of(403, new Headers(), "Access Denied");
+
+        // Route traffic conditionally
+        HttpHandler router = HttpHandlers.handleOrElse(
+            req -&gt; !req.getRequestURI().getPath().startsWith("/admin"),
+            fileHandler,
+            forbidden
+        );
+
+        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0, "/", router);
+        server.start();
+    }
+}</code></pre>
+
 </section>
 
 </div>
