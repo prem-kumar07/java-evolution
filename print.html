@@ -1946,17 +1946,27 @@ for (int i = 0; i + 3 &lt;= xs.size(); i++)
   <p>Writing your own gatherer → <a href="#pg-topics-streams-gatherers-html">Streams &amp; Gatherers deep-dive</a>.</p>
 
   <h3>Foreign Function &amp; Memory API <span class="badge added">Final in 22</span> <span class="badge jep">JEP 454</span></h3>
-  <p><em>Why it matters:</em> call native libraries and manage off-heap memory in pure Java — the
-  safe, supported replacement for JNI.</p>
+  <p><em>Why it matters:</em> "FFM" is really <strong>two</strong> APIs bundled under one JEP — call
+  native libraries, <em>and</em> manage off-heap memory in pure Java, the safe, supported replacement
+  for JNI. They're often used together (as below), but each is useful on its own.</p>
+  <table class="data">
+    <tr><th>API</th><th>Handles</th><th>Key types</th></tr>
+    <tr><td><strong>Memory API</strong></td><td>Allocating, reading, and writing off-heap memory —
+    works standalone, no native call required</td><td><code>Arena</code>,
+    <code>MemorySegment</code>, <code>ValueLayout</code></td></tr>
+    <tr><td><strong>Foreign Function API</strong></td><td>Calling a native (C) function from Java, or
+    letting native code call back into Java</td><td><code>Linker</code>,
+    <code>MethodHandle</code>, <code>FunctionDescriptor</code></td></tr>
+  </table>
   <pre><code class="java">// call C's strlen() — no C glue code, no build step
-Linker linker = Linker.nativeLinker();
-MethodHandle strlen = linker.downcallHandle(
+Linker linker = Linker.nativeLinker();                              // Foreign Function API
+MethodHandle strlen = linker.downcallHandle(                        // Foreign Function API
     linker.defaultLookup().find("strlen").orElseThrow(),
     FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
 
-try (Arena arena = Arena.ofConfined()) {
-  MemorySegment cString = arena.allocateFrom("hello");
-  long len = (long) strlen.invoke(cString);   // -> 5
+try (Arena arena = Arena.ofConfined()) {                            // Memory API
+  MemorySegment cString = arena.allocateFrom("hello");               // Memory API
+  long len = (long) strlen.invoke(cString);   // -> 5                // Foreign Function API (the call)
 }</code></pre>
   <p>A complete, runnable program (off-heap memory + downcall + upcall) →
   <a href="#pg-topics-ffm-api-html">FFM deep-dive</a>.</p>
