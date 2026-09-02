@@ -139,15 +139,31 @@ body {
   transform: rotate(90deg);   /* expanded: pointing down */
 }
 .nav-group.collapsed .nav-group-arrow { transform: rotate(0deg); }   /* collapsed: pointing right */
-.nav-group-items { overflow: hidden; }
+.nav-group-items {
+  overflow: hidden;
+  position: relative;
+  margin-left: 19px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
 .nav-group.collapsed .nav-group-items { display: none; }
 #sidebar a {
   display: block;
+  position: relative;
   padding: 6px 12px;
   border-radius: 6px;
   color: var(--text);
   text-decoration: none;
   font-size: .92rem;
+}
+#sidebar a::before {
+  content: "";
+  position: absolute;
+  left: -13px;
+  top: 50%;
+  width: 10px;
+  height: 1px;
+  background: var(--border);
 }
 #sidebar a:hover { background: var(--badge-bg); }
 #sidebar a.active {
