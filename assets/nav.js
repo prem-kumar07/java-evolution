@@ -58,7 +58,8 @@
       { href: "topics/jlink-jpackage.html",         label: "Custom runtime & packaging (jlink)" },
       { href: "topics/jfr.html",                    label: "JFR & Mission Control" },
       { href: "topics/jmx.html",                    label: "JMX & JConsole" },
-      { href: "topics/jwebserver.html",             label: "Simple Web Server" }
+      { href: "topics/jwebserver.html",             label: "Simple Web Server" },
+      { href: "topics/java-agent.html",             label: "Java Agent & Instrumentation" }
     ]}
   ];
 

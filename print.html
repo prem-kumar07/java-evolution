@@ -65,6 +65,7 @@
 <a href="#pg-topics-jfr-html">JFR &amp; JMC — complete guide</a>
 <a href="#pg-topics-jmx-html">JMX — complete guide</a>
 <a href="#pg-topics-jwebserver-html">Simple Web Server — complete guide</a>
+<a href="#pg-topics-java-agent-html">Java Agents &amp; Instrumentation — complete guide</a>
 </div>
 <section id="pg-quickstart-html" class="print-page">
   <p class="sec-tag">Set up your machine</p>
@@ -11599,6 +11600,657 @@ public class AdvancedRoutingServer {
         server.start();
     }
 }</code></pre>
+
+</section>
+<section id="pg-topics-java-agent-html" class="print-page">
+  <p class="sec-tag">Deep dive · runtime instrumentation</p>
+  <h1>Java Agents &amp; the Instrumentation API <span class="badge added">Java 5</span></h1>
+  <p class="lead">
+    A Java agent is ordinary Java code the JVM runs <em>before</em> — or, for a dynamic agent, <em>during</em>
+    — your application, with one extra superpower: a live handle on the JVM's own class-loading pipeline.
+    Through <code>java.lang.instrument.Instrumentation</code>, an agent can inspect every loaded class,
+    rewrite a class's bytecode as it loads, or even swap the bytecode of a class that's already running —
+    all without touching a single line of the application's source. This is the mechanism underneath every
+    APM tool, every code-coverage tool, every mocking framework, and every JVM profiler that claims
+    "zero code changes required."
+  </p>
+
+  <div class="hero-stats">
+    <div class="stat"><span class="num">Java 5</span><span class="lbl">JSR 163 — <code>-javaagent</code>, <code>premain</code></span></div>
+    <div class="stat"><span class="num">Java 6</span><span class="lbl">Attach API — dynamic <code>agentmain</code></span></div>
+    <div class="stat"><span class="num">17</span><span class="lbl">methods on <code>Instrumentation</code></span></div>
+    <div class="stat"><span class="num">0</span><span class="lbl">app restarts needed to redefine a class</span></div>
+    <div class="stat"><span class="num">JEP 451</span><span class="lbl">dynamic loading now warns (Java 21+)</span></div>
+  </div>
+  <div class="solves">
+    <span class="solves-label">The problem it solves</span>
+    Before <code>java.lang.instrument</code>, adding profiling, tracing, or mocking behavior to code you
+    didn't own meant one of two bad options: hand-edit or subclass everything you wanted to observe, or
+    ship a native (JVMTI/JVMPI) agent written in C. JSR 163 gave the JVM a standard, pure-Java hook into
+    class loading itself — any jar can declare itself an agent, ask to see (and rewrite) the bytecode of
+    every class as it loads, and the JDK's own <code>-javaagent</code> flag wires it up with no native code,
+    no build-tool integration, and no changes to the target application at all.
+  </div>
+
+  <div class="page-toc">
+    <strong>On this page</strong>
+    <a href="#what">1. What a Java agent is, and why it exists</a>
+    <a href="#static">2. Static agents — <code>premain()</code> and <code>-javaagent</code></a>
+    <a href="#instrumentation">3. The <code>Instrumentation</code> interface — all 17 methods</a>
+    <a href="#transformer">4. <code>ClassFileTransformer</code> — rewriting bytecode as classes load</a>
+    <a href="#redefine">5. <code>retransformClasses</code> vs <code>redefineClasses</code> — modifying a live class</a>
+    <a href="#dynamic">6. Dynamic agents — <code>agentmain()</code>, the Attach API &amp; <code>Launcher-Agent-Class</code></a>
+    <a href="#jep451">7. Java 21+ — the dynamic-loading warning (JEP 451)</a>
+    <a href="#manifest">8. Manifest attributes reference</a>
+    <a href="#usecases">9. Real-world use cases, and a combined Instrumentation + JFR + JMX example</a>
+    <a href="#timeline">10. Version timeline</a>
+    <a href="#cheat">11. Cheat sheet</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="what">1 · What a Java Agent Is, and Why It Exists</h2>
+  <p><strong>JSR 163</strong> added the whole mechanism in <strong>Java 5</strong>: the
+  <code>java.lang.instrument</code> package, the <code>-javaagent</code> launch flag, and a new manifest
+  attribute JAR files can carry. An "agent" is just a plain class with a specially-named static method —
+  no interface to implement, no special base class. What makes it an agent is entirely how it's declared
+  (a manifest attribute) and how it's launched (a JVM flag, or a dynamic attach).</p>
+  <p>Two independent axes define every agent:</p>
+  <table class="data">
+    <tr><th>Axis</th><th>Options</th></tr>
+    <tr><td><strong>When it attaches</strong></td><td><strong>Static</strong> — bundled via
+    <code>-javaagent</code> at JVM launch, runs <code>premain()</code> before <code>main()</code> even
+    starts. <strong>Dynamic</strong> — attached to an <em>already-running</em> JVM from another process,
+    runs <code>agentmain()</code> mid-execution.</td></tr>
+    <tr><td><strong>What it does once attached</strong></td><td>Registers a
+    <code>ClassFileTransformer</code> to rewrite bytecode as classes load, calls
+    <code>retransformClasses</code>/<code>redefineClasses</code> to rewrite classes that are
+    <em>already</em> loaded, or simply reads JVM state (<code>getAllLoadedClasses</code>,
+    <code>getObjectSize</code>) without changing anything.</td></tr>
+  </table>
+  <div class="note">Every example on this page was compiled and actually run against a real JDK 25
+  install (Temurin 25.0.4) — including the exact warning text JDK 21+ prints for dynamic agent loading, and
+  a genuine two-process dynamic-attach scenario. Nothing here is quoted from memory.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="static">2 · Static Agents — <code>premain()</code> and <code>-javaagent</code></h2>
+  <p>A static agent is just a class with a <code>premain</code> method, packaged as a JAR whose manifest
+  names that class. The JDK looks for the two-argument form first, and falls back to the one-argument form
+  if that's all the class defines — both verified below:</p>
+  <table class="data">
+    <tr><th>Signature</th><th>When used</th></tr>
+    <tr><td><code>public static void premain(String agentArgs, Instrumentation inst)</code></td>
+    <td>Preferred — the JDK looks for this first. Gives the agent the <code>Instrumentation</code> handle
+    it needs to actually transform bytecode.</td></tr>
+    <tr><td><code>public static void premain(String agentArgs)</code></td>
+    <td>Fallback, tried only if the two-argument form isn't found. Useful for an agent that only reads
+    <code>agentArgs</code> and never touches bytecode — a JSR 163 holdover from before
+    <code>Instrumentation</code> existed as a concept.</td></tr>
+  </table>
+  <pre><code class="java">// BasicAgent.java
+import java.lang.instrument.Instrumentation;
+
+public class BasicAgent {
+  public static void premain(String agentArgs, Instrumentation inst) {
+    System.out.println("premain called, agentArgs=" + agentArgs);
+    System.out.println("isRetransformClassesSupported=" + inst.isRetransformClassesSupported());
+    System.out.println("isRedefineClassesSupported=" + inst.isRedefineClassesSupported());
+    System.out.println("loaded class count at premain time=" + inst.getAllLoadedClasses().length);
+  }
+}</code></pre>
+  <p>The manifest — <strong>not</strong> a command-line flag — is what tells the JDK which class has
+  <code>premain</code>, and what capabilities the agent needs:</p>
+  <pre><code class="bash">$ cat MANIFEST.MF
+Premain-Class: BasicAgent
+Can-Retransform-Classes: true
+Can-Redefine-Classes: true
+
+$ javac BasicAgent.java Main.java
+$ jar cfm agent.jar MANIFEST.MF BasicAgent.class
+$ java -javaagent:agent.jar -cp . Main</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — <code>premain</code> runs to completion,
+  printing 888 already-bootstrapped JDK classes, <em>before</em> <code>Main.main</code> ever starts:
+  <pre><code class="java">premain called, agentArgs=null
+isRetransformClassesSupported=true
+isRedefineClassesSupported=true
+loaded class count at premain time=888
+main running</code></pre></div>
+  <p>Passing arguments to an agent is done with <code>=</code> after the jar path — everything after the
+  <code>=</code> arrives verbatim as <code>agentArgs</code>, and multiple <code>-javaagent</code> flags can
+  be stacked to load several independent agents into the same JVM:</p>
+  <pre><code class="bash">$ java -javaagent:agent.jar=myArgs -javaagent:other-agent.jar -cp . Main</code></pre>
+  <div class="tip">Order matters when multiple agents are stacked: <code>premain</code> methods run in the
+  same left-to-right order the <code>-javaagent</code> flags appear on the command line, all of them
+  finishing before <code>main()</code> starts.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="instrumentation">3 · The <code>Instrumentation</code> Interface — All 17 Methods</h2>
+  <p>Everything an agent can do funnels through the single <code>Instrumentation</code> object handed to
+  <code>premain</code>/<code>agentmain</code>. Confirmed against the live interface with
+  <code>javap java.lang.instrument.Instrumentation</code> — every method that exists, nothing more:</p>
+  <table class="data">
+    <tr><th>Method</th><th>What it does</th></tr>
+    <tr><td><code>addTransformer(ClassFileTransformer, boolean canRetransform)</code></td><td>Registers a
+    transformer to run on every future class load. <code>canRetransform=true</code> lets this transformer
+    also participate in later <code>retransformClasses</code> calls (§5).</td></tr>
+    <tr><td><code>addTransformer(ClassFileTransformer)</code></td><td>Same, with
+    <code>canRetransform</code> defaulted to <code>false</code>.</td></tr>
+    <tr><td><code>removeTransformer(ClassFileTransformer)</code></td><td>Unregisters a previously added
+    transformer; returns whether it was actually registered.</td></tr>
+    <tr><td><code>isRetransformClassesSupported()</code></td><td>Whether this JVM allows re-running the
+    transformer chain against already-loaded classes.</td></tr>
+    <tr><td><code>retransformClasses(Class&lt;?&gt;...)</code></td><td>Re-invokes every registered,
+    retransform-capable transformer against classes that are <strong>already loaded</strong> — verified
+    live in §5.</td></tr>
+    <tr><td><code>isRedefineClassesSupported()</code></td><td>Whether this JVM allows wholesale class
+    redefinition.</td></tr>
+    <tr><td><code>redefineClasses(ClassDefinition...)</code></td><td>Replaces an already-loaded class's
+    bytecode with caller-supplied bytes directly — <strong>bypasses the transformer chain entirely</strong>,
+    verified in §5.</td></tr>
+    <tr><td><code>isModifiableClass(Class&lt;?&gt;)</code></td><td>Whether a specific class can be
+    transformed/redefined at all — some core bootstrap classes can't be.</td></tr>
+    <tr><td><code>getAllLoadedClasses()</code></td><td>Every class currently loaded anywhere in the
+    JVM.</td></tr>
+    <tr><td><code>getInitiatedClasses(ClassLoader)</code></td><td>Classes a specific class loader has
+    initiated loading of.</td></tr>
+    <tr><td><code>getObjectSize(Object)</code></td><td>Shallow size, in bytes, of a given object instance
+    — verified with real numbers below.</td></tr>
+    <tr><td><code>appendToBootstrapClassLoaderSearch(JarFile)</code></td><td>Makes a jar's classes visible
+    to the bootstrap class loader — used when an agent's own support classes must be reachable from
+    <code>java.*</code> code.</td></tr>
+    <tr><td><code>appendToSystemClassLoaderSearch(JarFile)</code></td><td>Makes a jar's classes visible to
+    the system (application) class loader at runtime — verified below.</td></tr>
+    <tr><td><code>isNativeMethodPrefixSupported()</code></td><td>Whether this transformer's
+    native-method-prefix trick is supported.</td></tr>
+    <tr><td><code>setNativeMethodPrefix(ClassFileTransformer, String)</code></td><td>Lets a transformer
+    wrap a native method by renaming the original and generating a prefixed non-native stub in its
+    place — how native-call interception agents work.</td></tr>
+    <tr><td><code>redefineModule(...)</code></td><td>Adds reads/exports/opens/uses/provides to an
+    already-defined JPMS module at runtime (<strong>Java 9+</strong>) — verified below, opening
+    <code>java.lang</code> for reflection without <code>--add-opens</code>.</td></tr>
+    <tr><td><code>isModifiableModule(Module)</code></td><td>Whether a given module can be
+    redefined.</td></tr>
+  </table>
+  <p><code>getObjectSize</code> is the simplest one to demonstrate directly — every number below is real,
+  measured on this JDK 25 install (no compact object headers enabled, the JDK 25 default):</p>
+  <pre><code class="java">System.out.println("Object -&gt; " + inst.getObjectSize(new Object()) + " bytes");
+System.out.println("Point(1,2) -&gt; " + inst.getObjectSize(new Point(1, 2)) + " bytes");   // a 2-int record
+System.out.println("int[100] -&gt; " + inst.getObjectSize(new int[100]) + " bytes");
+System.out.println("String \"hi\" -&gt; " + inst.getObjectSize("hi") + " bytes");</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">Object -&gt; 16 bytes
+Point(1,2) -&gt; 24 bytes
+int[100] -&gt; 416 bytes
+String "hi" -&gt; 24 bytes</code></pre></div>
+  <p><code>appendToSystemClassLoaderSearch</code> makes a class reachable that genuinely was not on the
+  classpath when the JVM launched — verified by loading a class from a jar the agent appends at
+  <code>premain</code> time, then resolving it from application code with no other reference to that
+  jar anywhere:</p>
+  <pre><code class="java">// AppendAgent.java — args is the path to a jar NOT on the launch classpath
+public static void premain(String args, Instrumentation inst) throws Exception {
+  inst.appendToSystemClassLoaderSearch(new JarFile(args));
+}</code></pre>
+  <pre><code class="java">// AppendMain.java
+Class&lt;?&gt; helperClass = Class.forName("com.example.Helper");   // NOT on the launch -cp
+Object result = helperClass.getMethod("greet").invoke(null);
+System.out.println("via appended jar -&gt; " + result);</code></pre>
+  <div class="warn"><strong>Verified real output:</strong>
+  <pre><code class="java">[append-agent] appended .../extra.jar to system classloader search path
+via appended jar -&gt; hello from a jar appended at runtime</code></pre></div>
+  <p><code>redefineModule</code> is the one that looks the most like magic: it lets an agent grant itself
+  reflective access to a module's internals <em>without</em> the target JVM ever having been launched with
+  <code>--add-opens</code>. This is exactly how tools like Mockito's inline mock maker avoid making every
+  test run depend on JVM flags — verified end to end, opening <code>java.lang</code> to read
+  <code>String</code>'s private backing array:</p>
+  <pre><code class="java">Field valueField = String.class.getDeclaredField("value");
+try {
+  valueField.setAccessible(true);           // fails -- java.lang isn't open by default
+} catch (InaccessibleObjectException e) {
+  System.out.println("before redefineModule, blocked: " + e.getMessage());
+}
+
+Module javaBase = String.class.getModule();
+Module unnamed  = OpenMain.class.getModule();
+inst.redefineModule(
+    javaBase,
+    Set.of(),                                    // extraReads
+    Map.of(),                                     // extraExports
+    Map.of("java.lang", Set.of(unnamed)),         // extraOpens -- open java.lang to us
+    Set.of(), Map.of());                          // extraUses, extraProvides
+
+valueField.setAccessible(true);                   // now succeeds
+System.out.println("after redefineModule, setAccessible succeeded: " + valueField);</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — genuinely blocked, then genuinely opened, in
+  the same JVM, with no launch flags at all:
+  <pre><code class="java">before redefineModule, blocked: Unable to make field private final byte[] java.lang.String.value
+  accessible: module java.base does not "opens java.lang" to unnamed module @7a81197d
+isModifiableModule=true
+after redefineModule, setAccessible succeeded: private final byte[] java.lang.String.value</code></pre></div>
+
+  <!-- ============================================================ -->
+  <h2 id="transformer">4 · <code>ClassFileTransformer</code> — Rewriting Bytecode as Classes Load</h2>
+  <p><code>addTransformer</code> is where an agent actually gets to change code, not just observe it.
+  Confirmed via <code>javap</code> — two overloads, both <code>default</code> methods so an agent only
+  needs to implement the one it cares about:</p>
+  <table class="data">
+    <tr><th>Method</th><th>Since</th><th>Notes</th></tr>
+    <tr><td><code>byte[] transform(ClassLoader, String className, Class&lt;?&gt; classBeingRedefined,
+    ProtectionDomain, byte[] classfileBuffer)</code></td><td>Java 5</td><td>The original signature. Return
+    the (possibly modified) bytecode, or <code>null</code> to leave the class unchanged.</td></tr>
+    <tr><td><code>byte[] transform(Module, ClassLoader, String, Class&lt;?&gt;, ProtectionDomain,
+    byte[])</code></td><td>Java 9</td><td>Module-aware overload. Its default implementation just delegates
+    to the 5-arg one, so every pre-9 agent keeps compiling and running unmodified.</td></tr>
+  </table>
+  <p>The bytecode itself can be rewritten with any bytecode library — ASM and Byte Buddy are the
+  ecosystem's usual choices. Since <strong>Java 24</strong>, the JDK ships its own, no extra dependency
+  required: the <a href="#pg-versions-java-25-html">Class-File API (JEP 484)</a>, confirmed finalized
+  on this JDK 25 install (no <code>--enable-preview</code> needed) by
+  <code>java --describe-module java.base</code> exporting <code>java.lang.classfile</code>
+  unconditionally. Below, a transformer that injects a single static call at the very start of one target
+  method — a minimal, real method-entry probe, the same primitive every bytecode-based profiler and APM
+  agent builds on:</p>
+  <pre><code class="java">public class CountingTransformer implements ClassFileTransformer {
+  private final String targetClassNameSlash;   // e.g. "Worker"
+  private final String targetMethodName;       // e.g. "work"
+
+  public CountingTransformer(String targetClassNameSlash, String targetMethodName) {
+    this.targetClassNameSlash = targetClassNameSlash;
+    this.targetMethodName = targetMethodName;
+  }
+
+  @Override
+  public byte[] transform(ClassLoader loader, String className, Class&lt;?&gt; classBeingRedefined,
+                           ProtectionDomain protectionDomain, byte[] classfileBuffer) {
+    if (!targetClassNameSlash.equals(className)) return null;   // null = leave this class unchanged
+
+    ClassFile cf = ClassFile.of();
+    ClassModel model = cf.parse(classfileBuffer);
+
+    CodeTransform injectProbe = new CodeTransform() {
+      @Override public void atStart(CodeBuilder builder) {
+        builder.ldc(targetMethodName);
+        builder.invokestatic(ClassDesc.of("Probe"), "hit",
+            MethodTypeDesc.of(CD_void, CD_String));
+      }
+      @Override public void accept(CodeBuilder builder, CodeElement element) {
+        builder.with(element);   // forward everything else unchanged
+      }
+    };
+
+    ClassTransform xform = ClassTransform.transformingMethods(
+        mm -&gt; mm.methodName().equalsString(targetMethodName),
+        MethodTransform.transformingCode(injectProbe));
+
+    return cf.transformClass(model, xform);
+  }
+}</code></pre>
+  <p>Installed in <code>premain</code>, before <code>Worker</code> is ever loaded — the injection happens
+  transparently the first time the class-loading pipeline touches it:</p>
+  <pre><code class="java">public static void premain(String agentArgs, Instrumentation inst) {
+  inst.addTransformer(new CountingTransformer("Worker", "work"), true);
+}</code></pre>
+  <pre><code class="bash">$ java -javaagent:agent.jar -cp . Main</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — <code>Worker.work()</code>'s own source was
+  never touched; the probe call was injected purely at the bytecode level, and the class genuinely grew by
+  35 bytes:
+  <pre><code class="java">[agent] instrumented Worker.work() -- 404 bytes -&gt; 439 bytes
+[probe] entered work (total calls=1)
+  ...doing real work...
+[probe] entered work (total calls=2)
+  ...doing real work...
+main done, Probe.CALLS=2</code></pre></div>
+
+  <!-- ============================================================ -->
+  <h2 id="redefine">5 · <code>retransformClasses</code> vs <code>redefineClasses</code> — Modifying a Live Class</h2>
+  <p>Both methods change the bytecode of a class the JVM has <em>already loaded</em> — the capability that
+  makes hot-swap tooling and "turn on profiling without restarting" possible — but they work in genuinely
+  different ways, verified separately below.</p>
+  <table class="data">
+    <tr><th></th><th><code>retransformClasses</code></th><th><code>redefineClasses</code></th></tr>
+    <tr><td>Source of new bytecode</td><td>Re-runs every registered, retransform-capable
+    <code>ClassFileTransformer</code> against the class's <em>original</em> bytecode</td><td>Bytes supplied
+    directly by the caller in a <code>ClassDefinition</code> — no transformer involved at all</td></tr>
+    <tr><td>Needs</td><td><code>Can-Retransform-Classes: true</code> +
+    <code>addTransformer(t, true)</code></td><td><code>Can-Redefine-Classes: true</code></td></tr>
+    <tr><td>Typical use</td><td>Turning instrumentation on/off for classes already running (feature-flag a
+    profiler mid-session)</td><td>Hot-swapping a method body you've computed yourself — the IDE
+    "apply code changes" primitive</td></tr>
+  </table>
+  <h3>5.1 · <code>retransformClasses</code> — turning on instrumentation mid-run</h3>
+  <p>The agent attaches and does <em>nothing</em> at first; only later — driven by application code in this
+  demo, in practice often a JMX operation or a signal — does it install the transformer and retransform an
+  already-loaded, already-executing class:</p>
+  <pre><code class="java">// -- Main.java --
+Worker w = new Worker();
+w.work();                                  // BEFORE: plain, un-instrumented
+w.work();
+
+TimingAgent.instrumentNow(Worker.class, "work");   // agent decides, mid-run, to instrument
+
+w.work();                                  // AFTER: same object, same class, now instrumented
+w.work();
+
+// -- TimingAgent.java --
+public static void instrumentNow(Class&lt;?&gt; target, String method) throws Exception {
+  inst.addTransformer(new CountingTransformer(target.getName(), method), true);
+  inst.retransformClasses(target);   // re-runs the transform chain on an ALREADY-LOADED class
+}</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — the exact same <code>Worker</code> instance,
+  same class, instrumented with zero restart, mid-execution:
+  <pre><code class="java">-- before instrumentation --
+  ...doing real work...
+  ...doing real work...
+[agent] instrumented Worker.work() -- 404 bytes -&gt; 439 bytes
+[agent] retransformClasses(Worker) complete
+-- after retransformClasses --
+[probe] entered work (total calls=1)
+  ...doing real work...
+[probe] entered work (total calls=2)
+  ...doing real work...</code></pre></div>
+  <h3>5.2 · <code>redefineClasses</code> — supplying bytecode directly, no transformer chain</h3>
+  <p>Here the agent registers <strong>no transformer at all</strong> — the caller builds the new bytecode
+  itself (again with the Class-File API) and hands it straight to <code>redefineClasses</code> via a
+  <code>ClassDefinition</code>:</p>
+  <pre><code class="java">byte[] original = Files.readAllBytes(Path.of("Worker.class"));
+ClassModel model = ClassFile.of().parse(original);
+byte[] redefined = ClassFile.of().transformClass(model, /* ...inject a println call... */);
+
+inst.redefineClasses(new ClassDefinition(Worker.class, redefined));
+w.work();   // runs the new bytecode immediately</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — no transformer was ever registered on this
+  agent; the new behavior came entirely from the bytes passed to <code>redefineClasses</code>:
+  <pre><code class="java">  ...doing real work...
+-- after redefineClasses --
+  ...REDEFINED body ran instead...
+  ...doing real work...</code></pre></div>
+  <div class="tip">Both calls fail with <code>UnmodifiableClassException</code> for a class that
+  <code>isModifiableClass</code> reports <code>false</code> for, and both are checked exceptions —
+  the API deliberately forces every caller to think about the "this class can't be touched" case.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="dynamic">6 · Dynamic Agents — <code>agentmain()</code>, the Attach API &amp; <code>Launcher-Agent-Class</code></h2>
+  <p>Static agents need to be known about at JVM launch. <strong>Java 6</strong> added a second path: the
+  Attach API (<code>com.sun.tools.attach</code>, in the <code>jdk.attach</code> module) lets a
+  <em>completely separate process</em> reach into an already-running JVM by PID and load a jar as an agent
+  on the fly — no restart, and the target didn't need <code>-javaagent</code> at all.</p>
+  <table class="data">
+    <tr><th>Method</th><th>Notes</th></tr>
+    <tr><td><code>public static void agentmain(String agentArgs, Instrumentation inst)</code></td>
+    <td>The dynamic counterpart to <code>premain</code> — same two-arg/one-arg fallback rule applies.</td></tr>
+    <tr><td><code>VirtualMachine.attach(String pid)</code></td><td>From the attaching process — opens a
+    connection to a target JVM by process ID.</td></tr>
+    <tr><td><code>vm.loadAgent(String jarPath, String args)</code></td><td>Tells the target JVM to load
+    the named jar as an agent and invoke its <code>agentmain</code>, passing <code>args</code>
+    through.</td></tr>
+  </table>
+  <p>Verified as a genuine two-process scenario on this machine — a long-running <code>TargetApp</code>
+  started with no agent flags at all, and a completely separate <code>Attacher</code> process reaching in
+  by PID:</p>
+  <pre><code class="java">// Attacher.java -- a totally separate process
+VirtualMachine vm = VirtualMachine.attach(pid);
+vm.loadAgent(agentJarPath, "hello-from-attacher");
+vm.detach();</code></pre>
+  <pre><code class="bash">$ java -cp . TargetApp &amp;          # started with NO -javaagent flag
+TargetApp pid=19070
+$ java -cp . Attacher 19070 dyn-agent.jar
+Attacher: loadAgent completed</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — printed by <code>agentmain</code>, inside the
+  target process, after being loaded entirely from the outside (warning text discussed in §7):
+  <pre><code class="java">[dyn-agent] agentmain called, args=hello-from-attacher canRetransform=true</code></pre></div>
+  <h3>6.1 · <code>Launcher-Agent-Class</code> — an agent from <code>java -jar</code>, no <code>-javaagent</code> flag</h3>
+  <p>A third, less-known path since <strong>Java 9</strong>: a runnable jar's own manifest can name an
+  agent class that the launcher loads automatically before calling <code>main</code> — useful for a
+  self-contained tool (e.g. one that needs to open JDK-internal packages to itself) that shouldn't require
+  its users to remember a separate <code>-javaagent</code> flag.</p>
+  <div class="warn"><strong>Non-obvious, verified the hard way:</strong> <code>Launcher-Agent-Class</code>
+  invokes <code>agentmain</code>, <strong>not</strong> <code>premain</code> — even though nothing attached
+  from another process. Naming the entry-point method <code>premain</code> here fails at launch with a
+  native-level assertion, not a clean Java exception:
+  <pre><code class="java">$ java -jar launcher-app.jar
+Exception in thread "main" java.lang.NoSuchMethodException:
+  LauncherApp.agentmain(java.lang.String,java.lang.instrument.Instrumentation)
+*** java.lang.instrument ASSERTION FAILED ***: "!errorOutstanding" ...</code></pre></div>
+  <p>Fixed and verified working — same manifest, method renamed to <code>agentmain</code>:</p>
+  <pre><code class="bash">$ cat MANIFEST.MF
+Main-Class: LauncherApp
+Launcher-Agent-Class: LauncherApp
+
+$ java -jar launcher-app.jar</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — the agent runs before <code>main</code>, from
+  a plain <code>java -jar</code> invocation, no <code>-javaagent</code> anywhere on the command line:
+  <pre><code class="java">[launcher-agent-class] agentmain ran BEFORE main(), via plain 'java -jar', no -javaagent flag
+main() running</code></pre></div>
+
+  <!-- ============================================================ -->
+  <h2 id="jep451">7 · Java 21+ — the Dynamic-Loading Warning (JEP 451)</h2>
+  <p>JEP 451, "Prepare to Disallow the Dynamic Loading of Agents," shipped in <strong>Java 21</strong> as
+  the first step toward closing off §6's dynamic-attach path by default — the rationale being that a
+  process silently injecting bytecode into another running JVM is a serious integrity concern for
+  security-sensitive deployments, and static <code>-javaagent</code> agents (visible on the launch command
+  line) don't carry the same risk.</p>
+  <p>As of this JDK 25 install, the dynamic <code>loadAgent</code> call from §6 still succeeds — but now
+  prints a warning to the target process's own output, straight from the JVM itself, unedited:</p>
+  <div class="warn"><strong>Verified real output</strong> — captured on the target JVM's stdout the moment
+  <code>Attacher</code> loaded <code>dyn-agent.jar</code> into it:
+  <pre><code class="java">WARNING: A Java agent has been loaded dynamically (/.../dyn-agent.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release</code></pre></div>
+  <p>Suppressing the warning is exactly what it suggests — launch the <em>target</em> JVM (not the
+  attacher) with the flag, verified to fully silence it while dynamic attach keeps working:</p>
+  <pre><code class="bash">$ java -XX:+EnableDynamicAgentLoading -cp . TargetApp &amp;
+$ java -cp . Attacher &lt;pid&gt; dyn-agent.jar</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — no warning lines at all this time:
+  <pre><code class="java">TargetApp pid=19131
+[dyn-agent] agentmain called, args=hello-from-attacher canRetransform=true</code></pre></div>
+  <div class="note">Two things worth being precise about: (1) this affects only the <strong>dynamic</strong>
+  path (§6) — a static agent loaded via <code>-javaagent</code> at launch is completely unaffected, warning
+  or not; (2) as of this JDK 25 install it is <em>still</em> just a warning, not an error — the JVM's own
+  text says enforcement is planned for "a future release," so check the release notes of whatever JDK
+  you're actually deploying to rather than assuming this page's JDK 25 behavior still holds.</div>
+  <div class="tip">This is precisely why tools like IntelliJ's debugger-attach, Mockito's inline mock maker,
+  and Byte Buddy's <code>ByteBuddyAgent.install()</code> — all dynamic-attach users — started needing
+  <code>-XX:+EnableDynamicAgentLoading</code> on the JVMs they attach to, starting with Java 21.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="manifest">8 · Manifest Attributes Reference</h2>
+  <table class="data">
+    <tr><th>Attribute</th><th>Meaning</th></tr>
+    <tr><td><code>Premain-Class</code></td><td>Class with <code>premain</code> — required for a static
+    agent loaded via <code>-javaagent</code>.</td></tr>
+    <tr><td><code>Agent-Class</code></td><td>Class with <code>agentmain</code> — required for a dynamic
+    agent loaded via the Attach API's <code>loadAgent</code>.</td></tr>
+    <tr><td><code>Launcher-Agent-Class</code></td><td><strong>Java 9+.</strong> Class with
+    <code>agentmain</code> that the launcher itself loads before <code>main()</code>, for a jar started
+    with plain <code>java -jar</code> — verified in §6.1, including the "it's <code>agentmain</code>, not
+    <code>premain</code>" trap.</td></tr>
+    <tr><td><code>Can-Redefine-Classes</code></td><td><code>true</code>/<code>false</code> — must be
+    <code>true</code> for <code>redefineClasses</code> to be usable by this agent.</td></tr>
+    <tr><td><code>Can-Retransform-Classes</code></td><td><code>true</code>/<code>false</code> — must be
+    <code>true</code> for <code>retransformClasses</code> to be usable by this agent.</td></tr>
+    <tr><td><code>Can-Set-Native-Method-Prefix</code></td><td><code>true</code>/<code>false</code> —
+    gates <code>setNativeMethodPrefix</code>.</td></tr>
+    <tr><td><code>Boot-Class-Path</code></td><td>Legacy, pre-modules: space-separated relative paths added
+    to the bootstrap class loader's search path when the agent loads. Largely superseded by
+    <code>appendToBootstrapClassLoaderSearch</code> (§3), which does the same thing programmatically and
+    doesn't require repackaging the jar.</td></tr>
+  </table>
+  <div class="note">Every one of these lives in the <strong>agent jar's</strong> manifest, not the
+  application's — a target application never needs to know or care that it's being instrumented.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="usecases">9 · Real-World Use Cases, and a Combined Instrumentation + JFR + JMX Example</h2>
+  <table class="data">
+    <tr><th>Use case</th><th>How it maps to what's above</th></tr>
+    <tr><td>APM / tracing agents (OpenTelemetry Java auto-instrumentation, Datadog, New Relic, Elastic
+    APM)</td><td>Static <code>-javaagent</code> + <code>addTransformer</code> wrapping known
+    framework/library methods with timing and span-propagation code — exactly §4's pattern, just with a
+    much larger library of "which class/method to instrument" rules.</td></tr>
+    <tr><td>Mocking frameworks (Mockito's inline mock maker, PowerMock)</td><td>Dynamic attach (§6, often
+    via Byte Buddy's <code>ByteBuddyAgent.install()</code>) + <code>redefineClasses</code> (§5.2) to turn a
+    real class into a mock at test time, plus <code>redefineModule</code> (§3) to open JDK-internal
+    packages without requiring <code>--add-opens</code> on the test JVM.</td></tr>
+    <tr><td>Code-coverage tools (JaCoCo)</td><td><code>addTransformer</code> injecting probe-array
+    bookkeeping into every basic block, read back after the test run — the same entry-point-probe idea as
+    §4, applied far more densely.</td></tr>
+    <tr><td>Hot-swap / live-reload (JRebel, Spring Boot DevTools, an IDE's "apply code changes")</td>
+    <td><code>redefineClasses</code> (§5.2) — replace a running method's bytecode in place, no JVM
+    restart.</td></tr>
+    <tr><td>Profilers (async-profiler, YourKit, and JFR's own method profiling)</td><td>A blend of
+    Instrumentation-based method entry/exit hooks and JFR event emission — demonstrated together
+    below.</td></tr>
+    <tr><td>Lightweight in-process size estimation</td><td><code>getObjectSize</code> (§3) — cheaper than a
+    full heap dump when all you need is one object's shallow footprint.</td></tr>
+  </table>
+
+  <h3>9.1 · Capstone — one agent, three integrations at once</h3>
+  <p>Everything above, combined into a single <code>premain</code> that a real monitoring agent would
+  actually ship: <strong>Instrumentation</strong> injects a probe at the target method's entry point (§4),
+  the probe emits a <strong>custom JFR event</strong> on every call (see the
+  <a href="#pg-topics-jfr-html">JFR deep dive</a>), and the running counters are exposed live as a
+  <strong>JMX MBean</strong> (see the <a href="#pg-topics-jmx-html">JMX deep dive</a>) — all three wired up with zero
+  changes to the target application:</p>
+  <pre><code class="java">// MethodTimingEvent.java -- a custom JFR event
+@Label("Method Timing")
+@Category({"Demo", "Agent"})
+public class MethodTimingEvent extends Event {
+  @Label("Method") String method;
+  @Label("Call Number") long callNumber;
+}
+
+// AgentStatsMBean.java / AgentStats.java -- a plain Standard MBean (see the JMX deep dive, §4.1)
+public interface AgentStatsMBean { long getMethodCallCount(); }
+public class AgentStats implements AgentStatsMBean {
+  public long getMethodCallCount() { return Probe2.calls.get(); }
+}
+
+// Probe2.java -- what the injected bytecode calls into
+public class Probe2 {
+  static final AtomicLong calls = new AtomicLong();
+  public static void hit(String label) {
+    long n = calls.incrementAndGet();
+    MethodTimingEvent evt = new MethodTimingEvent();
+    if (evt.isEnabled() || evt.shouldCommit()) {
+      evt.method = label;
+      evt.callNumber = n;
+      evt.commit();
+    }
+  }
+}
+
+// CapstoneAgent.java
+public static void premain(String agentArgs, Instrumentation inst) throws Exception {
+  String[] parts = (agentArgs == null ? "Worker:work" : agentArgs).split(":");
+
+  // 1) Instrumentation: inject a probe at the target method's entry point
+  inst.addTransformer(new CountingTransformer2(parts[0], parts[1]));
+
+  // 2) JMX: expose the running counters as a standard MBean
+  ObjectName name = new ObjectName("com.example.agent:type=AgentStats");
+  ManagementFactory.getPlatformMBeanServer().registerMBean(new AgentStats(), name);
+
+  // 3) JFR: start an in-process recording so MethodTimingEvent instances land in a .jfr file
+  Recording recording = new Recording();
+  recording.enable("MethodTimingEvent");
+  recording.setDestination(Path.of("/tmp/capstone-agent.jfr"));
+  recording.start();
+  Runtime.getRuntime().addShutdownHook(new Thread(recording::stop));
+}</code></pre>
+  <pre><code class="java">// Main3.java -- the "application", completely unaware it's instrumented
+Worker w = new Worker();
+for (int i = 0; i &lt; 5; i++) w.work();
+
+ObjectName name = new ObjectName("com.example.agent:type=AgentStats");
+long count = (long) ManagementFactory.getPlatformMBeanServer().getAttribute(name, "MethodCallCount");
+System.out.println("via JMX -&gt; MethodCallCount=" + count);</code></pre>
+  <pre><code class="bash">$ java -javaagent:capstone-agent.jar=Worker:work -cp . Main3
+$ jfr print --events MethodTimingEvent /tmp/capstone-agent.jfr</code></pre>
+  <div class="warn"><strong>Verified real output</strong> — all three integrations firing from one agent,
+  one JVM, zero application changes:
+  <pre><code class="java">[capstone-agent] watching Worker.work()
+[capstone-agent] registered MBean com.example.agent:type=AgentStats
+[capstone-agent] JFR recording started -&gt; /tmp/capstone-agent.jfr
+  ...doing real work... (x5)
+via JMX -&gt; MethodCallCount=5
+
+MethodTimingEvent {
+  startTime = 12:14:00.449 (2026-09-02)
+  method = "Worker.work"
+  callNumber = 1
+  eventThread = "main" (javaThreadId = 3)
+  stackTrace = [
+    Probe2.hit(String) line: 22
+    Worker.work()
+    Main3.main(String[]) line: 7
+  ]
+}
+... (4 more, callNumber 2..5)</code></pre></div>
+  <div class="note">Note what came for free: JFR captured a full stack trace for every event without the
+  agent doing anything to collect one — exactly the mechanism a real profiler leans on instead of hand-
+  rolling stack walking. And the MBean reads live counters straight out of the same <code>AtomicLong</code>
+  the injected bytecode increments — <code>jconsole</code> pointed at this JVM would show
+  <code>MethodCallCount</code> ticking up in real time as <code>Worker.work()</code> gets called.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="timeline">10 · Version Timeline</h2>
+  <table class="data">
+    <tr><th>Version</th><th>Change</th></tr>
+    <tr><td>Java 5 <span class="badge added">JSR 163</span></td><td><code>java.lang.instrument</code>,
+    <code>-javaagent</code>, <code>premain</code> — the whole static-agent mechanism.</td></tr>
+    <tr><td>Java 6</td><td>Attach API (<code>com.sun.tools.attach</code>) and <code>agentmain</code> — an
+    agent can now attach to an already-running JVM, verified in §6.</td></tr>
+    <tr><td>Java 9</td><td><code>java.lang.instrument</code> becomes the <code>java.instrument</code>
+    module; <code>Launcher-Agent-Class</code> manifest attribute added (§6.1);
+    <code>redefineModule</code>/<code>isModifiableModule</code> added for JPMS (§3); the module-aware
+    6-arg <code>transform()</code> overload added to <code>ClassFileTransformer</code> (§4).</td></tr>
+    <tr><td>Java 21 <span class="badge jep">JEP 451</span></td><td>Dynamic agent loading (§6) now prints a
+    warning by default; <code>-XX:+EnableDynamicAgentLoading</code> suppresses it — verified in §7, exact
+    text captured live.</td></tr>
+    <tr><td>Java 22–23 <span class="badge preview">Preview</span></td><td>Class-File API (JEP 457, then
+    JEP 466) available behind <code>--enable-preview</code> — a pure-Java replacement for ASM/BCEL when
+    writing a <code>ClassFileTransformer</code> (§4).</td></tr>
+    <tr><td>Java 24 <span class="badge added">Finalized</span> <span class="badge jep">JEP 484</span></td>
+    <td>Class-File API finalized — no preview flag needed. Confirmed still exported unconditionally on
+    this JDK 25 install via <code>java --describe-module java.base</code>. Every §4/§5/§9 example above
+    uses it directly — see the <a href="#pg-versions-java-25-html">Java 25 page</a>.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="cheat">11 · Cheat Sheet</h2>
+  <div class="cheat">
+    <h3>Java agents in one glance</h3>
+    <ul>
+      <li><strong>Static agent:</strong> <code>Premain-Class</code> in the manifest + a
+      <code>premain(String, Instrumentation)</code> method, loaded with
+      <code>-javaagent:agent.jar[=args]</code> — runs before <code>main()</code>.</li>
+      <li><strong>Dynamic agent:</strong> <code>Agent-Class</code> in the manifest +
+      <code>agentmain(String, Instrumentation)</code>, loaded from another process via
+      <code>VirtualMachine.attach(pid).loadAgent(jarPath)</code> — runs mid-execution, and since
+      <strong>Java 21</strong> prints a JEP 451 warning unless the target ran with
+      <code>-XX:+EnableDynamicAgentLoading</code>.</li>
+      <li><strong>From <code>java -jar</code>, no flag at all:</strong> <code>Launcher-Agent-Class</code>
+      (Java 9+) — but it calls <code>agentmain</code>, not <code>premain</code>, verified the hard way in
+      §6.1.</li>
+      <li><strong>Rewrite bytecode as it loads:</strong> <code>inst.addTransformer(new
+      MyTransformer(), canRetransform)</code> — implement <code>ClassFileTransformer.transform(...)</code>,
+      return modified bytes or <code>null</code> to leave a class unchanged.</li>
+      <li><strong>Rewrite a class that's already loaded:</strong> <code>retransformClasses</code>
+      (re-runs the registered transformer chain) or <code>redefineClasses</code> (caller supplies the new
+      bytes directly, no transformer chain) — both need the matching
+      <code>Can-Re(de|trans)form-Classes: true</code> manifest attribute.</li>
+      <li><strong>No bytecode library needed since Java 25:</strong> the JDK's own Class-File API
+      (<code>java.lang.classfile</code>, JEP 484) — <code>ClassFile.of().parse(bytes)</code>,
+      <code>ClassTransform</code>/<code>CodeTransform</code>, <code>transformClass(...)</code>.</li>
+      <li><strong>Open a module's internals at runtime, no <code>--add-opens</code>:</strong>
+      <code>inst.redefineModule(module, Set.of(), Map.of(), Map.of(pkg, Set.of(reader)), Set.of(),
+      Map.of())</code>.</li>
+      <li><strong>Cheap object size:</strong> <code>inst.getObjectSize(obj)</code> — shallow, in
+      bytes.</li>
+      <li><strong>Pair it with JFR/JMX:</strong> emit a custom <code>jdk.jfr.Event</code> from the injected
+      probe for structured, stack-trace-carrying telemetry; register a plain
+      <code>MBeanServer.registerMBean(...)</code> to expose the agent's own live counters — both verified
+      together in §9.1.</li>
+    </ul>
+  </div>
 
 </section>
 
